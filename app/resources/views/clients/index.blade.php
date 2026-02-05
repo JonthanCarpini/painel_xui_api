@@ -7,6 +7,9 @@
     <h1 class="text-2xl font-bold text-white flex items-center gap-3">
         <i class="bi bi-people text-orange-500"></i>
         Lista de Clientes
+        <span id="totalClientsCounter" class="ml-2 text-sm bg-dark-200 text-gray-300 px-3 py-1 rounded-full border border-dark-100">
+            Total: {{ count($clients) }}
+        </span>
     </h1>
     <div class="flex gap-3">
         <button onclick="openTrialModal()" class="px-4 py-2 bg-gradient-to-r from-purple-500 to-purple-600 text-white rounded-lg hover:shadow-lg transition-all flex items-center gap-2">
@@ -468,6 +471,17 @@
                 </div>
             </div>
 
+            <div class="grid grid-cols-2 gap-4 mb-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-400 mb-2">Telefone</label>
+                    <input type="text" id="trialPhone" name="phone" class="w-full px-4 py-2 bg-dark-200 border border-dark-100 rounded-lg text-white focus:border-orange-500 focus:outline-none" placeholder="(00) 00000-0000">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-400 mb-2">Nota</label>
+                    <input type="text" id="trialNotes" name="notes" class="w-full px-4 py-2 bg-dark-200 border border-dark-100 rounded-lg text-white focus:border-orange-500 focus:outline-none" placeholder="Opcional">
+                </div>
+            </div>
+
             <div class="mb-4">
                 <label class="block text-sm font-medium text-gray-400 mb-2">Pacote de Teste *</label>
                 <select id="trialPackageId" name="package_id" required class="w-full px-4 py-2 bg-dark-200 border border-dark-100 rounded-lg text-white focus:border-orange-500 focus:outline-none" onchange="updateTrialPackage(this)">
@@ -518,6 +532,7 @@ let currentSortBy = 'created_at';
 let currentSortOrder = 'desc';
 let currentPage = 1;
 let currentPerPage = 20;
+let currentQuickFilter = '';
 
 // Busca dinâmica com debounce
 let searchTimeout;
@@ -532,6 +547,12 @@ document.getElementById('phoneInput')?.addEventListener('input', function() {
 });
 
 document.getElementById('statusFilter')?.addEventListener('change', function() {
+    currentQuickFilter = ''; // Limpar filtro rápido ao mudar filtros manuais
+    loadClients();
+});
+
+document.getElementById('typeFilter')?.addEventListener('change', function() {
+    currentQuickFilter = ''; // Limpar filtro rápido ao mudar filtros manuais
     loadClients();
 });
 
@@ -542,17 +563,31 @@ function loadClients(page = 1) {
     const search = document.getElementById('searchInput')?.value || '';
     const phone = document.getElementById('phoneInput')?.value || '';
     const status = document.getElementById('statusFilter')?.value || '';
+    const type = document.getElementById('typeFilter')?.value || '';
     
     const params = new URLSearchParams({
         search: search,
         phone: phone,
         status: status,
+        type: type,
+        quick_filter: currentQuickFilter,
         sort_by: currentSortBy,
         sort_order: currentSortOrder,
         per_page: currentPerPage,
         page: page
     });
     
+    // Atualizar UI dos filtros rápidos
+    document.querySelectorAll('[onclick^="applyQuickFilter"]').forEach(btn => {
+        if (currentQuickFilter && btn.getAttribute('onclick').includes(currentQuickFilter)) {
+            btn.classList.add('bg-orange-500', 'text-white');
+            btn.classList.remove('bg-dark-200', 'text-gray-300');
+        } else {
+            btn.classList.remove('bg-orange-500', 'text-white');
+            btn.classList.add('bg-dark-200', 'text-gray-300');
+        }
+    });
+
     fetch(`/clients?${params.toString()}`, {
         headers: {
             'X-Requested-With': 'XMLHttpRequest',
@@ -563,6 +598,13 @@ function loadClients(page = 1) {
     .then(data => {
         document.getElementById('clientsTableContainer').innerHTML = data.html;
         document.getElementById('paginationContainer').innerHTML = data.pagination;
+        
+        // Atualizar contador total
+        const totalCounter = document.getElementById('totalClientsCounter');
+        if (totalCounter && data.total !== undefined) {
+            totalCounter.innerText = `Total: ${data.total}`;
+            totalCounter.classList.remove('hidden');
+        }
     })
     .catch(error => {
         console.error('Erro ao carregar clientes:', error);
@@ -597,6 +639,8 @@ function clearFilters() {
     document.getElementById('searchInput').value = '';
     document.getElementById('phoneInput').value = '';
     document.getElementById('statusFilter').value = '';
+    document.getElementById('typeFilter').value = '';
+    currentQuickFilter = '';
     currentSortBy = 'created_at';
     currentSortOrder = 'desc';
     loadClients(1);
@@ -604,39 +648,21 @@ function clearFilters() {
 
 // Filtros rápidos por vencimento
 function applyQuickFilter(type) {
-    const now = Math.floor(Date.now() / 1000);
-    let maxDays = 0;
+    // Se clicar no mesmo filtro já ativo, desativa
+    if (currentQuickFilter === type) {
+        currentQuickFilter = '';
+    } else {
+        currentQuickFilter = type;
+        
+        // Limpar outros filtros visuais para evitar confusão, 
+        // mas o backend prioriza o quick_filter de qualquer forma se implementado assim
+        document.getElementById('searchInput').value = '';
+        document.getElementById('phoneInput').value = '';
+        document.getElementById('statusFilter').value = '';
+        document.getElementById('typeFilter').value = '';
+    }
     
-    if (type === 'today') maxDays = 1;
-    else if (type === '7days') maxDays = 7;
-    else if (type === '30days') maxDays = 30;
-    
-    // Limpar outros filtros
-    document.getElementById('searchInput').value = '';
-    document.getElementById('phoneInput').value = '';
-    document.getElementById('statusFilter').value = 'active';
-    
-    // Carregar e filtrar no frontend (mais rápido)
     loadClients(1);
-    
-    // Após carregar, filtrar por dias
-    setTimeout(() => {
-        const rows = document.querySelectorAll('tbody tr');
-        rows.forEach(row => {
-            const expDateCell = row.cells[6]?.textContent;
-            if (expDateCell) {
-                const parts = expDateCell.split(/[\/,\s:]+/);
-                const expDate = new Date(parts[2], parts[1] - 1, parts[0], parts[3] || 0, parts[4] || 0);
-                const daysLeft = Math.ceil((expDate - new Date()) / (1000 * 60 * 60 * 24));
-                
-                if (daysLeft >= 0 && daysLeft <= maxDays) {
-                    row.style.display = '';
-                } else {
-                    row.style.display = 'none';
-                }
-            }
-        });
-    }, 500);
 }
 
 // Funções antigas mantidas para compatibilidade
@@ -823,66 +849,6 @@ function sortTable(column) {
     rows.forEach(row => tbody.appendChild(row));
 }
 
-function filterByExpiry(type) {
-    const now = Math.floor(Date.now() / 1000);
-    const tbody = document.querySelector('tbody');
-    
-    allRows.forEach(row => {
-        const expDate = parseInt(row.dataset.exp);
-        const daysLeft = Math.ceil((expDate - now) / 86400);
-        
-        let show = false;
-        if (type === 'today' && daysLeft <= 1 && daysLeft >= 0) {
-            show = true;
-        } else if (type === '7days' && daysLeft <= 7 && daysLeft >= 0) {
-            show = true;
-        } else if (type === '30days' && daysLeft <= 30 && daysLeft >= 0) {
-            show = true;
-        }
-        
-        row.style.display = show ? '' : 'none';
-    });
-}
-
-function applyFilters() {
-    const searchInput = document.getElementById('searchInput').value.toLowerCase();
-    const statusFilter = document.getElementById('statusFilter').value;
-    const tbody = document.querySelector('tbody');
-    
-    allRows.forEach(row => {
-        const username = row.dataset.username.toLowerCase();
-        const password = row.dataset.password.toLowerCase();
-        const status = row.dataset.status;
-        const isTrial = row.dataset.trial === '1';
-        
-        let show = true;
-        
-        if (searchInput && !username.includes(searchInput) && !password.includes(searchInput)) {
-            show = false;
-        }
-        
-        if (statusFilter === 'active' && status !== 'active') {
-            show = false;
-        } else if (statusFilter === 'expired' && status !== 'expired') {
-            show = false;
-        } else if (statusFilter === 'trial' && !isTrial) {
-            show = false;
-        }
-        
-        row.style.display = show ? '' : 'none';
-    });
-}
-
-function clearFilters() {
-    document.getElementById('searchInput').value = '';
-    document.getElementById('statusFilter').value = '';
-    document.getElementById('dateType').value = 'exp_date';
-    document.getElementById('dateStart').value = '';
-    
-    allRows.forEach(row => {
-        row.style.display = '';
-    });
-}
 
 function openEditModal(clientId) {
     window.location.href = `/clients/${clientId}/edit`;

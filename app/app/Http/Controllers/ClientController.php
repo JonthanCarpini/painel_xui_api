@@ -133,7 +133,8 @@ class ClientController extends Controller
             return response()->json([
                 'html' => view('clients.partials.table', compact('clients'))->render(),
                 'pagination' => view('clients.partials.pagination', compact('clients'))->render(),
-                'stats' => $quickStats
+                'stats' => $quickStats,
+                'total' => $clients->total()
             ]);
         }
 
