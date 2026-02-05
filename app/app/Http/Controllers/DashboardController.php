@@ -133,7 +133,8 @@ class DashboardController extends Controller
                 'online_now' => LineLive::whereIn('user_id', function($query) use ($myTreeIds) {
                     $query->select('id')
                         ->from('lines')
-                        ->whereIn('member_id', $myTreeIds);
+                        ->whereIn('member_id', $myTreeIds)
+                        ->where('is_trial', 0);
                 })->whereNull('date_end')->count(),
             ];
         });
