@@ -7,8 +7,8 @@
     <h1 class="text-2xl font-bold text-white flex items-center gap-3">
         <i class="bi bi-people text-orange-500"></i>
         Lista de Clientes
-        <span id="totalClientsCounter" class="ml-2 text-sm bg-dark-200 text-gray-300 px-3 py-1 rounded-full border border-dark-100">
-            Total: {{ count($clients) }}
+        <span id="totalClientsCounter" class="ml-2 text-lg font-bold bg-orange-500/10 text-orange-500 px-4 py-1.5 rounded-full border border-orange-500/20">
+            Total: {{ $totalGlobal ?? count($clients) }}
         </span>
     </h1>
     <div class="flex gap-3">
@@ -96,106 +96,7 @@
     </div>
 </div>
 
-<!-- Tabela antiga removida -->
-@if(false)
-    <div class="overflow-x-auto">
-        <table class="w-full">
-            <thead class="bg-dark-200 border-b border-dark-100">
-                <tr>
-                    <th class="px-6 py-4 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider cursor-pointer hover:text-orange-500" onclick="sortTable('username')">
-                        USERNAME <i class="bi bi-arrow-down-up"></i>
-                    </th>
-                    <th class="px-6 py-4 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider cursor-pointer hover:text-orange-500" onclick="sortTable('password')">
-                        SENHA <i class="bi bi-arrow-down-up"></i>
-                    </th>
-                    <th class="px-6 py-4 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider">REVENDA</th>
-                    <th class="px-6 py-4 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider">TIPO</th>
-                    <th class="px-6 py-4 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider cursor-pointer hover:text-orange-500" onclick="sortTable('created_at')">
-                        CRIADO <i class="bi bi-arrow-down-up"></i>
-                    </th>
-                    <th class="px-6 py-4 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider cursor-pointer hover:text-orange-500" onclick="sortTable('exp_date')">
-                        VENCIMENTO <i class="bi bi-arrow-down-up"></i>
-                    </th>
-                    <th class="px-6 py-4 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider">CONEXÕES</th>
-                    <th class="px-6 py-4 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider cursor-pointer hover:text-orange-500" onclick="sortTable('status')">
-                        STATUS <i class="bi bi-arrow-down-up"></i>
-                    </th>
-                    <th class="px-6 py-4 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider">AÇÕES</th>
-                </tr>
-            </thead>
-            <tbody class="divide-y divide-dark-200">
-                @foreach($clients as $client)
-                @php
-                    $expDate = is_numeric($client['exp_date']) ? $client['exp_date'] : strtotime($client['exp_date']);
-                    $isExpired = $expDate < time();
-                    $daysLeft = ceil(($expDate - time()) / 86400);
-                @endphp
-                <tr class="hover:bg-dark-200 transition-colors duration-150" data-username="{{ $client['username'] }}" data-password="{{ $client['password'] }}" data-status="{{ $isExpired ? 'expired' : 'active' }}" data-trial="{{ $client['is_trial'] ?? 0 }}" data-exp="{{ $expDate }}" data-created="{{ $client['created_at'] ?? 0 }}">
-                    <td class="px-6 py-4">
-                        <span class="text-white font-medium">{{ $client['username'] }}</span>
-                    </td>
-                    <td class="px-6 py-4">
-                        <code class="text-gray-300 text-sm">{{ $client['password'] }}</code>
-                    </td>
-                    <td class="px-6 py-4">
-                        <span class="text-gray-400 text-sm">{{ $client['member_id'] ?? 'N/A' }}</span>
-                    </td>
-                    <td class="px-6 py-4">
-                        @if(isset($client['is_trial']) && $client['is_trial'] == 1)
-                            <span class="px-2 py-1 bg-yellow-500/10 text-yellow-500 text-xs font-semibold rounded">Teste</span>
-                        @else
-                            <span class="px-2 py-1 bg-green-500/10 text-green-500 text-xs font-semibold rounded">Cliente</span>
-                        @endif
-                    </td>
-                    <td class="px-6 py-4">
-                        <span class="text-gray-300 text-sm">{{ isset($client['created_at']) ? date('d/m/Y, H:i', is_numeric($client['created_at']) ? $client['created_at'] : strtotime($client['created_at'])) : 'N/A' }}</span>
-                    </td>
-                    <td class="px-6 py-4">
-                        <span class="text-sm {{ $isExpired ? 'text-red-400' : ($daysLeft <= 7 ? 'text-yellow-400' : 'text-gray-300') }}">
-                            {{ date('d/m/Y, H:i', $expDate) }}
-                        </span>
-                    </td>
-                    <td class="px-6 py-4">
-                        <div class="flex items-center gap-1">
-                            <i class="bi bi-broadcast text-blue-400"></i>
-                            <span class="text-white font-semibold">{{ $client['max_connections'] ?? 1 }}</span>
-                        </div>
-                    </td>
-                    <td class="px-6 py-4">
-                        @if(isset($client['enabled']) && $client['enabled'] == 1 && !$isExpired)
-                            <span class="px-2 py-1 bg-green-500/10 text-green-400 text-xs font-semibold rounded">Ativo</span>
-                        @else
-                            <span class="px-2 py-1 bg-red-500/10 text-red-400 text-xs font-semibold rounded">Vencido</span>
-                        @endif
-                    </td>
-                    <td class="px-6 py-4">
-                        <div class="flex items-center gap-1">
-                            <button onclick="openM3uModal({{ $client['id'] }}, '{{ $client['username'] }}')" class="p-2 bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors" title="Links M3U">
-                                <i class="bi bi-link-45deg"></i>
-                            </button>
-                            <button onclick="openEditModal({{ $client['id'] }})" class="p-2 bg-gray-600 text-white rounded hover:bg-gray-700 transition-colors" title="Editar">
-                                <i class="bi bi-pencil"></i>
-                            </button>
-                            <button onclick="openRenewModal({{ $client['id'] }})" class="p-2 bg-green-600 text-white rounded hover:bg-green-700 transition-colors" title="Renovar">
-                                <i class="bi bi-arrow-clockwise"></i>
-                            </button>
-                            <button onclick="killConnections({{ $client['id'] }})" class="p-2 bg-orange-600 text-white rounded hover:bg-orange-700 transition-colors" title="Destruir Conexão">
-                                <i class="bi bi-x-circle"></i>
-                            </button>
-                            <a href="{{ route('clients.m3u', $client['id']) }}" class="p-2 bg-purple-600 text-white rounded hover:bg-purple-700 transition-colors" title="Download M3U" download>
-                                <i class="bi bi-download"></i>
-                            </a>
-                            <button onclick="deleteClient({{ $client['id'] }})" class="p-2 bg-red-600 text-white rounded hover:bg-red-700 transition-colors" title="Excluir">
-                                <i class="bi bi-trash"></i>
-                            </button>
-                        </div>
-                    </td>
-                </tr>
-                @endforeach
-            </tbody>
-        </table>
-    </div>
-    @else
+@if(isset($totalGlobal) && $totalGlobal == 0)
     <div class="text-center py-16">
         <i class="bi bi-inbox text-gray-600 text-6xl mb-4"></i>
         <h3 class="text-xl font-semibold text-gray-400 mb-2">Nenhum cliente cadastrado</h3>
@@ -205,7 +106,9 @@
             Criar Primeiro Cliente
         </a>
     </div>
-    @endif
+@endif
+
+<!-- Código antigo removido -->
 </div>
 
 <!-- Modal Renovar -->
@@ -410,7 +313,7 @@
             <div class="grid grid-cols-2 gap-4 mb-4">
                 <div>
                     <label class="block text-sm font-medium text-gray-400 mb-2">Telefone</label>
-                    <input type="text" id="editPhone" name="phone" class="w-full px-4 py-2 bg-dark-200 border border-dark-100 rounded-lg text-white focus:border-orange-500 focus:outline-none">
+                    <input type="text" id="editPhone" name="phone" oninput="maskPhone(event)" class="w-full px-4 py-2 bg-dark-200 border border-dark-100 rounded-lg text-white focus:border-orange-500 focus:outline-none" placeholder="(00) 00000-0000">
                 </div>
                 <div>
                     <label class="block text-sm font-medium text-gray-400 mb-2">E-mail</label>
@@ -474,7 +377,7 @@
             <div class="grid grid-cols-2 gap-4 mb-4">
                 <div>
                     <label class="block text-sm font-medium text-gray-400 mb-2">Telefone</label>
-                    <input type="text" id="trialPhone" name="phone" class="w-full px-4 py-2 bg-dark-200 border border-dark-100 rounded-lg text-white focus:border-orange-500 focus:outline-none" placeholder="(00) 00000-0000">
+                    <input type="text" id="trialPhone" name="phone" oninput="maskPhone(event)" class="w-full px-4 py-2 bg-dark-200 border border-dark-100 rounded-lg text-white focus:border-orange-500 focus:outline-none" placeholder="(00) 00000-0000">
                 </div>
                 <div>
                     <label class="block text-sm font-medium text-gray-400 mb-2">Nota</label>
@@ -527,6 +430,24 @@
 
 @push('scripts')
 <script>
+function maskPhone(event) {
+    let input = event.target;
+    let value = input.value.replace(/\D/g, '');
+    if (value.length > 11) value = value.slice(0, 11);
+    
+    if (value.length > 2) {
+        if (value.length <= 10) {
+            value = `(${value.slice(0, 2)}) ${value.slice(2, 6)}-${value.slice(6)}`;
+        } else {
+            value = `(${value.slice(0, 2)}) ${value.slice(2, 7)}-${value.slice(7)}`;
+        }
+    } else if (value.length > 0) {
+        value = `(${value}`;
+    }
+    
+    input.value = value;
+}
+
 // Variáveis globais
 let currentSortBy = 'created_at';
 let currentSortOrder = 'desc';

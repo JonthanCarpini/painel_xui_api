@@ -69,12 +69,12 @@ class LineService
                 'max_connections' => $data['max_connections'] ?? $package->max_connections ?? 1,
                 'is_trial' => $isTrial ? 1 : 0,
                 'created_at' => time(),
-                'contact' => $data['email'] ?? '',
-                'phone' => $data['phone'] ?? '',
+                'contact' => $data['phone'] ?? '',
                 'admin_notes' => !empty($data['notes']) ? $data['notes'] : 'Criado via Painel Office',
                 'reseller_notes' => $data['reseller_notes'] ?? ($isTrial ? 'Teste' : 'Cliente oficial'),
                 'allowed_ips' => '[]',
                 'allowed_ua' => '[]',
+                'allowed_outputs' => json_encode(['1', '2']),
                 'package_id' => $package->id,
             ]);
 

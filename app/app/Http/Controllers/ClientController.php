@@ -128,6 +128,14 @@ class ClientController extends Controller
             ];
         });
 
+        // Contagem total global (sem filtros) para controle de exibição de "Nenhum cliente"
+        $totalGlobalQuery = Line::query();
+        if (!$user->isAdmin()) {
+            $myTreeIds = $user->getAllSubResellerIds();
+            $totalGlobalQuery->whereIn('member_id', $myTreeIds);
+        }
+        $totalGlobal = $totalGlobalQuery->count();
+
         // Se for requisição AJAX, retornar JSON com stats atualizados
         if ($request->ajax()) {
             return response()->json([
@@ -159,7 +167,8 @@ class ClientController extends Controller
             'clients' => $clients,
             'packages' => $packages,
             'bouquets' => $bouquets,
-            'quickStats' => $quickStats
+            'quickStats' => $quickStats,
+            'totalGlobal' => $totalGlobal
         ]);
     }
 
@@ -403,8 +412,7 @@ class ClientController extends Controller
                 'password' => $validated['password'],
                 'package_id' => $validated['package_id'] ?? $line->package_id,
                 'bouquet' => json_encode($validated['bouquet_ids']),
-                'phone' => $validated['phone'] ?? '',
-                'contact' => $validated['email'] ?? '',
+                'contact' => $validated['phone'] ?? '', // Salvar telefone em contact
                 'notes' => $validated['notes'] ?? '',
                 'enabled' => $validated['enabled'] ?? $line->enabled,
             ]);
@@ -717,7 +725,8 @@ class ClientController extends Controller
         return response()->json([
             'username' => $line->username,
             'password' => $line->password,
-            'email' => $line->contact ?? '',
+            'email' => '', // Email não é mais usado prioritariamente
+            'phone' => $line->contact ?? '', // Retornar contact como phone
             'notes' => $line->notes ?? '',
             'package_name' => $package ? $package->package_name : 'Sem pacote',
             'max_connections' => $line->max_connections,
