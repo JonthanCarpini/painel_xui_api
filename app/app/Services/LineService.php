@@ -71,7 +71,7 @@ class LineService
                 'created_at' => time(),
                 'contact' => $data['email'] ?? '',
                 'phone' => $data['phone'] ?? '',
-                'admin_notes' => $data['notes'] ?? 'Criado via Painel Office',
+                'admin_notes' => !empty($data['notes']) ? $data['notes'] : 'Criado via Painel Office',
                 'reseller_notes' => $data['reseller_notes'] ?? ($isTrial ? 'Teste' : 'Cliente oficial'),
                 'allowed_ips' => '[]',
                 'allowed_ua' => '[]',

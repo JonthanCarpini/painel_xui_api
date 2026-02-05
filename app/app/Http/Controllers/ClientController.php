@@ -22,6 +22,7 @@ class ClientController extends Controller
         $search = $request->input('search', '');
         $phone = $request->input('phone', '');
         $status = $request->input('status', '');
+        $type = $request->input('type', '');
         $sortBy = $request->input('sort_by', 'created_at');
         $sortOrder = $request->input('sort_order', 'desc');
         $perPage = $request->input('per_page', 20);
@@ -56,20 +57,48 @@ class ClientController extends Controller
             });
         }
 
-        // Busca por telefone
+        // Busca por telefone (admin_notes)
         if ($phone) {
             $query->where('admin_notes', 'like', "%{$phone}%");
         }
 
-        // Filtro por status
+        // Filtro por Tipo
+        if ($type === 'client') {
+            $query->where('is_trial', 0);
+        } elseif ($type === 'trial') {
+            $query->where('is_trial', 1);
+        }
+
+        // Filtro por Status
         if ($status === 'active') {
             $query->where('enabled', 1)
                   ->where('admin_enabled', 1)
                   ->where('exp_date', '>', time());
         } elseif ($status === 'expired') {
             $query->where('exp_date', '<=', time());
-        } elseif ($status === 'trial') {
-            $query->where('is_trial', 1);
+        } elseif ($status === 'blocked') {
+            $query->where(function($q) {
+                $q->where('enabled', 0)
+                  ->orWhere('admin_enabled', 0);
+            });
+        }
+
+        // Filtros Rápidos (se passados via query string especial)
+        $quickFilter = $request->input('quick_filter');
+        if ($quickFilter) {
+            $query->where('is_trial', 0); // Apenas oficiais para filtros rápidos
+            $now = time();
+            
+            if ($quickFilter === 'today') {
+                $endOfDay = strtotime('tomorrow') - 1;
+                $query->whereBetween('exp_date', [$now, $endOfDay]);
+            } elseif ($quickFilter === '7days') {
+                $end7Days = strtotime('+7 days');
+                $query->whereBetween('exp_date', [$now, $end7Days]);
+            } elseif ($quickFilter === '30days') {
+                $end30Days = strtotime('+30 days');
+                $query->whereBetween('exp_date', [$now, $end30Days]);
+            }
         }
 
         // Ordenação
@@ -78,17 +107,40 @@ class ClientController extends Controller
         // Paginação
         $clients = $query->paginate($perPage)->appends($request->except('page'));
 
-        // Se for requisição AJAX, retornar JSON
+        // Calcular estatísticas rápidas (Apenas Clientes Oficiais)
+        $statsQuery = Line::where('is_trial', 0);
+        if (!$user->isAdmin()) {
+            $myTreeIds = $user->getAllSubResellerIds();
+            $statsQuery->whereIn('member_id', $myTreeIds);
+        }
+
+        // Clonar query para cada contador para evitar contaminação
+        $now = time();
+        $endOfDay = strtotime('tomorrow') - 1;
+        $end7Days = strtotime('+7 days');
+        $end30Days = strtotime('+30 days');
+
+        $quickStats = cache()->remember('quick_stats_' . $user->id, 60, function () use ($statsQuery, $now, $endOfDay, $end7Days, $end30Days) {
+            return [
+                'today' => (clone $statsQuery)->whereBetween('exp_date', [$now, $endOfDay])->count(),
+                '7days' => (clone $statsQuery)->whereBetween('exp_date', [$now, $end7Days])->count(),
+                '30days' => (clone $statsQuery)->whereBetween('exp_date', [$now, $end30Days])->count(),
+            ];
+        });
+
+        // Se for requisição AJAX, retornar JSON com stats atualizados
         if ($request->ajax()) {
             return response()->json([
                 'html' => view('clients.partials.table', compact('clients'))->render(),
-                'pagination' => view('clients.partials.pagination', compact('clients'))->render()
+                'pagination' => view('clients.partials.pagination', compact('clients'))->render(),
+                'stats' => $quickStats
             ]);
         }
 
         // Cache de pacotes e bouquets
-        $packages = cache()->remember('packages_all', 3600, function () {
-            return Package::select('id', 'package_name', 'is_official', 'official_duration', 
+        // IMPORTANTE: Adicionado 'is_trial' para o modal funcionar
+        $packages = cache()->remember('packages_all_v2', 3600, function () {
+            return Package::select('id', 'package_name', 'is_official', 'is_trial', 'official_duration', 
                                    'official_duration_in', 'official_credits', 'max_connections', 
                                    'trial_duration', 'trial_duration_in', 'bouquets')
                           ->get();
@@ -105,7 +157,8 @@ class ClientController extends Controller
         return view('clients.index', [
             'clients' => $clients,
             'packages' => $packages,
-            'bouquets' => $bouquets
+            'bouquets' => $bouquets,
+            'quickStats' => $quickStats
         ]);
     }
 
@@ -140,6 +193,21 @@ class ClientController extends Controller
         $user = Auth::user();
 
         try {
+            // Garantir que o telefone vá para admin_notes para ser pesquisável
+            $phone = $validated['phone'] ?? '';
+            $notes = $validated['notes'] ?? '';
+            
+            // Se tiver telefone e notes estiver vazio, usa o telefone como notes
+            // Se tiver ambos, concatena
+            $finalNotes = $notes;
+            if (!empty($phone)) {
+                if (empty($finalNotes)) {
+                    $finalNotes = $phone;
+                } elseif (strpos($finalNotes, $phone) === false) {
+                    $finalNotes = $phone . ' - ' . $finalNotes;
+                }
+            }
+
             $data = [
                 'username' => $validated['username'],
                 'password' => $validated['password'],
@@ -147,8 +215,8 @@ class ClientController extends Controller
                 'bouquet_ids' => $validated['bouquet_ids'],
                 'max_connections' => $validated['max_connections'],
                 'email' => $validated['email'] ?? null,
-                'phone' => $validated['phone'] ?? null,
-                'notes' => $validated['notes'] ?? null,
+                'phone' => $phone,
+                'notes' => $finalNotes, // Aqui vai para admin_notes
                 'member_id' => $user->id,
                 'is_trial' => false,
             ];
@@ -208,6 +276,19 @@ class ClientController extends Controller
         $user = Auth::user();
 
         try {
+            // Garantir que o telefone vá para admin_notes para ser pesquisável
+            $phone = $validated['phone'] ?? '';
+            $notes = $validated['notes'] ?? '';
+            
+            $finalNotes = $notes;
+            if (!empty($phone)) {
+                if (empty($finalNotes)) {
+                    $finalNotes = $phone;
+                } elseif (strpos($finalNotes, $phone) === false) {
+                    $finalNotes = $phone . ' - ' . $finalNotes;
+                }
+            }
+
             $data = [
                 'username' => $validated['username'],
                 'password' => $validated['password'],
@@ -217,8 +298,8 @@ class ClientController extends Controller
                 'duration_unit' => $validated['duration_unit'],
                 'max_connections' => $validated['max_connections'],
                 'email' => $validated['email'] ?? null,
-                'phone' => $validated['phone'] ?? null,
-                'notes' => $validated['notes'] ?? null,
+                'phone' => $phone,
+                'notes' => $finalNotes, // Aqui vai para admin_notes
                 'member_id' => $user->id,
                 'is_trial' => true,
             ];

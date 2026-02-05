@@ -26,22 +26,25 @@
     
     <!-- Filtros Rápidos -->
     <div class="mb-4">
-        <p class="text-gray-400 text-sm mb-2">Filtros Rápidos</p>
-        <div class="flex gap-2">
-            <button onclick="applyQuickFilter('today')" class="px-4 py-2 bg-dark-200 text-gray-300 rounded-lg hover:bg-orange-500 hover:text-white transition-colors text-sm">
+        <p class="text-gray-400 text-sm mb-2">Filtros Rápidos (Apenas Clientes Oficiais)</p>
+        <div class="flex flex-wrap gap-2">
+            <button onclick="applyQuickFilter('today')" class="px-4 py-2 bg-dark-200 text-gray-300 rounded-lg hover:bg-orange-500 hover:text-white transition-colors text-sm flex items-center gap-2">
                 <i class="bi bi-calendar-check"></i> Vence Hoje
+                <span class="bg-orange-500/20 text-orange-500 group-hover:bg-white/20 group-hover:text-white px-2 py-0.5 rounded text-xs font-bold border border-orange-500/30">{{ $quickStats['today'] ?? 0 }}</span>
             </button>
-            <button onclick="applyQuickFilter('7days')" class="px-4 py-2 bg-dark-200 text-gray-300 rounded-lg hover:bg-orange-500 hover:text-white transition-colors text-sm">
+            <button onclick="applyQuickFilter('7days')" class="px-4 py-2 bg-dark-200 text-gray-300 rounded-lg hover:bg-orange-500 hover:text-white transition-colors text-sm flex items-center gap-2">
                 <i class="bi bi-calendar-week"></i> Vence em 7 Dias
+                <span class="bg-orange-500/20 text-orange-500 group-hover:bg-white/20 group-hover:text-white px-2 py-0.5 rounded text-xs font-bold border border-orange-500/30">{{ $quickStats['7days'] ?? 0 }}</span>
             </button>
-            <button onclick="applyQuickFilter('30days')" class="px-4 py-2 bg-dark-200 text-gray-300 rounded-lg hover:bg-orange-500 hover:text-white transition-colors text-sm">
+            <button onclick="applyQuickFilter('30days')" class="px-4 py-2 bg-dark-200 text-gray-300 rounded-lg hover:bg-orange-500 hover:text-white transition-colors text-sm flex items-center gap-2">
                 <i class="bi bi-calendar-month"></i> Vence em 30 Dias
+                <span class="bg-orange-500/20 text-orange-500 group-hover:bg-white/20 group-hover:text-white px-2 py-0.5 rounded text-xs font-bold border border-orange-500/30">{{ $quickStats['30days'] ?? 0 }}</span>
             </button>
         </div>
     </div>
 
     <!-- Busca e Filtros -->
-    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+    <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
         <div>
             <label class="block text-sm text-gray-400 mb-2">Username / Senha</label>
             <input type="text" id="searchInput" placeholder="Buscar por username ou senha" class="w-full px-4 py-2 bg-dark-200 border border-dark-100 rounded-lg text-white focus:border-orange-500 focus:outline-none">
@@ -51,12 +54,21 @@
             <input type="text" id="phoneInput" placeholder="Buscar por telefone" class="w-full px-4 py-2 bg-dark-200 border border-dark-100 rounded-lg text-white focus:border-orange-500 focus:outline-none">
         </div>
         <div>
+            <label class="block text-sm text-gray-400 mb-2">Tipo</label>
+            <select id="typeFilter" class="w-full px-4 py-2 bg-dark-200 border border-dark-100 rounded-lg text-white focus:border-orange-500 focus:outline-none">
+                <option value="">Todos</option>
+                <option value="client">Cliente</option>
+                <option value="trial">Teste</option>
+            </select>
+        </div>
+        <div>
             <label class="block text-sm text-gray-400 mb-2">Status</label>
             <select id="statusFilter" class="w-full px-4 py-2 bg-dark-200 border border-dark-100 rounded-lg text-white focus:border-orange-500 focus:outline-none">
                 <option value="">Todos</option>
                 <option value="active">Ativo</option>
                 <option value="expired">Vencido</option>
-                <option value="trial">Teste</option>
+                <option value="blocked">Bloqueado</option>
+                <option value="trial">Teste (Antigo)</option>
             </select>
         </div>
     </div>
