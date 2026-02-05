@@ -425,6 +425,43 @@
     </div>
 </div>
 
+<!-- Modal Mensagem do Cliente (Criado com Sucesso) -->
+@if(session('client_message'))
+<div id="clientMessageModal" class="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
+    <div class="bg-white dark:bg-dark-300 rounded-xl max-w-2xl w-full border border-gray-200 dark:border-dark-200 shadow-2xl">
+        <div class="p-6 border-b border-gray-200 dark:border-dark-200 flex justify-between items-center bg-gradient-to-r from-green-600 to-green-700">
+            <h3 class="text-xl font-bold text-white flex items-center gap-2">
+                <i class="bi bi-check-circle-fill"></i>
+                Cliente Criado com Sucesso!
+            </h3>
+            <button onclick="document.getElementById('clientMessageModal').remove()" class="text-white hover:text-gray-200">
+                <i class="bi bi-x-lg"></i>
+            </button>
+        </div>
+        <div class="p-6">
+            <div class="mb-6">
+                <label class="block text-sm font-medium text-gray-700 dark:text-gray-400 mb-2">Dados de Acesso</label>
+                <div class="relative">
+                    <textarea id="clientMessageText" readonly rows="12" class="w-full px-4 py-3 bg-gray-50 dark:bg-dark-200 border border-gray-300 dark:border-dark-100 rounded-lg text-gray-900 dark:text-white font-mono text-sm resize-none">{{ session('client_message') }}</textarea>
+                    <button onclick="copyToClipboard('clientMessageText')" class="absolute top-2 right-2 px-3 py-1.5 bg-orange-500 text-white rounded-lg hover:bg-orange-600 transition-colors flex items-center gap-2 text-xs">
+                        <i class="bi bi-clipboard"></i>
+                        Copiar
+                    </button>
+                </div>
+            </div>
+            
+            <div class="flex gap-3">
+                <button onclick="document.getElementById('clientMessageModal').remove()" class="flex-1 px-4 py-2 bg-gray-100 dark:bg-dark-200 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-200 dark:hover:bg-dark-100 transition-colors font-medium">Fechar</button>
+                <button onclick="window.open('https://wa.me/?text=' + encodeURIComponent(document.getElementById('clientMessageText').value), '_blank')" class="flex-1 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors font-medium flex items-center justify-center gap-2">
+                    <i class="bi bi-whatsapp"></i>
+                    Enviar no WhatsApp
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+@endif
+
 @push('scripts')
 <script>
 function maskPhone(event) {
@@ -443,6 +480,30 @@ function maskPhone(event) {
     }
     
     input.value = value;
+}
+
+// Helper para copiar texto
+function copyToClipboard(elementId) {
+    const el = document.getElementById(elementId);
+    if (!el) return;
+    
+    // Selecionar texto
+    el.select();
+    el.setSelectionRange(0, 99999);
+    
+    // Copiar
+    navigator.clipboard.writeText(el.value).then(() => {
+        // Feedback visual simples
+        const originalBg = el.style.backgroundColor;
+        el.style.backgroundColor = '#dcfce7'; // green-100
+        setTimeout(() => {
+            el.style.backgroundColor = originalBg;
+        }, 200);
+    });
+}
+
+function copyField(elementId) {
+    copyToClipboard(elementId);
 }
 
 // Variáveis globais
@@ -583,24 +644,15 @@ function applyQuickFilter(type) {
     loadClients(1);
 }
 
-// Funções antigas mantidas para compatibilidade
-let sortDirection = {};
-let allRows = [];
-
-document.addEventListener('DOMContentLoaded', function() {
-    const tbody = document.querySelector('tbody');
-    if (tbody) {
-        allRows = Array.from(tbody.querySelectorAll('tr'));
-    }
-});
+// Funções para Modais e Ações
 
 function openRenewModal(clientId) {
     // Encontrar o nome do cliente na linha da tabela
     const row = document.querySelector(`tr[onclick*="${clientId}"]`) || 
-                document.querySelector(`button[onclick="openRenewModal(${clientId})"]`).closest('tr');
+                document.querySelector(`button[onclick="openRenewModal(${clientId})"]`)?.closest('tr');
     
     if (row) {
-        const name = row.dataset.username || row.querySelector('td:first-child span').innerText.trim();
+        const name = row.dataset.username || row.querySelector('td:first-child span')?.innerText.trim() || 'Cliente';
         document.getElementById('renewClientName').value = name;
     }
     
@@ -653,8 +705,296 @@ function updateRenewPackage(select) {
     }
 }
 
-// Adicionar outras funções JS (openEditModal, submitEdit, etc) aqui conforme necessário
-// Para brevidade, assumimos que elas existem ou serão migradas das views originais
+function submitRenew(event) {
+    event.preventDefault();
+    const clientId = document.getElementById('renewClientId').value;
+    const form = document.getElementById('renewForm');
+    const formData = new FormData(form);
+    const btn = document.getElementById('renewBtnText').parentElement;
+    
+    btn.disabled = true;
+    btn.classList.add('opacity-50', 'cursor-not-allowed');
+    
+    fetch(`/clients/${clientId}/renew`, {
+        method: 'POST',
+        headers: {
+            'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content,
+            'Accept': 'application/json'
+        },
+        body: formData
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            closeRenewModal();
+            loadClients(currentPage);
+            
+            // Mostrar modal de sucesso
+            document.getElementById('renewSuccessUsername').value = data.client.username;
+            document.getElementById('renewSuccessPassword').value = data.client.password;
+            document.getElementById('renewSuccessExpDate').value = data.client.exp_date;
+            
+            // Gerar mensagem Whatsapp simples
+            const zapMsg = `✅ Renovação Concluída!\n\n👤 Usuário: ${data.client.username}\n🔑 Senha: ${data.client.password}\n📅 Validade: ${data.client.exp_date}\n📺 Conexões: ${data.client.max_connections}`;
+            document.getElementById('renewSuccessWhatsapp').value = zapMsg;
+            
+            document.getElementById('renewSuccessModal').classList.remove('hidden');
+        } else {
+            alert('Erro: ' + data.message);
+        }
+    })
+    .catch(error => {
+        console.error('Erro:', error);
+        alert('Erro ao renovar cliente.');
+    })
+    .finally(() => {
+        btn.disabled = false;
+        btn.classList.remove('opacity-50', 'cursor-not-allowed');
+    });
+}
+
+function closeRenewSuccessModal() {
+    document.getElementById('renewSuccessModal').classList.add('hidden');
+}
+
+function openM3uModal(clientId, username) {
+    // Definir nome se passado, ou tentar pegar do DOM
+    if (username) {
+        document.getElementById('m3uClientName').value = username;
+    } else {
+        const row = document.querySelector(`tr[onclick*="${clientId}"]`) || 
+                    document.querySelector(`button[onclick*="openM3uModal(${clientId}"]`)?.closest('tr');
+        if (row) {
+            document.getElementById('m3uClientName').value = row.dataset.username || 'Cliente';
+        }
+    }
+    
+    // Buscar dados
+    fetch(`/clients/${clientId}/m3u-data`)
+        .then(response => response.json())
+        .then(data => {
+            document.getElementById('m3uUrl').value = data.m3u_url;
+            document.getElementById('hlsUrl').value = data.hls_url;
+            document.getElementById('m3uModal').classList.remove('hidden');
+        })
+        .catch(err => alert('Erro ao carregar URLs'));
+}
+
+function closeM3uModal() {
+    document.getElementById('m3uModal').classList.add('hidden');
+}
+
+function openEditModal(clientId) {
+    document.getElementById('editClientId').value = clientId;
+    
+    fetch(`/clients/${clientId}/edit-data`)
+        .then(response => response.json())
+        .then(data => {
+            document.getElementById('editUsername').value = data.username;
+            document.getElementById('editPassword').value = data.password;
+            document.getElementById('editPhone').value = data.phone;
+            document.getElementById('editEmail').value = data.email;
+            document.getElementById('editNotes').value = data.notes;
+            document.getElementById('editPackageName').value = data.package_name;
+            document.getElementById('editMaxConnections').value = data.max_connections;
+            
+            // Renderizar bouquets
+            const bouquetsDiv = document.getElementById('editBouquets');
+            bouquetsDiv.innerHTML = '';
+            
+            data.all_bouquets.forEach(b => {
+                const isSelected = data.selected_bouquets.includes(b.id.toString()) || data.selected_bouquets.includes(b.id);
+                const html = `
+                    <label class="flex items-center gap-2 p-2 bg-white dark:bg-dark-300 border border-gray-200 dark:border-dark-100 rounded-lg hover:bg-gray-50 dark:hover:bg-dark-100 cursor-pointer">
+                        <input type="checkbox" name="bouquet_ids[]" value="${b.id}" ${isSelected ? 'checked' : ''} class="w-4 h-4 text-orange-500 rounded focus:ring-orange-500">
+                        <span class="text-sm text-gray-700 dark:text-white truncate" title="${b.bouquet_name}">${b.bouquet_name}</span>
+                    </label>
+                `;
+                bouquetsDiv.insertAdjacentHTML('beforeend', html);
+            });
+            
+            document.getElementById('editModal').classList.remove('hidden');
+        })
+        .catch(err => alert('Erro ao carregar dados do cliente'));
+}
+
+function closeEditModal() {
+    document.getElementById('editModal').classList.add('hidden');
+}
+
+function submitEdit(event) {
+    event.preventDefault();
+    const clientId = document.getElementById('editClientId').value;
+    const form = document.getElementById('editForm');
+    const formData = new FormData(form);
+    
+    // Adicionar método PUT
+    formData.append('_method', 'PUT');
+    
+    fetch(`/clients/${clientId}`, {
+        method: 'POST',
+        headers: {
+            'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content,
+            'Accept': 'application/json'
+        },
+        body: formData
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            closeEditModal();
+            loadClients(currentPage);
+            // Poderia mostrar toast de sucesso aqui
+        } else {
+            alert('Erro: ' + data.message);
+        }
+    })
+    .catch(err => alert('Erro ao atualizar cliente'));
+}
+
+function deleteClient(clientId) {
+    if (!confirm('Tem certeza que deseja excluir este cliente?')) return;
+    
+    fetch(`/clients/${clientId}`, {
+        method: 'DELETE',
+        headers: {
+            'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content,
+            'Accept': 'application/json'
+        }
+    })
+    .then(() => {
+        loadClients(currentPage);
+    })
+    .catch(err => alert('Erro ao excluir cliente'));
+}
+
+// Trial Modal Functions
+function openTrialModal() {
+    // Limpar form
+    document.getElementById('trialForm').reset();
+    document.getElementById('trialPackageId').selectedIndex = 0;
+    document.getElementById('trialBouquets').innerHTML = '@foreach($packages->first()->bouquets ?? [] as $b)...@endforeach'; // Fallback visual, será preenchido
+    
+    // Gerar user/pass aleatórios
+    generateTrialUsername();
+    generateTrialPassword();
+    
+    document.getElementById('trialModal').classList.remove('hidden');
+}
+
+function closeTrialModal() {
+    document.getElementById('trialModal').classList.add('hidden');
+}
+
+function generateTrialUsername() {
+    const random = Math.floor(Math.random() * 100000);
+    document.getElementById('trialUsername').value = 'teste' + random;
+}
+
+function generateTrialPassword() {
+    const random = Math.floor(Math.random() * 1000000);
+    document.getElementById('trialPassword').value = random.toString();
+}
+
+function updateTrialPackage(select) {
+    const selectedOption = select.options[select.selectedIndex];
+    if (select.value) {
+        document.getElementById('trialDurationValue').value = selectedOption.getAttribute('data-duration');
+        document.getElementById('trialDurationUnit').value = selectedOption.getAttribute('data-duration-in');
+        document.getElementById('trialMaxConnections').value = selectedOption.getAttribute('data-connections');
+        
+        // Atualizar bouquets (checkboxes) baseado no pacote
+        const packageBouquets = JSON.parse(selectedOption.getAttribute('data-bouquets'));
+        const checkboxes = document.querySelectorAll('#trialBouquets input[type="checkbox"]');
+        
+        checkboxes.forEach(cb => {
+            if (packageBouquets.includes(cb.value) || packageBouquets.includes(parseInt(cb.value))) {
+                cb.checked = true;
+            } else {
+                cb.checked = false;
+            }
+        });
+    }
+}
+
+function submitTrial(event) {
+    event.preventDefault();
+    const form = document.getElementById('trialForm');
+    const formData = new FormData(form);
+    const btn = document.getElementById('trialBtnText').parentElement;
+    
+    btn.disabled = true;
+    btn.classList.add('opacity-50');
+    
+    fetch('/clients/trial', {
+        method: 'POST',
+        headers: {
+            'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content,
+            'Accept': 'application/json'
+        },
+        body: formData
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            closeTrialModal();
+            
+            // Se vier mensagem personalizada
+            if (data.client_message) {
+                // Criar modal dinâmico ou reutilizar estrutura
+                // Por simplicidade, recarregar a página que vai pegar a session se fosse redirect,
+                // mas como é AJAX, vamos injetar o modal no DOM
+                
+                const modalHtml = `
+                <div id="ajaxClientMessageModal" class="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
+                    <div class="bg-white dark:bg-dark-300 rounded-xl max-w-2xl w-full border border-gray-200 dark:border-dark-200 shadow-2xl">
+                        <div class="p-6 border-b border-gray-200 dark:border-dark-200 flex justify-between items-center bg-gradient-to-r from-green-600 to-green-700">
+                            <h3 class="text-xl font-bold text-white flex items-center gap-2">
+                                <i class="bi bi-check-circle-fill"></i>
+                                Teste Criado com Sucesso!
+                            </h3>
+                            <button onclick="document.getElementById('ajaxClientMessageModal').remove()" class="text-white hover:text-gray-200">
+                                <i class="bi bi-x-lg"></i>
+                            </button>
+                        </div>
+                        <div class="p-6">
+                            <div class="mb-6">
+                                <label class="block text-sm font-medium text-gray-700 dark:text-gray-400 mb-2">Dados de Acesso</label>
+                                <div class="relative">
+                                    <textarea id="ajaxClientMessageText" readonly rows="12" class="w-full px-4 py-3 bg-gray-50 dark:bg-dark-200 border border-gray-300 dark:border-dark-100 rounded-lg text-gray-900 dark:text-white font-mono text-sm resize-none">${data.client_message}</textarea>
+                                    <button onclick="copyToClipboard('ajaxClientMessageText')" class="absolute top-2 right-2 px-3 py-1.5 bg-orange-500 text-white rounded-lg hover:bg-orange-600 transition-colors flex items-center gap-2 text-xs">
+                                        <i class="bi bi-clipboard"></i>
+                                        Copiar
+                                    </button>
+                                </div>
+                            </div>
+                            
+                            <div class="flex gap-3">
+                                <button onclick="document.getElementById('ajaxClientMessageModal').remove()" class="flex-1 px-4 py-2 bg-gray-100 dark:bg-dark-200 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-200 dark:hover:bg-dark-100 transition-colors font-medium">Fechar</button>
+                                <button onclick="window.open('https://wa.me/?text=' + encodeURIComponent(document.getElementById('ajaxClientMessageText').value), '_blank')" class="flex-1 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors font-medium flex items-center justify-center gap-2">
+                                    <i class="bi bi-whatsapp"></i>
+                                    Enviar no WhatsApp
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>`;
+                document.body.insertAdjacentHTML('beforeend', modalHtml);
+            } else {
+                alert('Teste criado com sucesso!');
+            }
+            
+            loadClients(currentPage);
+        } else {
+            alert('Erro: ' + data.message);
+        }
+    })
+    .catch(err => alert('Erro ao criar teste'))
+    .finally(() => {
+        btn.disabled = false;
+        btn.classList.remove('opacity-50');
+    });
+}
 </script>
 @endpush
 @endsection

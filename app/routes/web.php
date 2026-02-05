@@ -83,5 +83,16 @@ Route::middleware('auth')->group(function () {
     Route::prefix('settings')->name('settings.')->middleware('admin')->group(function () {
         Route::get('/', [\App\Http\Controllers\SettingsController::class, 'index'])->name('index');
         Route::put('/', [\App\Http\Controllers\SettingsController::class, 'update'])->name('update');
+        
+        // Novas rotas para Apps, DNS e Mensagem
+        Route::post('/apps', [\App\Http\Controllers\SettingsController::class, 'storeApp'])->name('apps.store');
+        Route::put('/apps/{id}', [\App\Http\Controllers\SettingsController::class, 'updateApp'])->name('apps.update');
+        Route::delete('/apps/{id}', [\App\Http\Controllers\SettingsController::class, 'destroyApp'])->name('apps.destroy');
+
+        Route::post('/dns', [\App\Http\Controllers\SettingsController::class, 'storeDns'])->name('dns.store');
+        Route::put('/dns/{id}', [\App\Http\Controllers\SettingsController::class, 'updateDns'])->name('dns.update');
+        Route::delete('/dns/{id}', [\App\Http\Controllers\SettingsController::class, 'destroyDns'])->name('dns.destroy');
+
+        Route::put('/message', [\App\Http\Controllers\SettingsController::class, 'updateClientMessage'])->name('message.update');
     });
 });

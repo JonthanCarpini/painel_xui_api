@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Models\AppSetting;
 use App\Models\Bouquet;
 use App\Models\CreditLog;
 use App\Models\Line;
@@ -254,5 +255,31 @@ class LineService
             'hls_url' => $hlsUrl,
             'dns' => $dns,
         ];
+    }
+
+    /**
+     * Gera a mensagem formatada para o cliente com base no template
+     */
+    public function generateClientMessage(Line $line)
+    {
+        $template = AppSetting::get('client_message_template', '');
+        
+        if (empty($template)) {
+            // Template padrão se não houver um configurado
+            $template = "✅ *Usuário:* {USERNAME}\n✅ *Senha:* {PASSWORD}\n🗓️ *Vencimento:* {EXPIRATION}\n\nLink M3U: {M3U_URL}";
+        }
+
+        $expiration = date('d/m/Y H:i:s', $line->exp_date);
+        $urls = $this->generateM3uUrls($line);
+        $dns = $urls['dns'];
+        
+        // Substituições Padrão
+        $message = str_replace('{USERNAME}', $line->username, $template);
+        $message = str_replace('{PASSWORD}', $line->password, $message);
+        $message = str_replace('{EXPIRATION}', $expiration, $message);
+        $message = str_replace('{DNS}', $dns, $message);
+        $message = str_replace('{M3U_URL}', $urls['m3u_url'], $message);
+
+        return $message;
     }
 }

@@ -3,14 +3,11 @@
 namespace App\Http\Controllers;
 
 use App\Models\Bouquet;
-use App\Models\CreditLog;
 use App\Models\Line;
 use App\Models\Package;
-use App\Models\XuiUser;
 use App\Services\LineService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Facades\DB;
 
 class ClientController extends Controller
 {
@@ -147,7 +144,6 @@ class ClientController extends Controller
         }
 
         // Cache de pacotes e bouquets
-        // IMPORTANTE: Adicionado 'is_trial' para o modal funcionar
         $packages = cache()->remember('packages_all_v2', 3600, function () {
             return Package::select('id', 'package_name', 'is_official', 'is_trial', 'official_duration', 
                                    'official_duration_in', 'official_credits', 'max_connections', 
@@ -203,12 +199,9 @@ class ClientController extends Controller
         $user = Auth::user();
 
         try {
-            // Garantir que o telefone vá para admin_notes para ser pesquisável
             $phone = $validated['phone'] ?? '';
             $notes = $validated['notes'] ?? '';
             
-            // Se tiver telefone e notes estiver vazio, usa o telefone como notes
-            // Se tiver ambos, concatena
             $finalNotes = $notes;
             if (!empty($phone)) {
                 if (empty($finalNotes)) {
@@ -226,15 +219,19 @@ class ClientController extends Controller
                 'max_connections' => $validated['max_connections'],
                 'email' => $validated['email'] ?? null,
                 'phone' => $phone,
-                'notes' => $finalNotes, // Aqui vai para admin_notes
+                'notes' => $finalNotes,
                 'member_id' => $user->id,
                 'is_trial' => false,
             ];
 
             $line = $lineService->createLine($data);
+            
+            // Gerar Mensagem do Cliente
+            $clientMessage = $lineService->generateClientMessage($line);
 
             return redirect()->route('clients.index')
-                ->with('success', 'Cliente criado com sucesso!');
+                ->with('success', 'Cliente criado com sucesso!')
+                ->with('client_message', $clientMessage);
 
         } catch (\Exception $e) {
             return back()->withErrors(['error' => $e->getMessage()])
@@ -286,7 +283,6 @@ class ClientController extends Controller
         $user = Auth::user();
 
         try {
-            // Garantir que o telefone vá para admin_notes para ser pesquisável
             $phone = $validated['phone'] ?? '';
             $notes = $validated['notes'] ?? '';
             
@@ -309,12 +305,15 @@ class ClientController extends Controller
                 'max_connections' => $validated['max_connections'],
                 'email' => $validated['email'] ?? null,
                 'phone' => $phone,
-                'notes' => $finalNotes, // Aqui vai para admin_notes
+                'notes' => $finalNotes,
                 'member_id' => $user->id,
                 'is_trial' => true,
             ];
 
             $line = $lineService->createLine($data);
+            
+            // Gerar Mensagem do Cliente
+            $clientMessage = $lineService->generateClientMessage($line);
 
             if ($request->expectsJson()) {
                 return response()->json([
@@ -326,11 +325,12 @@ class ClientController extends Controller
                         'password' => $line->password,
                         'exp_date' => $line->exp_date,
                         'max_connections' => $line->max_connections,
-                    ]
+                    ],
+                    'client_message' => $clientMessage
                 ]);
             }
 
-            // Gerar URLs M3U
+            // Gerar URLs M3U para view (fallback)
             $urls = $lineService->generateM3uUrls($line);
 
             return redirect()->route('clients.create-trial')
@@ -341,7 +341,8 @@ class ClientController extends Controller
                     'max_connections' => $line->max_connections,
                     'm3u_url' => $urls['m3u_url'],
                     'hls_url' => $urls['hls_url'],
-                ]);
+                ])
+                ->with('client_message', $clientMessage);
 
         } catch (\Exception $e) {
             if ($request->expectsJson()) {
@@ -412,7 +413,7 @@ class ClientController extends Controller
                 'password' => $validated['password'],
                 'package_id' => $validated['package_id'] ?? $line->package_id,
                 'bouquet' => json_encode($validated['bouquet_ids']),
-                'contact' => $validated['phone'] ?? '', // Salvar telefone em contact
+                'contact' => $validated['phone'] ?? '',
                 'notes' => $validated['notes'] ?? '',
                 'enabled' => $validated['enabled'] ?? $line->enabled,
             ]);
@@ -496,7 +497,6 @@ class ClientController extends Controller
             return back()->withErrors(['error' => 'Cliente não encontrado']);
         }
 
-        // Usar LineService para gerar URLs com DNS do revendedor
         $urls = $lineService->generateM3uUrls($line);
 
         return view('clients.m3u', [
