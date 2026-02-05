@@ -118,13 +118,15 @@ class DashboardController extends Controller
             $myTreeIds = $user->getAllSubResellerIds();
 
             return [
-                'total_clients' => Line::whereIn('member_id', $myTreeIds)->count(),
+                'total_clients' => Line::whereIn('member_id', $myTreeIds)->where('is_trial', 0)->count(),
                 'active_clients' => Line::whereIn('member_id', $myTreeIds)
+                    ->where('is_trial', 0)
                     ->where('enabled', 1)
                     ->where('exp_date', '>', $now)
                     ->count(),
                 'my_resellers' => XuiUser::where('owner_id', $userId)->count(),
                 'expiring_today' => Line::whereIn('member_id', $myTreeIds)
+                    ->where('is_trial', 0)
                     ->whereBetween('exp_date', [$startOfDay, $endOfDay])
                     ->count(),
                 'online_now' => LineLive::whereIn('user_id', function($query) use ($myTreeIds) {
