@@ -278,7 +278,7 @@
             </div>
         </div>
         <h3 class="text-3xl font-bold text-white mb-1">{{ $stats['total_clients'] }}</h3>
-        <p class="text-gray-400 text-sm font-medium">Meus Clientes</p>
+        <p class="text-gray-400 text-sm font-medium">Clientes (Oficial)</p>
     </div>
 
     <!-- Minhas Revendas -->
