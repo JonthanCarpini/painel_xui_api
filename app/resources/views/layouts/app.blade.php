@@ -145,7 +145,7 @@
                 <div class="flex items-center justify-between">
                     <div>
                         <h2 class="text-white text-xl font-bold">Olá, {{ Auth::user()->username }}</h2>
-                        <p class="text-gray-400 text-sm">Bem-vindo ao painel de controle</p>
+                        <p class="text-gray-400 text-sm">Painel XUI v2.0</p>
                     </div>
                     <div class="flex items-center gap-4">
                         <div class="bg-gradient-to-r from-orange-500 to-orange-600 px-4 py-2 rounded-lg">
