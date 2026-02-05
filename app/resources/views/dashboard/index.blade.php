@@ -269,7 +269,7 @@
     </div>
 </div>
 
-<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+<div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
     <!-- Meus Clientes -->
     <div class="bg-dark-300 rounded-xl p-6 border border-dark-200 hover:border-orange-500/50 transition-all duration-300">
         <div class="flex items-center justify-between mb-4">
@@ -290,17 +290,6 @@
         </div>
         <h3 class="text-3xl font-bold text-white mb-1">{{ $stats['my_resellers'] }}</h3>
         <p class="text-gray-400 text-sm font-medium">Minhas Revendas</p>
-    </div>
-
-    <!-- Vencendo Hoje -->
-    <div class="bg-dark-300 rounded-xl p-6 border border-dark-200 hover:border-yellow-500/50 transition-all duration-300">
-        <div class="flex items-center justify-between mb-4">
-            <div class="w-12 h-12 bg-yellow-500/10 rounded-lg flex items-center justify-center">
-                <i class="bi bi-exclamation-triangle text-yellow-500 text-2xl"></i>
-            </div>
-        </div>
-        <h3 class="text-3xl font-bold text-white mb-1">{{ $stats['expiring_today'] }}</h3>
-        <p class="text-gray-400 text-sm font-medium">Vencendo Hoje</p>
     </div>
 
     <!-- Online Agora -->
