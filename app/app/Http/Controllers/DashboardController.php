@@ -122,6 +122,7 @@ class DashboardController extends Controller
                 'active_clients' => Line::whereIn('member_id', $myTreeIds)
                     ->where('is_trial', 0)
                     ->where('enabled', 1)
+                    ->where('admin_enabled', 1)
                     ->where('exp_date', '>', $now)
                     ->count(),
                 'my_resellers' => XuiUser::where('owner_id', $userId)->count(),
