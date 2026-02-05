@@ -10,11 +10,16 @@ class UserPreference extends Model
     protected $table = 'user_preferences';
 
     protected $fillable = [
-        'user_id',
+        'panel_user_id',
         'key',
         'value',
         'type',
     ];
+
+    public function panelUser()
+    {
+        return $this->belongsTo(PanelUser::class, 'panel_user_id');
+    }
 
     // Helper para converter valor baseado no tipo
     public function getValueAttribute($value)

@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\LoginLog;
+use App\Models\PanelUser;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Session;
@@ -29,6 +30,15 @@ class AuthController extends Controller
             $request->session()->regenerate();
 
             $user = Auth::user();
+            // Sincronizar usuário local (Painel Plus)
+            PanelUser::updateOrCreate(
+                ['xui_id' => $user->id],
+                [
+                    'username' => $user->username,
+                    'group_id' => $user->member_group_id
+                ]
+            );
+            
             
             LoginLog::create([
                 'type' => 'panel',

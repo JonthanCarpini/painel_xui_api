@@ -4,11 +4,11 @@
 
 @section('content')
 <div class="flex items-center justify-between mb-8">
-    <h1 class="text-2xl font-bold text-white flex items-center gap-3">
+    <h1 class="text-2xl font-bold text-gray-900 dark:text-white flex items-center gap-3">
         <i class="bi bi-plus-circle text-orange-500"></i>
         Criar Novo Cliente
     </h1>
-    <a href="{{ route('clients.index') }}" class="px-4 py-2 bg-dark-300 border border-dark-200 text-gray-300 rounded-lg hover:bg-dark-200 transition-colors flex items-center gap-2">
+    <a href="{{ route('clients.index') }}" class="px-4 py-2 bg-white dark:bg-dark-300 border border-gray-200 dark:border-dark-200 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-50 dark:hover:bg-dark-200 transition-colors flex items-center gap-2">
         <i class="bi bi-arrow-left"></i>
         Voltar
     </a>
@@ -16,36 +16,36 @@
 
 <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
     <div class="lg:col-span-2">
-        <div class="bg-dark-300 rounded-xl border border-dark-200 p-6">
+        <div class="bg-white dark:bg-dark-300 rounded-xl border border-gray-200 dark:border-dark-200 p-6 shadow-sm dark:shadow-none">
             <form action="{{ route('clients.store') }}" method="POST">
                 @csrf
                 
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
                     <div>
-                        <label class="block text-sm font-medium text-gray-400 mb-2">Usuário *</label>
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-400 mb-2">Usu&aacute;rio *</label>
                         <div class="flex gap-2">
-                            <input type="text" id="usernameField" name="username" value="{{ old('username') }}" required minlength="3" maxlength="50" class="flex-1 px-4 py-2 bg-dark-200 border border-dark-100 rounded-lg text-white focus:border-orange-500 focus:outline-none" placeholder="Digite o usuário">
+                            <input type="text" id="usernameField" name="username" value="{{ old('username') }}" required minlength="3" maxlength="50" class="flex-1 px-4 py-2 bg-gray-50 dark:bg-dark-200 border border-gray-300 dark:border-dark-100 rounded-lg text-gray-900 dark:text-white focus:border-orange-500 focus:outline-none transition-colors" placeholder="Digite o usu&aacute;rio">
                             <button type="button" onclick="generateUsername()" class="px-4 py-2 bg-orange-500 text-white rounded-lg hover:bg-orange-600 transition-colors">
                                 <i class="bi bi-shuffle"></i>
                             </button>
                         </div>
-                        <p class="text-xs text-gray-500 mt-1">Mínimo 3 caracteres</p>
+                        <p class="text-xs text-gray-500 mt-1">M&iacute;nimo 3 caracteres</p>
                     </div>
                     <div>
-                        <label class="block text-sm font-medium text-gray-400 mb-2">Senha *</label>
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-400 mb-2">Senha *</label>
                         <div class="flex gap-2">
-                            <input type="text" id="passwordField" name="password" value="{{ old('password') }}" required minlength="6" class="flex-1 px-4 py-2 bg-dark-200 border border-dark-100 rounded-lg text-white focus:border-orange-500 focus:outline-none" placeholder="Digite a senha">
+                            <input type="text" id="passwordField" name="password" value="{{ old('password') }}" required minlength="6" class="flex-1 px-4 py-2 bg-gray-50 dark:bg-dark-200 border border-gray-300 dark:border-dark-100 rounded-lg text-gray-900 dark:text-white focus:border-orange-500 focus:outline-none transition-colors" placeholder="Digite a senha">
                             <button type="button" onclick="generatePassword()" class="px-4 py-2 bg-orange-500 text-white rounded-lg hover:bg-orange-600 transition-colors">
                                 <i class="bi bi-shuffle"></i>
                             </button>
                         </div>
-                        <p class="text-xs text-gray-500 mt-1">Mínimo 6 caracteres</p>
+                        <p class="text-xs text-gray-500 mt-1">M&iacute;nimo 6 caracteres</p>
                     </div>
                 </div>
 
                 <div class="mb-6">
-                    <label class="block text-sm font-medium text-gray-400 mb-2">Pacote *</label>
-                    <select name="package_id" id="packageSelect" required class="w-full px-4 py-2 bg-dark-200 border border-dark-100 rounded-lg text-white focus:border-orange-500 focus:outline-none">
+                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-400 mb-2">Pacote *</label>
+                    <select name="package_id" id="packageSelect" required class="w-full px-4 py-2 bg-gray-50 dark:bg-dark-200 border border-gray-300 dark:border-dark-100 rounded-lg text-gray-900 dark:text-white focus:border-orange-500 focus:outline-none transition-colors">
                         <option value="">Selecione um pacote</option>
                         @foreach($packages as $package)
                             @if($package->is_official == 1)
@@ -57,7 +57,7 @@
                                         {{ old('package_id') == $package->id ? 'selected' : '' }}>
                                     {{ $package->package_name }} - {{ $package->official_duration ?? 30 }} {{ $package->official_duration_in ?? 'dias' }}
                                     @if($package->official_credits > 0)
-                                        ({{ $package->official_credits }} crédito{{ $package->official_credits > 1 ? 's' : '' }})
+                                        ({{ $package->official_credits }} cr&eacute;dito{{ $package->official_credits > 1 ? 's' : '' }})
                                     @endif
                                 </option>
                             @endif
@@ -67,15 +67,15 @@
 
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
                     <div>
-                        <label class="block text-sm font-medium text-gray-400 mb-2">Duração *</label>
-                        <input type="text" id="durationDisplay" readonly class="w-full px-4 py-2 bg-dark-100 border border-dark-100 rounded-lg text-gray-400 cursor-not-allowed" value="Selecione um pacote" placeholder="Automático">
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-400 mb-2">Dura&ccedil;&atilde;o *</label>
+                        <input type="text" id="durationDisplay" readonly class="w-full px-4 py-2 bg-gray-100 dark:bg-dark-100 border border-gray-300 dark:border-dark-100 rounded-lg text-gray-500 dark:text-gray-400 cursor-not-allowed" value="Selecione um pacote" placeholder="Autom&aacute;tico">
                         <input type="hidden" id="durationValue" name="duration_value" value="">
                         <input type="hidden" id="durationUnit" name="duration_unit" value="">
                         <p class="text-xs text-gray-500 mt-1">Definido automaticamente pelo pacote</p>
                     </div>
                     <div>
-                        <label class="block text-sm font-medium text-gray-400 mb-2">Conexões Simultâneas *</label>
-                        <input type="text" id="connectionsDisplay" readonly class="w-full px-4 py-2 bg-dark-100 border border-dark-100 rounded-lg text-gray-400 cursor-not-allowed" value="Selecione um pacote" placeholder="Automático">
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-400 mb-2">Conex&otilde;es Simult&acirc;neas *</label>
+                        <input type="text" id="connectionsDisplay" readonly class="w-full px-4 py-2 bg-gray-100 dark:bg-dark-100 border border-gray-300 dark:border-dark-100 rounded-lg text-gray-500 dark:text-gray-400 cursor-not-allowed" value="Selecione um pacote" placeholder="Autom&aacute;tico">
                         <input type="hidden" id="maxConnections" name="max_connections" value="">
                         <p class="text-xs text-gray-500 mt-1">Definido automaticamente pelo pacote</p>
                     </div>
@@ -83,27 +83,27 @@
 
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
                     <div>
-                        <label class="block text-sm font-medium text-gray-400 mb-2">Telefone (Opcional)</label>
-                        <input type="text" id="phoneField" name="phone" value="{{ old('phone') }}" class="w-full px-4 py-2 bg-dark-200 border border-dark-100 rounded-lg text-white focus:border-orange-500 focus:outline-none" placeholder="(00) 00000-0000" maxlength="15">
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-400 mb-2">Telefone (Opcional)</label>
+                        <input type="text" id="phoneField" name="phone" value="{{ old('phone') }}" class="w-full px-4 py-2 bg-gray-50 dark:bg-dark-200 border border-gray-300 dark:border-dark-100 rounded-lg text-gray-900 dark:text-white focus:border-orange-500 focus:outline-none transition-colors" placeholder="(00) 00000-0000" maxlength="15">
                     </div>
                     <div>
-                        <label class="block text-sm font-medium text-gray-400 mb-2">E-mail (Opcional)</label>
-                        <input type="email" name="email" value="{{ old('email') }}" class="w-full px-4 py-2 bg-dark-200 border border-dark-100 rounded-lg text-white focus:border-orange-500 focus:outline-none" placeholder="email@exemplo.com">
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-400 mb-2">E-mail (Opcional)</label>
+                        <input type="email" name="email" value="{{ old('email') }}" class="w-full px-4 py-2 bg-gray-50 dark:bg-dark-200 border border-gray-300 dark:border-dark-100 rounded-lg text-gray-900 dark:text-white focus:border-orange-500 focus:outline-none transition-colors" placeholder="email@exemplo.com">
                     </div>
                 </div>
 
                 <div class="mb-6">
-                    <label class="block text-sm font-medium text-gray-400 mb-2">Observação (Opcional)</label>
-                    <textarea name="notes" rows="3" class="w-full px-4 py-2 bg-dark-200 border border-dark-100 rounded-lg text-white focus:border-orange-500 focus:outline-none" placeholder="Anotações sobre este cliente">{{ old('notes') }}</textarea>
+                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-400 mb-2">Observa&ccedil;&atilde;o (Opcional)</label>
+                    <textarea name="notes" rows="3" class="w-full px-4 py-2 bg-gray-50 dark:bg-dark-200 border border-gray-300 dark:border-dark-100 rounded-lg text-gray-900 dark:text-white focus:border-orange-500 focus:outline-none transition-colors" placeholder="Anota&ccedil;&otilde;es sobre este cliente">{{ old('notes') }}</textarea>
                 </div>
 
                 <div class="mb-6">
-                    <label class="block text-sm font-medium text-gray-400 mb-3">Selecione os Canais (Buquês) *</label>
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-3 max-h-64 overflow-y-auto p-4 bg-dark-200 rounded-lg">
+                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-400 mb-3">Selecione os Canais (Buqu&ecirc;s) *</label>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-3 max-h-64 overflow-y-auto p-4 bg-gray-50 dark:bg-dark-200 rounded-lg border border-gray-200 dark:border-0 custom-scrollbar">
                         @foreach($bouquets as $bouquet)
-                            <label class="flex items-center gap-3 p-3 bg-dark-300 rounded-lg hover:bg-dark-100 cursor-pointer transition-colors">
-                                <input type="checkbox" name="bouquet_ids[]" value="{{ $bouquet['id'] }}" {{ in_array($bouquet['id'], old('bouquet_ids', [])) ? 'checked' : '' }} class="w-5 h-5 text-orange-500 bg-dark-200 border-dark-100 rounded focus:ring-orange-500">
-                                <span class="text-white text-sm">{{ $bouquet['bouquet_name'] }}</span>
+                            <label class="flex items-center gap-3 p-3 bg-white dark:bg-dark-300 border border-gray-200 dark:border-dark-100 rounded-lg hover:bg-gray-50 dark:hover:bg-dark-100 cursor-pointer transition-colors shadow-sm dark:shadow-none">
+                                <input type="checkbox" name="bouquet_ids[]" value="{{ $bouquet['id'] }}" {{ in_array($bouquet['id'], old('bouquet_ids', [])) ? 'checked' : '' }} class="w-5 h-5 text-orange-500 bg-gray-100 dark:bg-dark-200 border-gray-300 dark:border-dark-100 rounded focus:ring-orange-500 focus:ring-2">
+                                <span class="text-gray-700 dark:text-white text-sm">{{ $bouquet['bouquet_name'] }}</span>
                             </label>
                         @endforeach
                     </div>
@@ -111,28 +111,28 @@
                 </div>
 
                 <div class="flex gap-3">
-                    <button type="submit" class="flex-1 px-6 py-3 bg-gradient-to-r from-orange-500 to-orange-600 text-white rounded-lg hover:shadow-lg hover:shadow-orange-500/20 transition-all flex items-center justify-center gap-2">
+                    <button type="submit" class="flex-1 px-6 py-3 bg-gradient-to-r from-orange-500 to-orange-600 text-white rounded-lg hover:shadow-lg hover:shadow-orange-500/20 transition-all flex items-center justify-center gap-2 font-medium">
                         <i class="bi bi-check-circle"></i>
                         Criar Cliente
                     </button>
-                    <a href="{{ route('clients.index') }}" class="px-6 py-3 bg-dark-200 text-gray-300 rounded-lg hover:bg-dark-100 transition-colors">Cancelar</a>
+                    <a href="{{ route('clients.index') }}" class="px-6 py-3 bg-gray-100 dark:bg-dark-200 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-200 dark:hover:bg-dark-100 transition-colors font-medium">Cancelar</a>
                 </div>
             </form>
         </div>
     </div>
 
     <div class="space-y-6">
-        <div class="bg-dark-300 rounded-xl border border-dark-200 p-6">
-            <h3 class="text-lg font-bold text-white mb-4 flex items-center gap-2">
+        <div class="bg-white dark:bg-dark-300 rounded-xl border border-gray-200 dark:border-dark-200 p-6 shadow-sm dark:shadow-none">
+            <h3 class="text-lg font-bold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
                 <i class="bi bi-info-circle text-orange-500"></i>
-                Informações
+                Informa&ccedil;&otilde;es
             </h3>
-            <div class="space-y-3 text-sm text-gray-400">
-                <p><strong class="text-white">Dicas:</strong></p>
+            <div class="space-y-3 text-sm text-gray-600 dark:text-gray-400">
+                <p><strong class="text-gray-900 dark:text-white">Dicas:</strong></p>
                 <ul class="space-y-2 ml-4">
                     <li class="flex items-start gap-2">
                         <i class="bi bi-check text-green-500 mt-0.5"></i>
-                        <span>Use senhas fortes e únicas</span>
+                        <span>Use senhas fortes e &uacute;nicas</span>
                     </li>
                     <li class="flex items-start gap-2">
                         <i class="bi bi-check text-green-500 mt-0.5"></i>
@@ -140,30 +140,30 @@
                     </li>
                     <li class="flex items-start gap-2">
                         <i class="bi bi-check text-green-500 mt-0.5"></i>
-                        <span>Defina duração conforme pagamento</span>
+                        <span>Defina dura&ccedil;&atilde;o conforme pagamento</span>
                     </li>
                     <li class="flex items-start gap-2">
                         <i class="bi bi-check text-green-500 mt-0.5"></i>
-                        <span>Selecione apenas canais necessários</span>
+                        <span>Selecione apenas canais necess&aacute;rios</span>
                     </li>
                 </ul>
             </div>
-            <div class="mt-4 p-3 bg-yellow-500/10 border border-yellow-500/50 rounded-lg">
-                <p class="text-yellow-400 text-sm flex items-start gap-2">
+            <div class="mt-4 p-3 bg-yellow-50 dark:bg-yellow-500/10 border border-yellow-200 dark:border-yellow-500/50 rounded-lg">
+                <p class="text-yellow-700 dark:text-yellow-400 text-sm flex items-start gap-2">
                     <i class="bi bi-exclamation-triangle-fill mt-0.5"></i>
-                    <span><strong>Atenção:</strong> Créditos serão debitados automaticamente</span>
+                    <span><strong>Aten&ccedil;&atilde;o:</strong> Cr&eacute;ditos ser&atilde;o debitados automaticamente</span>
                 </p>
             </div>
         </div>
 
-        <div class="bg-dark-300 rounded-xl border border-dark-200 p-6">
-            <h3 class="text-lg font-bold text-white mb-4 flex items-center gap-2">
+        <div class="bg-white dark:bg-dark-300 rounded-xl border border-gray-200 dark:border-dark-200 p-6 shadow-sm dark:shadow-none">
+            <h3 class="text-lg font-bold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
                 <i class="bi bi-lightning-charge text-orange-500"></i>
-                Ação Rápida
+                A&ccedil;&atilde;o R&aacute;pida
             </h3>
-            <a href="{{ route('clients.create-trial') }}" class="block w-full px-4 py-3 bg-dark-200 border border-orange-500 text-white rounded-lg hover:bg-dark-100 transition-colors text-center">
+            <a href="{{ route('clients.create-trial') }}" class="block w-full px-4 py-3 bg-white dark:bg-dark-200 border border-orange-500 text-orange-600 dark:text-white rounded-lg hover:bg-orange-50 dark:hover:bg-dark-100 transition-colors text-center font-medium">
                 <i class="bi bi-clock-history mr-2"></i>
-                Criar Teste Grátis
+                Criar Teste Gr&aacute;tis
             </a>
         </div>
     </div>

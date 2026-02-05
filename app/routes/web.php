@@ -75,6 +75,11 @@ Route::middleware('auth')->group(function () {
 
     Route::get('/credit-logs', [CreditLogController::class, 'index'])->name('credit-logs.index');
 
+    Route::prefix('profile')->name('profile.')->group(function () {
+        Route::get('/', [\App\Http\Controllers\ProfileController::class, 'index'])->name('index');
+        Route::put('/', [\App\Http\Controllers\ProfileController::class, 'update'])->name('update');
+    });
+
     Route::prefix('settings')->name('settings.')->middleware('admin')->group(function () {
         Route::get('/', [\App\Http\Controllers\SettingsController::class, 'index'])->name('index');
         Route::put('/', [\App\Http\Controllers\SettingsController::class, 'update'])->name('update');

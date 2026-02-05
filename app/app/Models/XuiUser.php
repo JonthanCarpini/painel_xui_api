@@ -103,4 +103,14 @@ class XuiUser extends Authenticatable
         
         return array_unique($ids);
     }
+
+    public function panelUser()
+    {
+        return $this->hasOne(PanelUser::class, 'xui_id');
+    }
+
+    public function getPreference($key, $default = null)
+    {
+        return $this->panelUser ? $this->panelUser->getPreference($key, $default) : $default;
+    }
 }
