@@ -16,7 +16,7 @@ if [ -z "$CLIENT_NAME" ] || [ -z "$DOMAIN" ]; then
 fi
 
 # Configurações Fixas
-IMAGE_NAME="jonthancarpini/painelshark:latest" # Sua imagem no Docker Hub
+IMAGE_NAME="carpini/painelshark:latest" # Sua imagem no Docker Hub
 NETWORK="saas_network"
 MYSQL_HOST="mysql_central"
 ROOT_PASS="root_password_segura" # Mesma do docker-compose.saas.yml

@@ -171,12 +171,52 @@ painel_xui/
 │   │       └── ...
 │   ├── routes/
 │   │   └── web.php                     # Definição de Rotas Web
-│   └── upload-zip.ps1                  # Script de Deploy Automatizado
+│   └── upload-zip.ps1                  # Script de Deploy Automatizado (Legado/VPS Única)
+├── docker/                             # Configurações de Containerização
+│   ├── nginx/                          # Config do Nginx para Containers
+│   └── entrypoint.sh                   # Script de inicialização do Container
 ├── documentos/                         # Documentação do Projeto
 │   ├── MANUAL_TECNICO_DO_SISTEMA.md    # Este arquivo
 │   └── ...
+├── docker-compose.saas.yml             # Orchestrador da Infra (Traefik + MySQL)
+├── spawn_client.sh                     # Script de Provisionamento de Novos Clientes
+├── Dockerfile                          # Definição da Imagem do Painel
 └── ...
 ```
+
+---
+
+## 8. 🐳 Arquitetura SaaS (Docker & Infraestrutura)
+
+O Painelshark foi arquitetado para rodar em modo **SaaS Single-Tenant**. Isso significa que cada cliente possui seu próprio container isolado, mas compartilha a infraestrutura de rede e banco de dados centralizado.
+
+### 8.1. Componentes da Infraestrutura
+1.  **Traefik (Gateway):** Atua como Proxy Reverso. Ele recebe requisições `painel.cliente.com`, gera SSL automático (Let's Encrypt) e encaminha para o container correto.
+2.  **MySQL Central:** Um único container MySQL armazena os bancos de todos os clientes. Cada cliente tem um schema isolado (`painel_clienteA`, `painel_clienteB`).
+3.  **Containers de Aplicação:** Cada cliente roda uma instância do Painelshark (PHP-FPM + Nginx) baseada na imagem Docker oficial do projeto.
+
+### 8.2. Fluxo de Provisionamento (Venda -> Ativação)
+O processo é automatizado pelo script `spawn_client.sh` presente na raiz.
+
+1.  **Venda Aprovada:** O sistema gerenciador chama o script de provisionamento.
+2.  **Criação de Banco:** O script cria `painel_{cliente}` e usuário `user_{cliente}` no MySQL Central.
+3.  **Spawn do Container:** Um novo container docker é iniciado com variáveis de ambiente injetadas:
+    *   `DB_HOST`: Aponta para `mysql_central`.
+    *   `APP_URL`: Domínio do cliente.
+    *   `XUI_HOST`: URL do painel XUI do cliente (externo).
+4.  **Migração:** O container roda `php artisan migrate --force` ao iniciar para criar as tabelas locais.
+
+### 8.3. White Label e Customização
+Como a imagem Docker é imutável (igual para todos), a personalização (Logo, Nome, Cores) **NÃO** fica no código ou `.env`.
+*   **Armazenamento:** Configurações visuais ficam na tabela `app_settings` dentro do banco `painel_plus` do cliente.
+*   **Injeção:** O Laravel carrega essas configs via `AppServiceProvider` e injeta nas Views.
+
+### 8.4. Processo de Atualização em Massa
+Para atualizar todos os 100+ clientes simultaneamente:
+1.  Commitar alterações no Git (`main`).
+2.  Gerar nova build Docker: `docker build -t carpini/painelshark:latest .`
+3.  Subir para o Hub: `docker push carpini/painelshark:latest`.
+4.  No servidor, rodar script de update que faz `docker pull` e reinicia os containers com a nova imagem.
 
 ---
 
