@@ -80,6 +80,24 @@
                 </div>
             </div>
 
+            @if(session('client_message'))
+            <div class="mb-6">
+                <label class="block text-sm font-medium text-gray-700 dark:text-gray-400 mb-2">Mensagem do Cliente (WhatsApp)</label>
+                <div class="relative">
+                    <textarea id="trialClientMessage" readonly rows="8" class="w-full px-4 py-3 bg-gray-50 dark:bg-dark-200 border border-gray-300 dark:border-dark-100 rounded-lg text-gray-900 dark:text-white font-mono text-xs resize-none">{{ session('client_message') }}</textarea>
+                    <button onclick="copyField('trialClientMessage')" class="absolute top-2 right-2 px-2 py-1 bg-orange-500 text-white rounded hover:bg-orange-600 transition-colors text-xs">
+                        <i class="bi bi-clipboard"></i>
+                    </button>
+                </div>
+                <div class="mt-2 flex justify-end">
+                    <button onclick="window.open('https://wa.me/?text=' + encodeURIComponent(document.getElementById('trialClientMessage').value), '_blank')" class="px-3 py-1.5 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors text-sm flex items-center gap-2">
+                        <i class="bi bi-whatsapp"></i>
+                        Enviar no WhatsApp
+                    </button>
+                </div>
+            </div>
+            @endif
+
             <div class="flex gap-3">
                 <button onclick="closeSuccessModal()" class="flex-1 px-4 py-2 bg-gray-100 dark:bg-dark-200 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-200 dark:hover:bg-dark-100 transition-colors font-medium">Fechar</button>
                 <a href="{{ route('clients.index') }}" class="flex-1 px-4 py-2 bg-gradient-to-r from-orange-500 to-orange-600 text-white rounded-lg hover:shadow-lg transition-all text-center font-medium">
@@ -130,7 +148,7 @@
                                         data-duration="{{ $package->trial_duration ?? 24 }}"
                                         data-duration-in="{{ $package->trial_duration_in ?? 'hours' }}"
                                         data-connections="{{ $package->max_connections ?? 1 }}"
-                                        data-bouquets="{{ $package->bouquets ?? '[]' }}"
+                                        data-bouquets="{{ json_encode($package->bouquets ?? []) }}"
                                         {{ old('package_id') == $package->id ? 'selected' : '' }}>
                                     {{ $package->package_name }} - {{ $package->trial_duration ?? 24 }} {{ $package->trial_duration_in ?? 'horas' }}
                                     @if($package->trial_credits > 0)

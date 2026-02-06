@@ -53,7 +53,7 @@
                                         data-duration="{{ $package->official_duration ?? 30 }}"
                                         data-duration-in="{{ $package->official_duration_in ?? 'days' }}"
                                         data-connections="{{ $package->max_connections ?? 1 }}"
-                                        data-bouquets="{{ $package->bouquets ?? '[]' }}"
+                                        data-bouquets="{{ json_encode($package->bouquets ?? []) }}"
                                         {{ old('package_id') == $package->id ? 'selected' : '' }}>
                                     {{ $package->package_name }} - {{ $package->official_duration ?? 30 }} {{ $package->official_duration_in ?? 'dias' }}
                                     @if($package->official_credits > 0)

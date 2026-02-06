@@ -104,8 +104,11 @@ class XuiApiService
             $data['bouquet_ids'] = json_encode(array_values($data['bouquet_ids']));
         }
 
-        if (isset($data['exp_date']) && !is_string($data['exp_date'])) {
-            $data['exp_date'] = date('Y-m-d H:i', strtotime($data['exp_date']));
+        if (isset($data['exp_date'])) {
+            if (!is_numeric($data['exp_date'])) {
+                $data['exp_date'] = strtotime($data['exp_date']);
+            }
+            $data['exp_date'] = (int)$data['exp_date'];
         }
 
         return $this->makeRequest('create_line', $data);
@@ -119,8 +122,11 @@ class XuiApiService
             $data['bouquet_ids'] = json_encode(array_values($data['bouquet_ids']));
         }
 
-        if (isset($data['exp_date']) && !is_string($data['exp_date'])) {
-            $data['exp_date'] = date('Y-m-d H:i', strtotime($data['exp_date']));
+        if (isset($data['exp_date'])) {
+            if (!is_numeric($data['exp_date'])) {
+                $data['exp_date'] = strtotime($data['exp_date']);
+            }
+            $data['exp_date'] = (int)$data['exp_date'];
         }
 
         return $this->makeRequest('edit_line', $data);
@@ -177,6 +183,11 @@ class XuiApiService
             'result' => $response['result'] ?? true,
             'data' => array_values($filtered)
         ];
+    }
+
+    public function getStreams(array $params = []): array
+    {
+        return $this->makeRequest('get_streams', $params);
     }
 
     public function getLiveConnections(): array
@@ -264,5 +275,20 @@ class XuiApiService
         }
         
         return $this->makeRequest('credit_logs', $params);
+    }
+
+    public function restartStream(int $streamId): array
+    {
+        // Ação comum em painéis Xtream UI/Codes para reiniciar stream
+        // Geralmente é 'sys' com sub-action ou uma action direta 'restart_stream'
+        // Tentando 'restart_services' ou 'restart_stream'. 
+        // Baseado em documentações comuns de XUI modificado:
+        return $this->makeRequest('sys', ['action' => 'restart_stream', 'stream_id' => $streamId]);
+    }
+
+    public function getStreamInfo(int $streamId): array
+    {
+        // Busca informações detalhadas do stream
+        return $this->makeRequest('get_stream', ['id' => $streamId]);
     }
 }

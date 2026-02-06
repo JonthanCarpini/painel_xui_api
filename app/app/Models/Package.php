@@ -48,6 +48,7 @@ class Package extends Model
         'force_server_id' => 'integer',
         'lock_device' => 'boolean',
         'max_registered_devices' => 'integer',
+        'bouquets' => 'array',
     ];
 
     public function lines()

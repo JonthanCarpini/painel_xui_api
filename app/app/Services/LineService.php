@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Models\AppSetting;
 use App\Models\Bouquet;
 use App\Models\CreditLog;
+use App\Models\UserLog;
 use App\Models\Line;
 use App\Models\Package;
 use App\Models\XuiUser;
@@ -83,7 +84,8 @@ class LineService
             if ($cost > 0 && !$owner->isAdmin()) {
                 $owner->decrement('credits', $cost);
 
-                // 8. AÇÃO C: Log Financeiro (credit_logs)
+                // 8. AÇÃO C: Log Financeiro (credit_logs - LEGADO)
+                // Mantemos o log legado apenas quando houver movimentação financeira real
                 CreditLog::create([
                     'target_id' => $owner->id,
                     'admin_id' => $owner->id,
@@ -92,6 +94,37 @@ class LineService
                     'reason' => "Criação de Linha: {$line->username} (Pacote: {$package->package_name})",
                 ]);
             }
+
+            // Traduzir Unidade e Formatar Duração (Para o Log Novo)
+            $unitMap = [
+                'hours' => 'Horas',
+                'hour' => 'Hora',
+                'days' => 'Dias',
+                'day' => 'Dia',
+                'months' => 'Meses',
+                'month' => 'Mês',
+                'years' => 'Anos',
+                'year' => 'Ano'
+            ];
+            $unitVal = strtolower($unit);
+            $unitPt = $unitMap[$unitVal] ?? $unitVal;
+            $durationText = $duration . ' ' . $unitPt;
+
+            // 9. AÇÃO D: Log Geral (users_logs - NOVO/PADRÃO XUI)
+            // Registramos sempre, mesmo se for Admin ou teste (custo 0)
+            $logCost = ($cost > 0 && !$owner->isAdmin()) ? $cost : 0;
+            
+            UserLog::create([
+                'owner' => $owner->id,
+                'type' => 'line_create',
+                'action' => "Criou linha {$line->username} ({$durationText})",
+                'log_id' => $line->id,
+                'package_id' => $package->id,
+                'cost' => $logCost,
+                'credits_after' => $owner->fresh()->credits,
+                'date' => time(),
+                'deleted_info' => null
+            ]);
 
             return $line;
         });
@@ -145,12 +178,27 @@ class LineService
 
             $line->update($updateData);
 
+            // Traduzir Unidade
+            $unitMap = [
+                'hours' => 'Horas',
+                'hour' => 'Hora',
+                'days' => 'Dias',
+                'day' => 'Dia',
+                'months' => 'Meses',
+                'month' => 'Mês',
+                'years' => 'Anos',
+                'year' => 'Ano'
+            ];
+            $unit = strtolower($data['duration_unit']);
+            $unitPt = $unitMap[$unit] ?? $unit;
+            
+            $durationText = $data['duration_value'] . ' ' . $unitPt;
+
             // 6. AÇÃO B: Debitar Créditos (Se não for Admin)
             if (!$owner->isAdmin()) {
                 $owner->decrement('credits', $cost);
 
-                // 7. AÇÃO C: Log Financeiro
-                $durationText = $data['duration_value'] . ' ' . $data['duration_unit'];
+                // 7. AÇÃO C: Log Financeiro (LEGADO)
                 CreditLog::create([
                     'target_id' => $owner->id,
                     'admin_id' => $owner->id,
@@ -159,6 +207,21 @@ class LineService
                     'reason' => "Renovação de Linha: {$line->username} (+{$durationText})",
                 ]);
             }
+
+            // 8. AÇÃO D: Log Geral (NOVO - users_logs)
+            $logCost = (!$owner->isAdmin()) ? $cost : 0;
+
+            UserLog::create([
+                'owner' => $owner->id,
+                'type' => 'line_extend',
+                'action' => "Renovou linha {$line->username} (+{$durationText})",
+                'log_id' => $line->id,
+                'package_id' => $package->id,
+                'cost' => $logCost,
+                'credits_after' => $owner->fresh()->credits,
+                'date' => time(),
+                'deleted_info' => null
+            ]);
 
             return $line;
         });
@@ -264,21 +327,54 @@ class LineService
     {
         $template = AppSetting::get('client_message_template', '');
         
-        if (empty($template)) {
-            // Template padrão se não houver um configurado
-            $template = "✅ *Usuário:* {USERNAME}\n✅ *Senha:* {PASSWORD}\n🗓️ *Vencimento:* {EXPIRATION}\n\nLink M3U: {M3U_URL}";
-        }
-
         $expiration = date('d/m/Y H:i:s', $line->exp_date);
         $urls = $this->generateM3uUrls($line);
         $dns = $urls['dns'];
+
+        // Se não houver template, usar o formato padrão solicitado
+        if (empty($template)) {
+            $message = "👤 USUÁRIO: {$line->username}\n";
+            $message .= "🔑 SENHA: {$line->password}\n";
+            $message .= "📅 VENCIMENTO: {$expiration}\n\n";
+            $message .= "http://{$dns}\n\n";
+
+            // Buscar aplicativos ativos
+            $apps = \App\Models\ClientApplication::where('is_active', true)->get();
+            
+            foreach ($apps as $app) {
+                $message .= "\n📺 {$app->name}\n";
+                if ($app->downloader_id) $message .= "📥 DOWNLOADER: {$app->downloader_id}\n";
+                if ($app->direct_link) $message .= "🔗 Link Direto: {$app->direct_link}\n";
+                if ($app->compatible_devices) $message .= "📱 {$app->compatible_devices}\n";
+                if ($app->activation_code) $message .= "🔑 Código: {$app->activation_code}\n";
+                if ($app->login_instructions) $message .= "👉 {$app->login_instructions}\n";
+            }
+            
+            return $message;
+        }
         
-        // Substituições Padrão
+        // Se houver template (lógica antiga/personalizada)
         $message = str_replace('{USERNAME}', $line->username, $template);
         $message = str_replace('{PASSWORD}', $line->password, $message);
         $message = str_replace('{EXPIRATION}', $expiration, $message);
         $message = str_replace('{DNS}', $dns, $message);
         $message = str_replace('{M3U_URL}', $urls['m3u_url'], $message);
+        $message = str_replace('{HLS_URL}', $urls['hls_url'], $message);
+
+        // Apps placeholders
+        if (strpos($message, '{APPS}') !== false) {
+            $appsContent = '';
+            $apps = \App\Models\ClientApplication::where('is_active', true)->get();
+            foreach ($apps as $app) {
+                $appsContent .= "\n📺 {$app->name}\n";
+                if ($app->downloader_id) $appsContent .= "📥 DOWNLOADER: {$app->downloader_id}\n";
+                if ($app->direct_link) $appsContent .= "🔗 Link Direto: {$app->direct_link}\n";
+                if ($app->compatible_devices) $appsContent .= "📱 {$app->compatible_devices}\n";
+                if ($app->activation_code) $appsContent .= "🔑 Código: {$app->activation_code}\n";
+                if ($app->login_instructions) $appsContent .= "👉 {$app->login_instructions}\n";
+            }
+            $message = str_replace('{APPS}', $appsContent, $message);
+        }
 
         return $message;
     }

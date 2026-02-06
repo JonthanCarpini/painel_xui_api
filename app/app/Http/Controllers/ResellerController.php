@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\CreditLog;
+use App\Models\UserLog;
 use App\Models\XuiUser;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -76,6 +77,7 @@ class ResellerController extends Controller
             if (!$user->isAdmin()) {
                 $user->decrement('credits', $validated['credits']);
 
+                // Log Legado (Admin pagando)
                 CreditLog::create([
                     'admin_id' => $user->id,
                     'target_id' => $reseller->id,
@@ -84,12 +86,53 @@ class ResellerController extends Controller
                     'reason' => "Criação de revenda: {$validated['username']}",
                 ]);
 
+                // Log Novo (Admin pagando) - Type: credit_change
+                // Na lógica do XUI, quando se transfere créditos, cria-se um log.
+                UserLog::create([
+                    'owner' => $user->id,
+                    'type' => 'credit_change',
+                    'action' => "Criou revenda {$validated['username']} com {$validated['credits']} créditos",
+                    'log_id' => $reseller->id,
+                    'package_id' => 0,
+                    'cost' => $validated['credits'], // Custo positivo = Saída
+                    'credits_after' => $user->fresh()->credits,
+                    'date' => time(),
+                    'deleted_info' => null
+                ]);
+
+                // Log Legado (Revenda recebendo)
                 CreditLog::create([
                     'admin_id' => $user->id,
                     'target_id' => $reseller->id,
                     'amount' => $validated['credits'],
                     'date' => time(),
                     'reason' => "Crédito inicial da revenda: {$validated['username']}",
+                ]);
+                
+                 // Log Novo (Revenda Recebendo)
+                 UserLog::create([
+                    'owner' => $reseller->id,
+                    'type' => 'credit_change',
+                    'action' => "Créditos iniciais de {$user->username}",
+                    'log_id' => $user->id, // De quem veio
+                    'package_id' => 0,
+                    'cost' => -$validated['credits'], // Custo negativo = Entrada
+                    'credits_after' => $reseller->credits,
+                    'date' => time(),
+                    'deleted_info' => null
+                ]);
+            } else {
+                // Se for admin criando, apenas logar a criação/entrada na revenda, sem débito no admin
+                 UserLog::create([
+                    'owner' => $reseller->id,
+                    'type' => 'credit_change',
+                    'action' => "Créditos iniciais do Admin",
+                    'log_id' => $user->id,
+                    'package_id' => 0,
+                    'cost' => -$validated['credits'],
+                    'credits_after' => $reseller->credits,
+                    'date' => time(),
+                    'deleted_info' => null
                 ]);
             }
 
@@ -200,6 +243,7 @@ class ResellerController extends Controller
             if (!$user->isAdmin() && $amount > 0) {
                 $user->decrement('credits', $amount);
 
+                // Log Legado (Admin/Revenda Pai enviando)
                 CreditLog::create([
                     'admin_id' => $user->id,
                     'target_id' => $user->id,
@@ -207,14 +251,41 @@ class ResellerController extends Controller
                     'date' => time(),
                     'reason' => "Transferência para revenda: {$reseller->username}",
                 ]);
+
+                // Log Novo (Admin/Revenda Pai enviando)
+                UserLog::create([
+                    'owner' => $user->id,
+                    'type' => 'credit_change',
+                    'action' => "Transferência de créditos para {$reseller->username}",
+                    'log_id' => $reseller->id,
+                    'package_id' => 0,
+                    'cost' => $amount, // Positivo = Gasto
+                    'credits_after' => $user->fresh()->credits,
+                    'date' => time(),
+                    'deleted_info' => null
+                ]);
             }
 
+            // Log Legado (Revenda recebendo ou perdendo)
             CreditLog::create([
                 'admin_id' => $user->id,
                 'target_id' => $reseller->id,
                 'amount' => $amount,
                 'date' => time(),
                 'reason' => $amount > 0 ? "Recarga de créditos" : "Remoção de créditos",
+            ]);
+
+            // Log Novo (Revenda recebendo ou perdendo)
+            UserLog::create([
+                'owner' => $reseller->id,
+                'type' => 'credit_change',
+                'action' => $amount > 0 ? "Créditos recebidos de {$user->username}" : "Créditos removidos pelo Admin",
+                'log_id' => $user->id,
+                'package_id' => 0,
+                'cost' => -$amount, // Se amount=10 (ganhou), cost=-10. Se amount=-10 (perdeu), cost=10.
+                'credits_after' => $reseller->fresh()->credits,
+                'date' => time(),
+                'deleted_info' => null
             ]);
 
             DB::connection('xui')->commit();

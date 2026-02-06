@@ -3,32 +3,36 @@
 @section('title', 'Configurações do Sistema')
 
 @section('content')
-<div class="flex flex-col md:flex-row items-center justify-between mb-8 gap-4">
+<div class="flex flex-col md:flex-row items-start md:items-center justify-between mb-6 md:mb-8 gap-4">
     <div>
-        <h1 class="text-2xl font-bold text-gray-900 dark:text-white flex items-center gap-3">
+        <h1 class="text-xl md:text-2xl font-bold text-gray-900 dark:text-white flex items-center gap-3">
             <i class="bi bi-gear text-orange-500"></i>
             Configura&ccedil;&otilde;es do Sistema
         </h1>
-        <p class="text-gray-500 dark:text-gray-400 mt-1">Gerencie as configura&ccedil;&otilde;es globais, aplicativos e mensagens.</p>
+        <p class="text-sm md:text-base text-gray-500 dark:text-gray-400 mt-1">Gerencie as configura&ccedil;&otilde;es globais, aplicativos e mensagens.</p>
     </div>
 </div>
 
 <!-- Abas de Navegação -->
 <div class="bg-white dark:bg-dark-300 rounded-xl border border-gray-200 dark:border-dark-200 mb-6 shadow-sm dark:shadow-none overflow-hidden">
-    <div class="flex border-b border-gray-200 dark:border-dark-200 overflow-x-auto">
-        <button type="button" onclick="switchTab('geral')" id="tab-geral" class="tab-button active px-6 py-4 text-sm font-medium transition-colors flex items-center gap-2 whitespace-nowrap text-orange-600 dark:text-orange-500 border-b-2 border-orange-600 dark:border-orange-500 bg-orange-50/50 dark:bg-orange-500/10">
+    <div class="flex border-b border-gray-200 dark:border-dark-200 overflow-x-auto custom-scrollbar">
+        <button type="button" onclick="switchTab('geral')" id="tab-geral" class="tab-button active flex-1 min-w-[120px] px-4 md:px-6 py-3 md:py-4 text-sm font-medium transition-colors flex items-center justify-center gap-2 whitespace-nowrap text-orange-600 dark:text-orange-500 border-b-2 border-orange-600 dark:border-orange-500 bg-orange-50/50 dark:bg-orange-500/10">
             <i class="bi bi-sliders"></i>
             Geral
         </button>
-        <button type="button" onclick="switchTab('apps')" id="tab-apps" class="tab-button px-6 py-4 text-sm font-medium transition-colors flex items-center gap-2 whitespace-nowrap text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 hover:bg-gray-50 dark:hover:bg-dark-200">
+        <button type="button" onclick="switchTab('apps')" id="tab-apps" class="tab-button flex-1 min-w-[120px] px-4 md:px-6 py-3 md:py-4 text-sm font-medium transition-colors flex items-center justify-center gap-2 whitespace-nowrap text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 hover:bg-gray-50 dark:hover:bg-dark-200">
             <i class="bi bi-android2"></i>
             Aplicativos
         </button>
-        <button type="button" onclick="switchTab('dns')" id="tab-dns" class="tab-button px-6 py-4 text-sm font-medium transition-colors flex items-center gap-2 whitespace-nowrap text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 hover:bg-gray-50 dark:hover:bg-dark-200">
+        <button type="button" onclick="switchTab('dns')" id="tab-dns" class="tab-button flex-1 min-w-[120px] px-4 md:px-6 py-3 md:py-4 text-sm font-medium transition-colors flex items-center justify-center gap-2 whitespace-nowrap text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 hover:bg-gray-50 dark:hover:bg-dark-200">
             <i class="bi bi-globe"></i>
             DNS
         </button>
-        <button type="button" onclick="switchTab('message')" id="tab-message" class="tab-button px-6 py-4 text-sm font-medium transition-colors flex items-center gap-2 whitespace-nowrap text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 hover:bg-gray-50 dark:hover:bg-dark-200">
+        <button type="button" onclick="switchTab('notices')" id="tab-notices" class="tab-button flex-1 min-w-[120px] px-4 md:px-6 py-3 md:py-4 text-sm font-medium transition-colors flex items-center justify-center gap-2 whitespace-nowrap text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 hover:bg-gray-50 dark:hover:bg-dark-200">
+            <i class="bi bi-megaphone"></i>
+            Avisos
+        </button>
+        <button type="button" onclick="switchTab('message')" id="tab-message" class="tab-button flex-1 min-w-[120px] px-4 md:px-6 py-3 md:py-4 text-sm font-medium transition-colors flex items-center justify-center gap-2 whitespace-nowrap text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 hover:bg-gray-50 dark:hover:bg-dark-200">
             <i class="bi bi-chat-text"></i>
             Mensagem
         </button>
@@ -41,36 +45,38 @@
         @csrf
         @method('PUT')
         
-        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div class="grid grid-cols-1 gap-6">
             <!-- Configurações Gerais -->
-            <div class="bg-white dark:bg-dark-300 rounded-xl border border-gray-200 dark:border-dark-200 p-6 shadow-sm dark:shadow-none">
+            <div class="bg-white dark:bg-dark-300 rounded-xl border border-gray-200 dark:border-dark-200 p-4 md:p-6 shadow-sm dark:shadow-none">
                 <h2 class="text-lg font-bold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
                     <i class="bi bi-sliders text-orange-500"></i>
                     Configura&ccedil;&otilde;es Gerais
                 </h2>
                 
                 <div class="space-y-4">
-                    <div>
-                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-400 mb-2">Nome do Servidor</label>
-                        <input type="text" name="server_name" value="{{ $settings->server_name ?? '' }}" class="w-full px-4 py-2 bg-gray-50 dark:bg-dark-200 border border-gray-300 dark:border-dark-100 rounded-lg text-gray-900 dark:text-white focus:border-orange-500 focus:outline-none transition-colors">
-                    </div>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-400 mb-2">Nome do Servidor</label>
+                            <input type="text" name="server_name" value="{{ $settings->server_name ?? '' }}" class="w-full px-4 py-2 bg-gray-50 dark:bg-dark-200 border border-gray-300 dark:border-dark-100 rounded-lg text-gray-900 dark:text-white focus:border-orange-500 focus:outline-none transition-colors">
+                        </div>
 
-                    <div>
-                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-400 mb-2">Fuso Hor&aacute;rio Padr&atilde;o</label>
-                        <select name="default_timezone" class="w-full px-4 py-2 bg-gray-50 dark:bg-dark-200 border border-gray-300 dark:border-dark-100 rounded-lg text-gray-900 dark:text-white focus:border-orange-500 focus:outline-none transition-colors">
-                            <option value="America/Sao_Paulo" {{ ($settings->default_timezone ?? '') == 'America/Sao_Paulo' ? 'selected' : '' }}>Am&eacute;rica/S&atilde;o Paulo (BRT)</option>
-                            <option value="America/New_York" {{ ($settings->default_timezone ?? '') == 'America/New_York' ? 'selected' : '' }}>Am&eacute;rica/Nova York (EST)</option>
-                            <option value="Europe/London" {{ ($settings->default_timezone ?? '') == 'Europe/London' ? 'selected' : '' }}>Europa/Londres (GMT)</option>
-                        </select>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-400 mb-2">Fuso Hor&aacute;rio Padr&atilde;o</label>
+                            <select name="default_timezone" class="w-full px-4 py-2 bg-gray-50 dark:bg-dark-200 border border-gray-300 dark:border-dark-100 rounded-lg text-gray-900 dark:text-white focus:border-orange-500 focus:outline-none transition-colors">
+                                <option value="America/Sao_Paulo" {{ ($settings->default_timezone ?? '') == 'America/Sao_Paulo' ? 'selected' : '' }}>Am&eacute;rica/S&atilde;o Paulo (BRT)</option>
+                                <option value="America/New_York" {{ ($settings->default_timezone ?? '') == 'America/New_York' ? 'selected' : '' }}>Am&eacute;rica/Nova York (EST)</option>
+                                <option value="Europe/London" {{ ($settings->default_timezone ?? '') == 'Europe/London' ? 'selected' : '' }}>Europa/Londres (GMT)</option>
+                            </select>
+                        </div>
                     </div>
                 </div>
             </div>
 
             <!-- Configurações de Streaming -->
-            <div class="bg-white dark:bg-dark-300 rounded-xl border border-gray-200 dark:border-dark-200 p-6 shadow-sm dark:shadow-none">
+            <div class="bg-white dark:bg-dark-300 rounded-xl border border-gray-200 dark:border-dark-200 p-4 md:p-6 shadow-sm dark:shadow-none">
                 <h2 class="text-lg font-bold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
                     <i class="bi bi-play-circle text-orange-500"></i>
-                    Configura&ccedil;&otilde;es de Streaming
+                    Configura&ccedil;&otilde;es de Streaming e Planos
                 </h2>
                 
                 <div class="space-y-4">
@@ -78,13 +84,90 @@
                         <label class="block text-sm font-medium text-gray-700 dark:text-gray-400 mb-2">Limite de Reprodu&ccedil;&atilde;o Simult&acirc;nea</label>
                         <input type="number" name="playback_limit" value="{{ $settings->playback_limit ?? 4 }}" class="w-full px-4 py-2 bg-gray-50 dark:bg-dark-200 border border-gray-300 dark:border-dark-100 rounded-lg text-gray-900 dark:text-white focus:border-orange-500 focus:outline-none transition-colors">
                     </div>
+
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-400 mb-2">Pacote de Renovação em Confiança</label>
+                        <select name="trust_renew_package_id" class="w-full px-4 py-2 bg-gray-50 dark:bg-dark-200 border border-gray-300 dark:border-dark-100 rounded-lg text-gray-900 dark:text-white focus:border-orange-500 focus:outline-none transition-colors">
+                            <option value="">Selecione um pacote...</option>
+                            @foreach($packages as $package)
+                                <option value="{{ $package->id }}" {{ ($trustPackageId ?? '') == $package->id ? 'selected' : '' }}>
+                                    {{ $package->package_name }} ({{ $package->official_duration }} {{ $package->official_duration_in }}) - {{ $package->official_credits }} Créditos
+                                </option>
+                            @endforeach
+                        </select>
+                        <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">Este pacote será usado quando a opção "Renovar em Confiança" for selecionada na gestão de clientes.</p>
+                    </div>
                 </div>
+            </div>
+
+            <!-- Configurações de Cliente Fantasma -->
+            <div class="bg-white dark:bg-dark-300 rounded-xl border border-gray-200 dark:border-dark-200 p-4 md:p-6 shadow-sm dark:shadow-none">
+                <h2 class="text-lg font-bold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
+                    <i class="bi bi-ghost text-orange-500"></i>
+                    Cliente Fantasma (Teste de Canais)
+                </h2>
+                
+                <p class="text-sm text-gray-500 dark:text-gray-400 mb-4">
+                    Configure um usu&aacute;rio do XUI (Cliente Fantasma) que tenha conex&otilde;es ilimitadas e n&atilde;o expire.
+                    Ao salvar, a lista de canais ser&aacute; baixada e salva localmente para uso nos testes.
+                </p>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-400 mb-2">Usu&aacute;rio (Cliente Fantasma)</label>
+                        <input type="text" name="ghost_reseller_username" value="{{ $ghostReseller['username'] ?? '' }}" class="w-full px-4 py-2 bg-gray-50 dark:bg-dark-200 border border-gray-300 dark:border-dark-100 rounded-lg text-gray-900 dark:text-white focus:border-orange-500 focus:outline-none transition-colors" placeholder="Digite o usuário">
+                    </div>
+
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-400 mb-2">Senha</label>
+                        <input type="text" name="ghost_reseller_password" value="{{ $ghostReseller['password'] ?? '' }}" class="w-full px-4 py-2 bg-gray-50 dark:bg-dark-200 border border-gray-300 dark:border-dark-100 rounded-lg text-gray-900 dark:text-white focus:border-orange-500 focus:outline-none transition-colors" placeholder="Digite a senha">
+                    </div>
+
+                    <div class="md:col-span-2">
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-400 mb-2">Horário da Rotação Diária</label>
+                        <div class="relative max-w-xs">
+                            <div class="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none">
+                                <i class="bi bi-clock text-gray-500"></i>
+                            </div>
+                            <input type="time" name="ghost_rotation_time" value="{{ $ghostReseller['rotation_time'] ?? '04:00' }}" class="block w-full pl-10 pr-3 py-2 bg-gray-50 dark:bg-dark-200 border border-gray-300 dark:border-dark-100 rounded-lg text-gray-900 dark:text-white focus:border-orange-500 focus:outline-none transition-colors">
+                        </div>
+                        <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">Horário em que a senha será alterada e a lista de canais atualizada automaticamente.</p>
+                    </div>
+                </div>
+
+                @if(!empty($ghostReseller['username']))
+                <div class="mt-4 flex flex-col sm:flex-row gap-4">
+                    <div class="flex-1 p-3 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-900/30 rounded-lg flex items-center gap-3">
+                        <i class="bi bi-check-circle-fill text-green-500 text-xl"></i>
+                        <div>
+                            <p class="text-sm font-bold text-green-700 dark:text-green-400">Configura&ccedil;&atilde;o Ativa</p>
+                            <p class="text-xs text-green-600 dark:text-green-500">Canais sincronizados: <strong>{{ $ghostReseller['channels_count'] ?? 0 }}</strong></p>
+                        </div>
+                    </div>
+                    
+                    <div class="flex-1 p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-900/30 rounded-lg flex items-center gap-3">
+                        <i class="bi bi-cloud-download-fill text-blue-500 text-xl"></i>
+                        <div>
+                            <p class="text-sm font-bold text-blue-700 dark:text-blue-400">&Uacute;ltima Sincroniza&ccedil;&atilde;o</p>
+                            <p class="text-xs text-blue-600 dark:text-blue-500">{{ $ghostReseller['last_sync'] ?? 'Nunca' }}</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="mt-2 text-xs text-gray-400">
+                    * Para atualizar a lista de canais, clique em "Salvar Configurações Gerais" novamente.
+                </div>
+                @endif
             </div>
         </div>
 
         <!-- Botão Salvar -->
-        <div class="mt-6 flex justify-end">
-            <button type="submit" class="px-6 py-3 bg-gradient-to-r from-orange-500 to-orange-600 text-white rounded-lg hover:shadow-lg hover:shadow-orange-500/20 transition-all flex items-center gap-2 font-medium">
+        <div class="mt-6 flex flex-col md:flex-row justify-end gap-4">
+            <a href="{{ route('settings.migrate') }}" onclick="return confirm('Isso irá executar as migrações pendentes no banco de dados. Deseja continuar?')" class="w-full md:w-auto px-6 py-3 bg-gray-100 dark:bg-dark-200 text-gray-600 dark:text-gray-400 rounded-lg hover:bg-gray-200 dark:hover:bg-dark-100 transition-all flex items-center justify-center gap-2 font-medium border border-gray-200 dark:border-dark-100">
+                <i class="bi bi-database-up"></i>
+                Atualizar Banco de Dados
+            </a>
+            
+            <button type="submit" class="w-full md:w-auto px-6 py-3 bg-gradient-to-r from-orange-500 to-orange-600 text-white rounded-lg hover:shadow-lg hover:shadow-orange-500/20 transition-all flex items-center justify-center gap-2 font-medium">
                 <i class="bi bi-check-circle"></i>
                 Salvar Configura&ccedil;&otilde;es Gerais
             </button>
@@ -94,7 +177,7 @@
 
 <!-- Conteúdo da Aba Aplicativos -->
 <div id="content-apps" class="tab-content hidden">
-    <div class="bg-white dark:bg-dark-300 rounded-xl border border-gray-200 dark:border-dark-200 p-6 shadow-sm dark:shadow-none mb-6">
+    <div class="bg-white dark:bg-dark-300 rounded-xl border border-gray-200 dark:border-dark-200 p-4 md:p-6 shadow-sm dark:shadow-none mb-6">
         <h2 class="text-lg font-bold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
             <i class="bi bi-plus-circle text-orange-500"></i>
             Adicionar Novo Aplicativo
@@ -129,7 +212,7 @@
                 </div>
             </div>
             <div class="mt-4 flex justify-end">
-                <button type="submit" class="px-6 py-2 bg-orange-500 hover:bg-orange-600 text-white rounded-lg transition-colors font-medium">
+                <button type="submit" class="w-full md:w-auto px-6 py-2 bg-orange-500 hover:bg-orange-600 text-white rounded-lg transition-colors font-medium">
                     Adicionar App
                 </button>
             </div>
@@ -140,7 +223,7 @@
     <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         @forelse($apps as $app)
         <div class="bg-white dark:bg-dark-300 rounded-xl border border-gray-200 dark:border-dark-200 p-6 shadow-sm hover:shadow-md transition-shadow relative group">
-            <div class="absolute top-4 right-4 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+            <div class="absolute top-4 right-4 flex gap-2 opacity-100 md:opacity-0 group-hover:opacity-100 transition-opacity">
                 <button onclick="editApp({{ json_encode($app) }})" class="p-2 bg-blue-50 dark:bg-blue-500/10 text-blue-600 dark:text-blue-400 rounded-lg hover:bg-blue-100 dark:hover:bg-blue-500/20 transition-colors">
                     <i class="bi bi-pencil"></i>
                 </button>
@@ -157,7 +240,7 @@
                 <div class="w-10 h-10 rounded-lg bg-orange-100 dark:bg-orange-500/20 flex items-center justify-center text-orange-600 dark:text-orange-500">
                     <i class="bi bi-android2 text-xl"></i>
                 </div>
-                <h3 class="font-bold text-gray-900 dark:text-white">{{ $app->name }}</h3>
+                <h3 class="font-bold text-gray-900 dark:text-white truncate pr-16">{{ $app->name }}</h3>
             </div>
 
             <div class="space-y-2 text-sm text-gray-600 dark:text-gray-400">
@@ -192,7 +275,7 @@
 
 <!-- Conteúdo da Aba DNS -->
 <div id="content-dns" class="tab-content hidden">
-    <div class="bg-white dark:bg-dark-300 rounded-xl border border-gray-200 dark:border-dark-200 p-6 shadow-sm dark:shadow-none mb-6">
+    <div class="bg-white dark:bg-dark-300 rounded-xl border border-gray-200 dark:border-dark-200 p-4 md:p-6 shadow-sm dark:shadow-none mb-6">
         <h2 class="text-lg font-bold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
             <i class="bi bi-plus-circle text-orange-500"></i>
             Adicionar Novo DNS
@@ -211,7 +294,7 @@
                 </div>
             </div>
             <div class="mt-4 flex justify-end">
-                <button type="submit" class="px-6 py-2 bg-orange-500 hover:bg-orange-600 text-white rounded-lg transition-colors font-medium">
+                <button type="submit" class="w-full md:w-auto px-6 py-2 bg-orange-500 hover:bg-orange-600 text-white rounded-lg transition-colors font-medium">
                     Adicionar DNS
                 </button>
             </div>
@@ -219,70 +302,155 @@
     </div>
 
     <!-- Lista de DNS -->
-    <div class="bg-white dark:bg-dark-300 rounded-xl border border-gray-200 dark:border-dark-200 overflow-hidden">
-        <table class="w-full">
-            <thead class="bg-gray-50 dark:bg-dark-200">
-                <tr>
-                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Nome</th>
-                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">URL</th>
-                    <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">A&ccedil;&otilde;es</th>
-                </tr>
-            </thead>
-            <tbody class="divide-y divide-gray-200 dark:divide-dark-200">
-                @forelse($dnsServers as $dns)
-                <tr class="hover:bg-gray-50 dark:hover:bg-dark-200/50 transition-colors">
-                    <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-white">
-                        <i class="bi bi-globe text-orange-500 mr-2"></i>
-                        {{ $dns->name }}
-                    </td>
-                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-600 dark:text-gray-300 font-mono">
-                        {{ $dns->url }}
-                    </td>
-                    <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium flex justify-end gap-2">
-                        <button onclick="editDns({{ json_encode($dns) }})" class="text-blue-600 hover:text-blue-900 dark:text-blue-400 dark:hover:text-blue-300">
-                            <i class="bi bi-pencil"></i>
-                        </button>
-                        <form action="{{ route('settings.dns.destroy', $dns->id) }}" method="POST" onsubmit="return confirm('Tem certeza?')">
-                            @csrf
-                            @method('DELETE')
-                            <button type="submit" class="text-red-600 hover:text-red-900 dark:text-red-400 dark:hover:text-red-300">
-                                <i class="bi bi-trash"></i>
+    <div class="bg-white dark:bg-dark-300 rounded-xl border border-gray-200 dark:border-dark-200 overflow-hidden shadow-sm">
+        <div class="overflow-x-auto">
+            <table class="w-full text-left border-collapse">
+                <thead class="bg-gray-50 dark:bg-dark-200">
+                    <tr>
+                        <th class="px-4 md:px-6 py-3 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider whitespace-nowrap">Nome</th>
+                        <th class="px-4 md:px-6 py-3 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider whitespace-nowrap">URL</th>
+                        <th class="px-4 md:px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider whitespace-nowrap">A&ccedil;&otilde;es</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-gray-200 dark:divide-dark-200">
+                    @forelse($dnsServers as $dns)
+                    <tr class="hover:bg-gray-50 dark:hover:bg-dark-200/50 transition-colors">
+                        <td class="px-4 md:px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-white">
+                            <i class="bi bi-globe text-orange-500 mr-2"></i>
+                            {{ $dns->name }}
+                        </td>
+                        <td class="px-4 md:px-6 py-4 whitespace-nowrap text-sm text-gray-600 dark:text-gray-300 font-mono">
+                            {{ $dns->url }}
+                        </td>
+                        <td class="px-4 md:px-6 py-4 whitespace-nowrap text-right text-sm font-medium flex justify-end gap-2">
+                            <button onclick="editDns({{ json_encode($dns) }})" class="text-blue-600 hover:text-blue-900 dark:text-blue-400 dark:hover:text-blue-300 p-1">
+                                <i class="bi bi-pencil"></i>
                             </button>
-                        </form>
-                    </td>
-                </tr>
-                @empty
-                <tr>
-                    <td colspan="3" class="px-6 py-4 text-center text-gray-500 dark:text-gray-400">
-                        Nenhum DNS cadastrado.
-                    </td>
-                </tr>
-                @endforelse
-            </tbody>
-        </table>
+                            <form action="{{ route('settings.dns.destroy', $dns->id) }}" method="POST" onsubmit="return confirm('Tem certeza?')">
+                                @csrf
+                                @method('DELETE')
+                                <button type="submit" class="text-red-600 hover:text-red-900 dark:text-red-400 dark:hover:text-red-300 p-1">
+                                    <i class="bi bi-trash"></i>
+                                </button>
+                            </form>
+                        </td>
+                    </tr>
+                    @empty
+                    <tr>
+                        <td colspan="3" class="px-6 py-4 text-center text-gray-500 dark:text-gray-400">
+                            Nenhum DNS cadastrado.
+                        </td>
+                    </tr>
+                    @endforelse
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- Conteúdo da Aba Avisos -->
+<div id="content-notices" class="tab-content hidden">
+    <div class="bg-white dark:bg-dark-300 rounded-xl border border-gray-200 dark:border-dark-200 p-4 md:p-6 shadow-sm dark:shadow-none mb-6">
+        <h2 class="text-lg font-bold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
+            <i class="bi bi-plus-circle text-orange-500"></i>
+            Adicionar Novo Aviso
+        </h2>
+        
+        <form action="{{ route('settings.notices.store') }}" method="POST">
+            @csrf
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div class="col-span-1 md:col-span-2">
+                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-400 mb-2">Título</label>
+                    <input type="text" name="title" required class="w-full px-4 py-2 bg-gray-50 dark:bg-dark-200 border border-gray-300 dark:border-dark-100 rounded-lg text-gray-900 dark:text-white focus:border-orange-500 focus:outline-none transition-colors" placeholder="Ex: Manutenção Programada">
+                </div>
+                <div class="col-span-1 md:col-span-2">
+                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-400 mb-2">Mensagem</label>
+                    <textarea name="message" required rows="3" class="w-full px-4 py-2 bg-gray-50 dark:bg-dark-200 border border-gray-300 dark:border-dark-100 rounded-lg text-gray-900 dark:text-white focus:border-orange-500 focus:outline-none transition-colors" placeholder="Digite o conteúdo do aviso..."></textarea>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-400 mb-2">Tipo</label>
+                    <select name="type" class="w-full px-4 py-2 bg-gray-50 dark:bg-dark-200 border border-gray-300 dark:border-dark-100 rounded-lg text-gray-900 dark:text-white focus:border-orange-500 focus:outline-none transition-colors">
+                        <option value="info">Informação (Azul)</option>
+                        <option value="warning">Alerta (Amarelo)</option>
+                        <option value="danger">Perigo/Erro (Vermelho)</option>
+                        <option value="success">Sucesso (Verde)</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-400 mb-2">Prioridade (Ordem)</label>
+                    <input type="number" name="priority" value="0" class="w-full px-4 py-2 bg-gray-50 dark:bg-dark-200 border border-gray-300 dark:border-dark-100 rounded-lg text-gray-900 dark:text-white focus:border-orange-500 focus:outline-none transition-colors">
+                </div>
+            </div>
+            <div class="mt-4 flex justify-end">
+                <button type="submit" class="w-full md:w-auto px-6 py-2 bg-orange-500 hover:bg-orange-600 text-white rounded-lg transition-colors font-medium">
+                    Adicionar Aviso
+                </button>
+            </div>
+        </form>
+    </div>
+
+    <!-- Lista de Avisos -->
+    <div class="space-y-4">
+        @forelse($notices as $notice)
+        <div class="bg-white dark:bg-dark-300 rounded-xl border border-gray-200 dark:border-dark-200 p-4 md:p-6 shadow-sm relative group border-l-4 {{ match($notice->type) { 'info' => 'border-l-blue-500', 'warning' => 'border-l-yellow-500', 'danger' => 'border-l-red-500', 'success' => 'border-l-green-500', default => 'border-l-gray-500' } }}">
+            <div class="absolute top-4 right-4 flex gap-2 opacity-100 md:opacity-0 group-hover:opacity-100 transition-opacity">
+                <button onclick="editNotice({{ json_encode($notice) }})" class="p-2 bg-blue-50 dark:bg-blue-500/10 text-blue-600 dark:text-blue-400 rounded-lg hover:bg-blue-100 dark:hover:bg-blue-500/20 transition-colors">
+                    <i class="bi bi-pencil"></i>
+                </button>
+                <form action="{{ route('settings.notices.destroy', $notice->id) }}" method="POST" onsubmit="return confirm('Tem certeza que deseja excluir?')">
+                    @csrf
+                    @method('DELETE')
+                    <button type="submit" class="p-2 bg-red-50 dark:bg-red-500/10 text-red-600 dark:text-red-400 rounded-lg hover:bg-red-100 dark:hover:bg-red-500/20 transition-colors">
+                        <i class="bi bi-trash"></i>
+                    </button>
+                </form>
+            </div>
+
+            <div class="flex items-center gap-3 mb-2 pr-16">
+                <span class="text-xs font-bold px-2 py-1 rounded uppercase shrink-0 {{ match($notice->type) { 'info' => 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300', 'warning' => 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-300', 'danger' => 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-300', 'success' => 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300', default => 'bg-gray-100 text-gray-800' } }}">
+                    {{ $notice->type }}
+                </span>
+                <h3 class="font-bold text-gray-900 dark:text-white text-lg truncate">{{ $notice->title }}</h3>
+            </div>
+            
+            <p class="text-gray-600 dark:text-gray-300 whitespace-pre-wrap text-sm md:text-base">{{ $notice->message }}</p>
+            
+            <div class="mt-3 flex flex-wrap gap-4 text-xs text-gray-500 dark:text-gray-400">
+                <span><i class="bi bi-sort-numeric-down"></i> Prioridade: {{ $notice->priority }}</span>
+                <span><i class="bi bi-clock"></i> {{ $notice->created_at->format('d/m/Y H:i') }}</span>
+                @if(!$notice->is_active)
+                <span class="text-red-500 font-bold"><i class="bi bi-eye-slash"></i> Inativo</span>
+                @endif
+            </div>
+        </div>
+        @empty
+        <div class="text-center py-12 text-gray-500 dark:text-gray-400 bg-white dark:bg-dark-300 rounded-xl border border-gray-200 dark:border-dark-200">
+            Nenhum aviso cadastrado.
+        </div>
+        @endforelse
     </div>
 </div>
 
 <!-- Conteúdo da Aba Mensagem -->
 <div id="content-message" class="tab-content hidden">
-    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div class="lg:col-span-2">
-            <div class="bg-white dark:bg-dark-300 rounded-xl border border-gray-200 dark:border-dark-200 p-6 shadow-sm dark:shadow-none h-full">
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 h-full">
+        <div class="lg:col-span-2 order-2 lg:order-1 h-full">
+            <div class="bg-white dark:bg-dark-300 rounded-xl border border-gray-200 dark:border-dark-200 p-4 md:p-6 shadow-sm dark:shadow-none h-full flex flex-col">
                 <h2 class="text-lg font-bold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
                     <i class="bi bi-chat-text text-orange-500"></i>
                     Modelo de Mensagem do Cliente
                 </h2>
                 
-                <form action="{{ route('settings.message.update') }}" method="POST" class="h-full flex flex-col">
+                <form action="{{ route('settings.message.update') }}" method="POST" class="flex-1 flex flex-col min-h-[400px]">
                     @csrf
                     @method('PUT')
                     
                     <div class="flex-1 mb-4">
-                        <textarea name="client_message_template" id="messageTemplate" class="w-full h-[500px] px-4 py-3 bg-gray-50 dark:bg-dark-200 border border-gray-300 dark:border-dark-100 rounded-lg text-gray-900 dark:text-white focus:border-orange-500 focus:outline-none transition-colors font-mono text-sm resize-none">{{ $clientMessageTemplate }}</textarea>
+                        <textarea name="client_message_template" id="messageTemplate" class="w-full h-full px-4 py-3 bg-gray-50 dark:bg-dark-200 border border-gray-300 dark:border-dark-100 rounded-lg text-gray-900 dark:text-white focus:border-orange-500 focus:outline-none transition-colors font-mono text-sm resize-none min-h-[300px]">{{ $clientMessageTemplate }}</textarea>
                     </div>
                     
                     <div class="flex justify-end">
-                        <button type="submit" class="px-6 py-3 bg-gradient-to-r from-orange-500 to-orange-600 text-white rounded-lg hover:shadow-lg hover:shadow-orange-500/20 transition-all flex items-center gap-2 font-medium">
+                        <button type="submit" class="w-full md:w-auto px-6 py-3 bg-gradient-to-r from-orange-500 to-orange-600 text-white rounded-lg hover:shadow-lg hover:shadow-orange-500/20 transition-all flex items-center justify-center gap-2 font-medium">
                             <i class="bi bi-check-circle"></i>
                             Salvar Mensagem
                         </button>
@@ -291,9 +459,9 @@
             </div>
         </div>
 
-        <div class="space-y-6">
+        <div class="lg:col-span-1 order-1 lg:order-2 space-y-6">
             <!-- Placeholders -->
-            <div class="bg-white dark:bg-dark-300 rounded-xl border border-gray-200 dark:border-dark-200 p-6 shadow-sm dark:shadow-none">
+            <div class="bg-white dark:bg-dark-300 rounded-xl border border-gray-200 dark:border-dark-200 p-4 md:p-6 shadow-sm dark:shadow-none">
                 <h3 class="font-bold text-gray-900 dark:text-white mb-3">Vari&aacute;veis Dispon&iacute;veis</h3>
                 <div class="space-y-2 text-sm">
                     <div class="flex justify-between items-center bg-gray-50 dark:bg-dark-200 p-2 rounded cursor-pointer hover:bg-gray-100 dark:hover:bg-dark-100" onclick="insertTag('{USERNAME}')">
@@ -307,6 +475,14 @@
                     <div class="flex justify-between items-center bg-gray-50 dark:bg-dark-200 p-2 rounded cursor-pointer hover:bg-gray-100 dark:hover:bg-dark-100" onclick="insertTag('{EXPIRATION}')">
                         <code class="text-orange-600 dark:text-orange-400">{EXPIRATION}</code>
                         <span class="text-gray-500 text-xs">Data de Vencimento</span>
+                    </div>
+                    <div class="flex justify-between items-center bg-gray-50 dark:bg-dark-200 p-2 rounded cursor-pointer hover:bg-gray-100 dark:hover:bg-dark-100" onclick="insertTag('{M3U_URL}')">
+                        <code class="text-orange-600 dark:text-orange-400">{M3U_URL}</code>
+                        <span class="text-gray-500 text-xs">Link M3U Completo</span>
+                    </div>
+                    <div class="flex justify-between items-center bg-gray-50 dark:bg-dark-200 p-2 rounded cursor-pointer hover:bg-gray-100 dark:hover:bg-dark-100" onclick="insertTag('{HLS_URL}')">
+                        <code class="text-orange-600 dark:text-orange-400">{HLS_URL}</code>
+                        <span class="text-gray-500 text-xs">Link HLS (M3U8)</span>
                     </div>
                 </div>
             </div>
@@ -455,6 +631,55 @@
         btn.classList.add('bg-blue-500', 'hover:bg-blue-600');
         
         switchTab('dns');
+        form.scrollIntoView({ behavior: 'smooth' });
+    }
+
+    function editNotice(notice) {
+        document.querySelector('input[name="title"]').value = notice.title;
+        document.querySelector('textarea[name="message"]').value = notice.message;
+        document.querySelector('select[name="type"]').value = notice.type;
+        document.querySelector('input[name="priority"]').value = notice.priority;
+        
+        const form = document.querySelector('form[action="{{ route('settings.notices.store') }}"]');
+        form.action = '/settings/notices/' + notice.id;
+        
+        let methodInput = form.querySelector('input[name="_method"]');
+        if (!methodInput) {
+            methodInput = document.createElement('input');
+            methodInput.type = 'hidden';
+            methodInput.name = '_method';
+            methodInput.value = 'PUT';
+            form.appendChild(methodInput);
+        }
+
+        // Adicionar campo is_active se não existir (para edição)
+        let activeContainer = document.getElementById('notice-active-container');
+        if (!activeContainer) {
+            activeContainer = document.createElement('div');
+            activeContainer.id = 'notice-active-container';
+            activeContainer.className = 'mt-4';
+            activeContainer.innerHTML = `
+                <label class="inline-flex items-center cursor-pointer">
+                    <input type="checkbox" name="is_active" value="1" class="sr-only peer">
+                    <div class="relative w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-orange-300 dark:peer-focus:ring-orange-800 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-orange-500"></div>
+                    <span class="ms-3 text-sm font-medium text-gray-900 dark:text-gray-300">Aviso Ativo</span>
+                </label>
+            `;
+            // Inserir antes dos botões
+            const btnContainer = form.querySelector('.flex.justify-end');
+            form.insertBefore(activeContainer, btnContainer);
+        }
+        
+        // Atualizar checkbox
+        const checkbox = activeContainer.querySelector('input[type="checkbox"]');
+        if (checkbox) checkbox.checked = notice.is_active;
+        
+        const btn = form.querySelector('button[type="submit"]');
+        btn.innerText = 'Atualizar Aviso';
+        btn.classList.remove('bg-orange-500', 'hover:bg-orange-600');
+        btn.classList.add('bg-blue-500', 'hover:bg-blue-600');
+        
+        switchTab('notices');
         form.scrollIntoView({ behavior: 'smooth' });
     }
 </script>

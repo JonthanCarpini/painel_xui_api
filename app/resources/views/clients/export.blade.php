@@ -59,12 +59,18 @@
             </div>
         </div>
         <p class="text-gray-600 dark:text-gray-300 mb-4 text-sm">
-            Exporte todos os seus clientes em formato CSV com username, senha, telefone, validade e status.
+            Escolha entre o relatório completo ou apenas lista de contatos.
         </p>
-        <button onclick="exportCSV()" class="w-full px-4 py-3 bg-gradient-to-r from-green-500 to-green-600 text-white rounded-lg hover:shadow-lg transition-all flex items-center justify-center gap-2 font-medium">
-            <i class="bi bi-download"></i>
-            Baixar CSV
-        </button>
+        <div class="flex flex-col gap-2">
+            <button onclick="exportCSV('full')" class="w-full px-4 py-2 bg-gradient-to-r from-green-500 to-green-600 text-white rounded-lg hover:shadow-lg transition-all flex items-center justify-center gap-2 font-medium">
+                <i class="bi bi-download"></i>
+                Exportar Completo
+            </button>
+            <button onclick="exportCSV('simple')" class="w-full px-4 py-2 bg-gray-100 dark:bg-dark-200 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-200 dark:hover:bg-dark-100 transition-all flex items-center justify-center gap-2 font-medium border border-gray-200 dark:border-dark-100">
+                <i class="bi bi-person-lines-fill"></i>
+                Exportar Contatos (Nome/Tel)
+            </button>
+        </div>
     </div>
 
     <!-- Exportar TXT -->
@@ -170,9 +176,13 @@ function getFilters() {
     return params.toString();
 }
 
-function exportCSV() {
+function exportCSV(mode = 'full') {
     const filters = getFilters();
-    window.location.href = '/clients/export/csv' + (filters ? '?' + filters : '');
+    // Converter string de filtros em URLSearchParams para manipular facilmente
+    const params = new URLSearchParams(filters);
+    params.append('mode', mode);
+    
+    window.location.href = '/clients/export/csv?' + params.toString();
 }
 
 function exportTXT() {

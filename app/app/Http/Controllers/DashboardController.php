@@ -2,8 +2,11 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Bouquet;
+use App\Models\CreditLog;
 use App\Models\Line;
 use App\Models\LineLive;
+use App\Models\Package;
 use App\Models\Server;
 use App\Models\Stream;
 use App\Models\XuiUser;
@@ -24,17 +27,125 @@ class DashboardController extends Controller
             $stats = $this->getResellerStats($user->id);
         }
 
+        // Dados para Modal de Teste Rápido
+        $packages = Cache::remember('packages_all', 3600, function () {
+            return Package::all();
+        });
+        
+        $blacklist = config('xui.bouquet_blacklist', []);
+        $bouquets = Cache::remember('bouquets_list', 3600, function () use ($blacklist) {
+            return Bouquet::whereNotIn('id', $blacklist)
+                ->orderBy('bouquet_order')
+                ->get();
+        });
+
+        // Dados para Gráficos (7 e 30 dias)
+        $charts7 = $this->getChartStats($user->id, $user->isAdmin(), 7);
+        $charts30 = $this->getChartStats($user->id, $user->isAdmin(), 30);
+
+        // Clientes vencendo nos próximos 7 dias
+        $expiringClients = $this->getExpiringClients($user->id, $user->isAdmin());
+
         return view('dashboard.index', [
             'balance' => $currentBalance,
             'stats' => $stats,
-            'user' => $user
+            'user' => $user,
+            'packages' => $packages,
+            'bouquets' => $bouquets,
+            'charts' => [
+                'days_7' => $charts7,
+                'days_30' => $charts30
+            ],
+            'expiringClients' => $expiringClients
         ]);
+    }
+
+    private function getExpiringClients(int $userId, bool $isAdmin)
+    {
+        // Cache curto de 5 minutos
+        return Cache::remember("dashboard_expiring_{$userId}", 300, function () use ($userId, $isAdmin) {
+            $query = Line::with(['package', 'member'])
+                ->where('exp_date', '>', time()) // Não vencidos ainda
+                ->where('exp_date', '<=', strtotime('+7 days')) // Vencem em até 7 dias
+                ->where('is_trial', 0) // Excluir testes
+                ->orderBy('exp_date', 'asc');
+
+            if (!$isAdmin) {
+                // Para revendedores, mostrar apenas seus clientes diretos e de sub-revendas
+                $user = XuiUser::find($userId);
+                $myTreeIds = $user->getAllSubResellerIds();
+                $query->whereIn('member_id', $myTreeIds);
+            }
+
+            return $query->limit(50)->get(); // Limitamos a 50 na query, front vai exibir scroll
+        });
+    }
+
+    private function getChartStats(int $userId, bool $isAdmin, int $daysCount = 7): array
+    {
+        $cacheKey = "dashboard_charts_{$userId}_{$daysCount}";
+        
+        return Cache::remember($cacheKey, 300, function () use ($userId, $isAdmin, $daysCount) {
+            $days = [];
+            $clientsData = [];
+            $trialsData = [];
+            $resellersData = [];
+            $rechargesData = [];
+
+            // Loop pelos dias
+            for ($i = $daysCount - 1; $i >= 0; $i--) {
+                $date = date('Y-m-d', strtotime("-$i days"));
+                $days[] = date('d/m', strtotime("-$i days"));
+                $start = strtotime("$date 00:00:00");
+                $end = strtotime("$date 23:59:59");
+
+                // --- Clients & Trials ---
+                $lineQuery = DB::connection('xui')->table('lines')
+                    ->whereBetween('created_at', [$start, $end]);
+                
+                if (!$isAdmin) {
+                    $user = XuiUser::find($userId);
+                    $myTreeIds = $user->getAllSubResellerIds();
+                    $lineQuery->whereIn('member_id', $myTreeIds);
+                }
+
+                $clientsData[] = (clone $lineQuery)->where('is_trial', 0)->count();
+                $trialsData[] = (clone $lineQuery)->where('is_trial', 1)->count();
+
+                // --- Resellers & Recharges ---
+                $resellerQuery = DB::connection('xui')->table('users')
+                    ->where('member_group_id', 2)
+                    ->whereBetween('date_registered', [$start, $end]);
+                
+                if (!$isAdmin) {
+                    $resellerQuery->where('owner_id', $userId);
+                }
+                $resellersData[] = $resellerQuery->count();
+
+                $rechargeQuery = DB::connection('xui')->table('users_credits_logs')
+                    ->where('admin_id', $userId)
+                    ->where('amount', '>', 0)
+                    ->where('target_id', '!=', $userId)
+                    ->whereBetween('date', [$start, $end]);
+                
+                $rechargesData[] = $rechargeQuery->count();
+            }
+
+            return [
+                'labels' => $days,
+                'clients' => $clientsData,
+                'trials' => $trialsData,
+                'resellers' => $resellersData,
+                'recharges' => $rechargesData
+            ];
+        });
     }
 
     private function getAdminStats(): array
     {
         return Cache::remember('admin_dashboard_stats', 60, function () {
             $now = time();
+            $user = Auth::user();
 
             // Top Revendas com LEFT JOIN para incluir revendedores sem linhas
             $topResellers = DB::connection('xui')
@@ -58,6 +169,17 @@ class DashboardController extends Controller
                     'credits' => $top->credits ?? 0,
                 ];
             }
+
+            // Últimas Recargas (Logs onde admin é o atual, target é diferente, valor negativo para admin ou positivo para target?)
+            // Na tabela users_credits_logs: target_id é quem sofreu a alteração. admin_id é quem fez.
+            // Se admin recarregou revenda, log deve ser: target=revenda, admin=admin, amount > 0
+            $lastRecharges = CreditLog::with('target:id,username')
+                ->where('admin_id', $user->id)
+                ->where('target_id', '!=', $user->id) // Não auto-alterações
+                ->where('amount', '>', 0) // Crédito adicionado
+                ->orderBy('date', 'desc')
+                ->limit(5)
+                ->get();
 
             // Total de Canais (Live + Created Live: tipos 1 e 3)
             $liveChannels = Stream::whereIn('type', [1, 3])->count();
@@ -102,6 +224,7 @@ class DashboardController extends Controller
                 'online_streams' => $onlineChannels,
                 'offline_streams' => $offlineChannels,
                 'top_resellers' => $topResellersData,
+                'last_recharges' => $lastRecharges,
                 'main_server' => $this->getMainServerStats(),
             ];
         });
@@ -113,29 +236,123 @@ class DashboardController extends Controller
             $now = time();
             $startOfDay = strtotime('today');
             $endOfDay = strtotime('tomorrow') - 1;
+            $startOfMonth = strtotime('first day of this month 00:00:00');
+            $endOfMonth = strtotime('last day of this month 23:59:59');
 
             $user = XuiUser::find($userId);
             $myTreeIds = $user->getAllSubResellerIds();
 
+            // Consultas de Linhas (Clientes)
+            $linesQuery = DB::connection('xui')->table('lines')->whereIn('member_id', $myTreeIds);
+            
+            // Stats Básicos
+            $totalClients = (clone $linesQuery)->where('is_trial', 0)->count();
+            $activeClients = (clone $linesQuery)
+                ->where('is_trial', 0)
+                ->where('enabled', 1)
+                ->where('admin_enabled', 1)
+                ->where('exp_date', '>', $now)
+                ->count();
+            
+            $expiredClients = (clone $linesQuery)
+                ->where('is_trial', 0)
+                ->where('exp_date', '<', $now)
+                ->count();
+                
+            $expiringToday = (clone $linesQuery)
+                ->where('is_trial', 0)
+                ->whereBetween('exp_date', [$startOfDay, $endOfDay])
+                ->count();
+
+            // Estatísticas de Vendas (Criação de Linhas Oficiais)
+            $salesToday = (clone $linesQuery)
+                ->where('is_trial', 0)
+                ->whereBetween('created_at', [$startOfDay, $endOfDay])
+                ->count();
+                
+            $salesMonth = (clone $linesQuery)
+                ->where('is_trial', 0)
+                ->whereBetween('created_at', [$startOfMonth, $endOfMonth])
+                ->count();
+
+            // Estatísticas de Testes
+            $trialsToday = (clone $linesQuery)
+                ->where('is_trial', 1)
+                ->whereBetween('created_at', [$startOfDay, $endOfDay])
+                ->count();
+                
+            $trialsMonth = (clone $linesQuery)
+                ->where('is_trial', 1)
+                ->whereBetween('created_at', [$startOfMonth, $endOfMonth])
+                ->count();
+
+            // Online Now
+            $onlineNow = LineLive::whereIn('user_id', function($query) use ($myTreeIds) {
+                $query->select('id')
+                    ->from('lines')
+                    ->whereIn('member_id', $myTreeIds);
+            })->whereNull('date_end')->count();
+            
+            // Revendas Stats
+            $myResellersIds = XuiUser::where('owner_id', $userId)->pluck('id')->toArray();
+            $totalResellers = count($myResellersIds);
+            
+            // Revendas Inativas (> 30 dias sem login)
+            $inactiveResellers = 0;
+            $resellersNoCredit = 0;
+            $topResellers = [];
+            
+            if ($totalResellers > 0) {
+                $inactiveResellers = XuiUser::whereIn('id', $myResellersIds)
+                    ->where('last_login', '<', strtotime('-30 days'))
+                    ->count();
+                    
+                $resellersNoCredit = XuiUser::whereIn('id', $myResellersIds)
+                    ->where('credits', '<=', 0)
+                    ->count();
+                    
+                // Top 5 Revendas Diretas por número de clientes
+                $topResellers = XuiUser::whereIn('id', $myResellersIds)
+                    ->select(['id', 'username', 'credits'])
+                    ->get()
+                    ->map(function($reseller) {
+                        // Contar clientes deste revendedor (apenas diretos dele)
+                        $reseller->total_lines = DB::connection('xui')->table('lines')
+                            ->where('member_id', $reseller->id)
+                            ->where('is_trial', 0)
+                            ->count();
+                        return $reseller;
+                    })
+                    ->sortByDesc('total_lines')
+                    ->take(5)
+                    ->values()
+                    ->toArray();
+            }
+
+            // Últimas Recargas
+            $lastRecharges = CreditLog::with('target:id,username')
+                ->where('admin_id', $userId)
+                ->where('target_id', '!=', $userId)
+                ->where('amount', '>', 0)
+                ->orderBy('date', 'desc')
+                ->limit(5)
+                ->get();
+
             return [
-                'total_clients' => Line::whereIn('member_id', $myTreeIds)->where('is_trial', 0)->count(),
-                'active_clients' => Line::whereIn('member_id', $myTreeIds)
-                    ->where('is_trial', 0)
-                    ->where('enabled', 1)
-                    ->where('admin_enabled', 1)
-                    ->where('exp_date', '>', $now)
-                    ->count(),
-                'my_resellers' => XuiUser::where('owner_id', $userId)->count(),
-                'expiring_today' => Line::whereIn('member_id', $myTreeIds)
-                    ->where('is_trial', 0)
-                    ->whereBetween('exp_date', [$startOfDay, $endOfDay])
-                    ->count(),
-                'online_now' => LineLive::whereIn('user_id', function($query) use ($myTreeIds) {
-                    $query->select('id')
-                        ->from('lines')
-                        ->whereIn('member_id', $myTreeIds)
-                        ->where('is_trial', 0);
-                })->whereNull('date_end')->count(),
+                'total_clients' => $totalClients,
+                'active_clients' => $activeClients,
+                'expired_clients' => $expiredClients,
+                'expiring_today' => $expiringToday,
+                'online_now' => $onlineNow,
+                'sales_today' => $salesToday,
+                'sales_month' => $salesMonth,
+                'trials_today' => $trialsToday,
+                'trials_month' => $trialsMonth,
+                'my_resellers' => $totalResellers,
+                'inactive_resellers' => $inactiveResellers,
+                'resellers_no_credit' => $resellersNoCredit,
+                'top_resellers' => $topResellers,
+                'last_recharges' => $lastRecharges,
             ];
         });
     }

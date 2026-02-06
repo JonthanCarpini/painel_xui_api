@@ -5,23 +5,23 @@
 @section('content')
 <div class="w-full">
     <!-- Header -->
-    <div class="flex items-center justify-between mb-8">
+    <div class="flex flex-col md:flex-row items-start md:items-center justify-between mb-6 md:mb-8 gap-4">
         <div>
-            <h1 class="text-2xl font-bold text-gray-900 dark:text-white flex items-center gap-3">
+            <h1 class="text-xl md:text-2xl font-bold text-gray-900 dark:text-white flex items-center gap-3">
                 <i class="bi bi-person-circle text-orange-500"></i>
                 Meu Perfil
             </h1>
-            <p class="text-gray-500 dark:text-gray-400 mt-1">Gerencie suas informa&ccedil;&otilde;es e prefer&ecirc;ncias do painel.</p>
+            <p class="text-sm md:text-base text-gray-500 dark:text-gray-400 mt-1">Gerencie suas informa&ccedil;&otilde;es e prefer&ecirc;ncias do painel.</p>
         </div>
     </div>
 
     <!-- Tabs Header -->
-    <div class="bg-white dark:bg-dark-300 rounded-xl border border-gray-200 dark:border-dark-200 mb-6 shadow-sm dark:shadow-none">
-        <div class="flex border-b border-gray-200 dark:border-dark-200 overflow-x-auto">
-            <button class="inline-block px-6 py-4 border-b-2 hover:text-gray-600 hover:border-gray-300 dark:hover:text-gray-300 border-orange-500 text-orange-600 dark:text-orange-500 transition-colors duration-200 font-medium flex items-center gap-2 whitespace-nowrap" id="overview-tab" data-tabs-target="#overview" type="button" role="tab" aria-controls="overview" aria-selected="true">
+    <div class="bg-white dark:bg-dark-300 rounded-xl border border-gray-200 dark:border-dark-200 mb-6 shadow-sm dark:shadow-none overflow-hidden">
+        <div class="flex border-b border-gray-200 dark:border-dark-200 overflow-x-auto custom-scrollbar">
+            <button class="flex-1 min-w-[140px] px-4 md:px-6 py-3 md:py-4 border-b-2 hover:text-gray-600 hover:border-gray-300 dark:hover:text-gray-300 border-orange-500 text-orange-600 dark:text-orange-500 transition-colors duration-200 font-medium flex items-center justify-center gap-2 whitespace-nowrap text-sm md:text-base" id="overview-tab" data-tabs-target="#overview" type="button" role="tab" aria-controls="overview" aria-selected="true">
                 <i class="bi bi-person-vcard"></i> Vis&atilde;o Geral
             </button>
-            <button class="inline-block px-6 py-4 border-b-2 border-transparent hover:text-gray-600 hover:border-gray-300 dark:hover:text-gray-300 text-gray-500 dark:text-gray-400 transition-colors duration-200 font-medium flex items-center gap-2 whitespace-nowrap" id="preferences-tab" data-tabs-target="#preferences" type="button" role="tab" aria-controls="preferences" aria-selected="false">
+            <button class="flex-1 min-w-[140px] px-4 md:px-6 py-3 md:py-4 border-b-2 border-transparent hover:text-gray-600 hover:border-gray-300 dark:hover:text-gray-300 text-gray-500 dark:text-gray-400 transition-colors duration-200 font-medium flex items-center justify-center gap-2 whitespace-nowrap text-sm md:text-base" id="preferences-tab" data-tabs-target="#preferences" type="button" role="tab" aria-controls="preferences" aria-selected="false">
                 <i class="bi bi-sliders"></i> Prefer&ecirc;ncias
             </button>
         </div>
@@ -155,6 +155,15 @@
                                     class="w-full bg-gray-50 dark:bg-dark-200 border border-gray-300 dark:border-dark-100 rounded-lg px-4 py-3 text-gray-900 dark:text-white focus:outline-none focus:border-orange-500 focus:ring-1 focus:ring-orange-500 transition-colors"
                                     placeholder="Ex: Meu Painel IPTV">
                                 <p class="mt-2 text-xs text-gray-500 dark:text-gray-400">Este nome ser&aacute; exibido no topo do menu lateral e na aba do navegador.</p>
+                            </div>
+
+                            <!-- Telefone de Suporte -->
+                            <div>
+                                <label for="phone" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Telefone / WhatsApp de Suporte</label>
+                                <input type="text" id="phone" name="phone" value="{{ old('phone', $panelUser->phone) }}" 
+                                    class="w-full bg-gray-50 dark:bg-dark-200 border border-gray-300 dark:border-dark-100 rounded-lg px-4 py-3 text-gray-900 dark:text-white focus:outline-none focus:border-orange-500 focus:ring-1 focus:ring-orange-500 transition-colors"
+                                    placeholder="Ex: 5511999999999">
+                                <p class="mt-2 text-xs text-gray-500 dark:text-gray-400">N&uacute;mero para que seus clientes entrem em contato com voc&ecirc;.</p>
                             </div>
 
                             <!-- URL do Logo -->

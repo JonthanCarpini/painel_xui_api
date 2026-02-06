@@ -13,6 +13,7 @@ class PanelUser extends Model
         'xui_id',
         'username',
         'group_id',
+        'phone',
     ];
 
     public function preferences()

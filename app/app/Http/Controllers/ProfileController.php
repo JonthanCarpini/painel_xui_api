@@ -36,6 +36,7 @@ class ProfileController extends Controller
     public function update(Request $request)
     {
         $request->validate([
+            'phone' => 'nullable|string|max:20',
             'panel_name' => 'nullable|string|max:255',
             'logo_url' => 'nullable|url|max:255',
             'dark_mode' => 'boolean',
@@ -45,6 +46,10 @@ class ProfileController extends Controller
 
         $xuiUser = Auth::user();
         $panelUser = PanelUser::where('xui_id', $xuiUser->id)->firstOrFail();
+
+        // Atualizar dados do usuário
+        $panelUser->phone = $request->input('phone');
+        $panelUser->save();
 
         // Salvar preferências
         $panelUser->setPreference('panel_name', $request->input('panel_name', 'Painel XUI'));

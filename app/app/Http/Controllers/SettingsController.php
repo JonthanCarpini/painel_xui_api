@@ -5,12 +5,25 @@ namespace App\Http\Controllers;
 use App\Models\AppSetting;
 use App\Models\ClientApplication;
 use App\Models\DnsServer;
+use App\Models\Notice;
+use App\Models\TestChannel;
+use App\Models\Package;
+use App\Services\ChannelService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
 
 class SettingsController extends Controller
 {
+    protected $channelService;
+
+    public function __construct(ChannelService $channelService)
+    {
+        $this->channelService = $channelService;
+    }
+
     public function index()
     {
         $user = Auth::user();
@@ -26,13 +39,31 @@ class SettingsController extends Controller
         // Buscar dados locais
         $apps = ClientApplication::all();
         $dnsServers = DnsServer::all();
+        $notices = Notice::orderBy('priority', 'desc')->orderBy('created_at', 'desc')->get();
         $clientMessageTemplate = AppSetting::get('client_message_template', '');
+        $trustPackageId = AppSetting::get('trust_renew_package_id');
+        
+        // Buscar pacotes oficiais para seleção
+        $packages = Package::where('is_official', 1)->get();
+        
+        // Dados da Revenda Fantasma (Teste de Canais)
+        $ghostReseller = [
+            'username' => AppSetting::get('ghost_reseller_username', ''),
+            'password' => AppSetting::get('ghost_reseller_password', ''),
+            'rotation_time' => AppSetting::get('ghost_rotation_time', '04:00'),
+            'last_sync' => AppSetting::get('ghost_reseller_last_sync', 'Nunca'),
+            'channels_count' => TestChannel::count()
+        ];
 
         return view('settings.index', [
             'settings' => $settings,
             'apps' => $apps,
             'dnsServers' => $dnsServers,
-            'clientMessageTemplate' => $clientMessageTemplate
+            'notices' => $notices,
+            'clientMessageTemplate' => $clientMessageTemplate,
+            'ghostReseller' => $ghostReseller,
+            'packages' => $packages,
+            'trustPackageId' => $trustPackageId
         ]);
     }
 
@@ -59,15 +90,56 @@ class SettingsController extends Controller
             'language' => 'nullable|string|max:16',
             'date_format' => 'nullable|string|max:16',
             'datetime_format' => 'nullable|string|max:16',
+            'ghost_reseller_username' => 'nullable|string|max:255',
+            'ghost_reseller_password' => 'nullable|string|max:255',
+            'ghost_rotation_time' => 'nullable|date_format:H:i',
+            'trust_renew_package_id' => 'nullable|integer',
         ]);
 
         try {
-            DB::connection('xui')->table('settings')
-                ->where('id', 1)
-                ->update($validated);
+            // 0. Salvar Pacote de Confiança
+            if ($request->has('trust_renew_package_id')) {
+                AppSetting::set('trust_renew_package_id', $request->input('trust_renew_package_id'));
+            }
+
+            // 1. Processar Cliente Fantasma (Teste de Canais)
+            if ($request->has('ghost_reseller_username')) {
+                $username = $request->input('ghost_reseller_username');
+                $password = $request->input('ghost_reseller_password');
+                $rotationTime = $request->input('ghost_rotation_time', '04:00');
+                
+                $currentUsername = AppSetting::get('ghost_reseller_username');
+                $currentPassword = AppSetting::get('ghost_reseller_password');
+                
+                AppSetting::set('ghost_rotation_time', $rotationTime);
+
+                // Se houve mudança nas credenciais, salvar e sincronizar canais
+                if ($username && ($username !== $currentUsername || $password !== $currentPassword)) {
+                    AppSetting::set('ghost_reseller_username', $username);
+                    AppSetting::set('ghost_reseller_password', $password);
+                    
+                    // Sincronizar canais
+                    $syncResult = $this->channelService->syncChannels($username, $password);
+                    
+                    if (!$syncResult['success']) {
+                        return back()->withErrors(['error' => 'Credenciais salvas, mas falha ao baixar lista de canais: ' . $syncResult['message']])->withInput();
+                    }
+                }
+            }
+
+            // 2. Processar Configurações do XUI
+            $xuiSettings = collect($validated)
+                ->except(['ghost_reseller_username', 'ghost_reseller_password', 'ghost_rotation_time', 'trust_renew_package_id'])
+                ->toArray();
+
+            if (!empty($xuiSettings)) {
+                DB::connection('xui')->table('settings')
+                    ->where('id', 1)
+                    ->update($xuiSettings);
+            }
 
             return redirect()->route('settings.index')
-                ->with('success', 'Configurações atualizadas com sucesso!');
+                ->with('success', 'Configurações atualizadas e canais sincronizados com sucesso!');
 
         } catch (\Exception $e) {
             return back()->withErrors(['error' => 'Erro ao atualizar configurações: ' . $e->getMessage()])
@@ -187,5 +259,54 @@ class SettingsController extends Controller
 
         return redirect()->route('settings.index', ['#message'])
             ->with('success', 'Modelo de mensagem atualizado com sucesso!');
+    }
+
+    // --- AVISOS (NOTICES) ---
+
+    public function storeNotice(Request $request)
+    {
+        if (!Auth::user()->isAdmin()) abort(403);
+
+        $validated = $request->validate([
+            'title' => 'required|string|max:255',
+            'message' => 'required|string',
+            'type' => 'required|in:info,warning,danger,success',
+            'priority' => 'integer|min:0',
+        ]);
+
+        Notice::create($validated);
+
+        return redirect()->route('settings.index', ['#notices'])
+            ->with('success', 'Aviso criado com sucesso!');
+    }
+
+    public function updateNotice(Request $request, $id)
+    {
+        if (!Auth::user()->isAdmin()) abort(403);
+
+        $validated = $request->validate([
+            'title' => 'required|string|max:255',
+            'message' => 'required|string',
+            'type' => 'required|in:info,warning,danger,success',
+            'priority' => 'integer|min:0',
+            'is_active' => 'boolean'
+        ]);
+
+        $notice = Notice::findOrFail($id);
+        $notice->update($validated);
+
+        return redirect()->route('settings.index', ['#notices'])
+            ->with('success', 'Aviso atualizado com sucesso!');
+    }
+
+    public function destroyNotice($id)
+    {
+        if (!Auth::user()->isAdmin()) abort(403);
+
+        $notice = Notice::findOrFail($id);
+        $notice->delete();
+
+        return redirect()->route('settings.index', ['#notices'])
+            ->with('success', 'Aviso removido com sucesso!');
     }
 }
