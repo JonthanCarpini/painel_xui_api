@@ -1,0 +1,61 @@
+version: '3.8'
+
+networks:
+  saas_network:
+    name: saas_network
+    driver: bridge
+
+volumes:
+  mysql_data:
+  traefik_certs:
+
+services:
+  # 🚦 O Porteiro (Reverse Proxy & SSL Manager)
+  traefik:
+    image: traefik:v2.10
+    container_name: traefik_gateway
+    restart: always
+    command:
+      - "--api.insecure=true" # Dashboard na porta 8080 (Proteger em produção!)
+      - "--providers.docker=true"
+      - "--providers.docker.exposedbydefault=false"
+      - "--entrypoints.web.address=:80"
+      - "--entrypoints.websecure.address=:443"
+      - "--certificatesresolvers.myresolver.acme.tlschallenge=true"
+      # - "--certificatesresolvers.myresolver.acme.email=admin@seudominio.com" # Descomentar em prod
+      # - "--certificatesresolvers.myresolver.acme.storage=/letsencrypt/acme.json"
+    ports:
+      - "80:80"
+      - "443:443"
+      - "8080:8080"
+    volumes:
+      - "/var/run/docker.sock:/var/run/docker.sock:ro"
+      - "traefik_certs:/letsencrypt"
+    networks:
+      - saas_network
+
+  # 🗄️ O Banco Central (Multi-Tenant)
+  mysql_central:
+    image: mysql:8.0
+    container_name: mysql_central
+    restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD:root_password_segura # Alterar em produção
+    volumes:
+      - mysql_data:/var/lib/mysql
+    networks:
+      - saas_network
+    command: --default-authentication-plugin=mysql_native_password
+
+  # 🩺 Admin do Banco (Opcional - Apenas para Debug)
+  phpmyadmin:
+    image: phpmyadmin/phpmyadmin
+    container_name: pma_debug
+    environment:
+      PMA_HOST: mysql_central
+      MYSQL_ROOT_PASSWORD: root_password_segura
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.pma.rule=Host(`db.painelshark.local`)" # Ajustar domínio
+    networks:
+      - saas_network

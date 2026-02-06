@@ -1,0 +1,14 @@
+/vendor
+/node_modules
+/public/hot
+/public/storage
+/storage/*.key
+.env
+.git
+.github
+.idea
+.vscode
+docker-compose.yml
+docker-compose.override.yml
+phpunit.xml
+tests
