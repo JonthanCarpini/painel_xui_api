@@ -133,5 +133,52 @@ Ao criar uma nova funcionalidade:
 
 ---
 
+## 7. 📂 Estrutura de Arquivos e Pastas
+
+Abaixo está a estrutura dos diretórios principais do projeto, focando onde a lógica de negócio reside.
+
+```
+painel_xui/
+├── app/                                # Código Fonte Principal (Laravel)
+│   ├── app/
+│   │   ├── Http/Controllers/           # Controladores (Lógica de Requisição)
+│   │   │   ├── Admin/                  # Controladores exclusivos de Admin
+│   │   │   ├── ChannelTestController.php # Lógica do Teste de Canais
+│   │   │   ├── ClientController.php    # Gestão de Clientes (CRUD Híbrido)
+│   │   │   ├── DashboardController.php # Lógica do Dashboard e Gráficos
+│   │   │   └── ...
+│   │   ├── Models/                     # Modelos Eloquent
+│   │   │   ├── Line.php                # Modelo da Linha (Conexão: xui)
+│   │   │   ├── XuiUser.php             # Modelo de Usuário XUI (Conexão: xui)
+│   │   │   ├── ClientDetail.php        # Detalhes Locais (Conexão: painel_plus)
+│   │   │   ├── Notice.php              # Avisos (Conexão: painel_plus)
+│   │   │   └── ...
+│   │   └── Services/                   # Lógica de Negócio e Integrações
+│   │       ├── XuiApiService.php       # Wrapper para todas as chamadas API do XUI
+│   │       └── LineService.php         # Regras para criação/renovação de linhas
+│   ├── config/                         # Arquivos de Configuração
+│   │   ├── database.php                # Configuração das conexões (xui vs mysql)
+│   │   └── ...
+│   ├── database/
+│   │   └── migrations/                 # Migrações para o banco local (painel_plus)
+│   ├── resources/
+│   │   └── views/                      # Templates Blade (Frontend)
+│   │       ├── channel-test/           # Views do Teste de Canais
+│   │       ├── clients/                # Views de Gestão de Clientes
+│   │       ├── dashboard/              # View do Dashboard
+│   │       ├── layouts/                # Layout base (Sidebar, Header)
+│   │       ├── notices/                # View dos Avisos (Sticky Notes)
+│   │       └── ...
+│   ├── routes/
+│   │   └── web.php                     # Definição de Rotas Web
+│   └── upload-zip.ps1                  # Script de Deploy Automatizado
+├── documentos/                         # Documentação do Projeto
+│   ├── MANUAL_TECNICO_DO_SISTEMA.md    # Este arquivo
+│   └── ...
+└── ...
+```
+
+---
+
 **Painelshark Team**  
 *Documento vivo - Atualize sempre que houver mudanças arquiteturais.*
