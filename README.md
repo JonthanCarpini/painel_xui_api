@@ -1,5 +1,7 @@
 # 📘 Manual Técnico do Sistema - Painelshark (Painel Office)
 
+![Build Status](https://github.com/JonthanCarpini/Painelshark/actions/workflows/docker-publish.yml/badge.svg)
+
 > **Versão do Documento:** 1.0  
 > **Data:** 06/02/2026  
 > **Status:** Em Desenvolvimento Ativo
