@@ -33,7 +33,7 @@ RUN composer install --no-dev --no-scripts --no-autoloader
 COPY app/ .
 
 # Generate autoloader and run scripts
-RUN composer dump-autoload --optimize --no-dev
+RUN composer dump-autoload --optimize --no-dev --no-scripts
 
 # Copy Nginx config
 COPY docker/nginx/default.conf /etc/nginx/sites-available/default

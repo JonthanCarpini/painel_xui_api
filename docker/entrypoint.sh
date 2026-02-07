@@ -14,10 +14,10 @@ chown -R www-data:www-data /var/www/storage /var/www/bootstrap/cache
 
 # Roda comandos do Laravel
 echo "🚀 Executando migrações e otimizações..."
+php artisan package:discover --ansi
 php artisan migrate --force
-php artisan config:cache
-php artisan route:cache
-php artisan view:cache
+php artisan optimize:clear
+php artisan optimize
 
 # Inicia o PHP-FPM (processo principal)
 echo "✅ Painelshark iniciado!"
