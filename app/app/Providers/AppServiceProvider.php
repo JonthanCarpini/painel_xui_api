@@ -7,6 +7,7 @@ use App\Models\Notice;
 use App\Models\PanelUser;
 use App\Models\Ticket;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\URL;
 use Illuminate\Support\Facades\View;
 use Illuminate\Support\ServiceProvider;
 
@@ -25,6 +26,10 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
+        if (str_starts_with(config('app.url'), 'https://')) {
+            URL::forceScheme('https');
+        }
+
         Auth::provider('xui_db', function ($app, array $config) {
             return new XuiDatabaseUserProvider();
         });
