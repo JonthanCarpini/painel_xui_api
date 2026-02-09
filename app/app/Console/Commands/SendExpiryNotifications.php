@@ -95,8 +95,14 @@ class SendExpiryNotifications extends Command
                 $detail = ClientDetail::where('xui_client_id', $line->id)->first();
                 $phone = $detail->phone ?? null;
 
-                if (!$phone || strlen(preg_replace('/\D/', '', $phone)) < 10) {
-                    continue;
+                if (!$phone) continue;
+
+                $phone = preg_replace('/\D/', '', $phone);
+
+                if (strlen($phone) < 10) continue;
+
+                if (strlen($phone) <= 11) {
+                    $phone = '55' . $phone;
                 }
 
                 $message = $setting->parseMessage($template, [
