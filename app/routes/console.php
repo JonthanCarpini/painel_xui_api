@@ -11,3 +11,6 @@ Artisan::command('inspire', function () {
 
 // Agendar rotação do cliente fantasma
 Schedule::command('ghost:rotate')->dailyAt(AppSetting::get('ghost_rotation_time', '04:00'));
+
+// Enviar notificações de vencimento via WhatsApp (3 dias, 1 dia, hoje)
+Schedule::command('notifications:send-expiry')->dailyAt('09:00');

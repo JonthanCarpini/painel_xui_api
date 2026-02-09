@@ -35,4 +35,9 @@ return [
         ],
     ],
 
+    'evolution' => [
+        'url' => env('EVOLUTION_API_URL', 'https://evo.onpanel.site'),
+        'api_key' => env('EVOLUTION_API_KEY', ''),
+    ],
+
 ];

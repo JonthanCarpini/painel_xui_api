@@ -118,6 +118,15 @@ Route::middleware(['auth', 'maintenance'])->group(function () {
     Route::prefix('profile')->name('profile.')->group(function () {
         Route::get('/', [\App\Http\Controllers\ProfileController::class, 'index'])->name('index');
         Route::put('/', [\App\Http\Controllers\ProfileController::class, 'update'])->name('update');
+
+        Route::prefix('whatsapp')->name('whatsapp.')->group(function () {
+            Route::post('/create-instance', [\App\Http\Controllers\ProfileController::class, 'createWhatsappInstance'])->name('create-instance');
+            Route::get('/qrcode', [\App\Http\Controllers\ProfileController::class, 'getWhatsappQrCode'])->name('qrcode');
+            Route::get('/status', [\App\Http\Controllers\ProfileController::class, 'getWhatsappStatus'])->name('status');
+            Route::post('/disconnect', [\App\Http\Controllers\ProfileController::class, 'disconnectWhatsapp'])->name('disconnect');
+            Route::delete('/delete', [\App\Http\Controllers\ProfileController::class, 'deleteWhatsappInstance'])->name('delete');
+            Route::put('/settings', [\App\Http\Controllers\ProfileController::class, 'updateWhatsappSettings'])->name('settings');
+        });
     });
 
     Route::prefix('settings')->name('settings.')->middleware('admin')->group(function () {

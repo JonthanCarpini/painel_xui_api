@@ -24,6 +24,9 @@
             <button class="flex-1 min-w-[140px] px-4 md:px-6 py-3 md:py-4 border-b-2 border-transparent hover:text-gray-600 hover:border-gray-300 dark:hover:text-gray-300 text-gray-500 dark:text-gray-400 transition-colors duration-200 font-medium flex items-center justify-center gap-2 whitespace-nowrap text-sm md:text-base" id="preferences-tab" data-tabs-target="#preferences" type="button" role="tab" aria-controls="preferences" aria-selected="false">
                 <i class="bi bi-sliders"></i> Prefer&ecirc;ncias
             </button>
+            <button class="flex-1 min-w-[140px] px-4 md:px-6 py-3 md:py-4 border-b-2 border-transparent hover:text-gray-600 hover:border-gray-300 dark:hover:text-gray-300 text-gray-500 dark:text-gray-400 transition-colors duration-200 font-medium flex items-center justify-center gap-2 whitespace-nowrap text-sm md:text-base" id="whatsapp-tab" data-tabs-target="#whatsapp" type="button" role="tab" aria-controls="whatsapp" aria-selected="false">
+                <i class="bi bi-whatsapp"></i> WhatsApp
+            </button>
         </div>
     </div>
 
@@ -128,7 +131,12 @@
             </div>
         </div>
 
-        <!-- Tab 2: Preferências -->
+        <!-- Tab 2: WhatsApp -->
+        <div class="hidden" id="whatsapp" role="tabpanel" aria-labelledby="whatsapp-tab">
+            @include('profile.partials.whatsapp', ['whatsappSetting' => $whatsappSetting ?? null])
+        </div>
+
+        <!-- Tab 3: Preferências -->
         <div class="hidden" id="preferences" role="tabpanel" aria-labelledby="preferences-tab">
             <div class="bg-white dark:bg-dark-300 border border-gray-200 dark:border-dark-200 rounded-xl overflow-hidden shadow-sm">
                 <div class="border-b border-gray-200 dark:border-dark-200 px-8 py-6 bg-gray-50 dark:bg-dark-200/50">
