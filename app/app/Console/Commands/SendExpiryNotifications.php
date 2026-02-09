@@ -18,7 +18,11 @@ class SendExpiryNotifications extends Command
 
     public function handle(): int
     {
-        $nowTime = Carbon::now()->format('H:i');
+        $tz = 'America/Sao_Paulo';
+        $now = Carbon::now($tz);
+        $nowTime = $now->format('H:i');
+
+        $this->info("Iniciando envio de notificações — {$now->format('d/m/Y H:i:s')} (Fuso: {$tz})");
 
         $settings = WhatsappSetting::where('notifications_enabled', true)
             ->where('connection_status', 'connected')
@@ -30,12 +34,14 @@ class SendExpiryNotifications extends Command
         }
 
         $evo = new EvolutionService();
-        $todayStart = strtotime('today');
-        $todayEnd = strtotime('tomorrow') - 1;
-        $in1dStart = strtotime('+1 day 00:00:00');
-        $in1dEnd = strtotime('+1 day 23:59:59');
-        $in3dStart = strtotime('+3 days 00:00:00');
-        $in3dEnd = strtotime('+3 days 23:59:59');
+
+        $todayCarbon = Carbon::today($tz);
+        $todayStart = $todayCarbon->timestamp;
+        $todayEnd = $todayCarbon->copy()->endOfDay()->timestamp;
+        $in1dStart = $todayCarbon->copy()->addDay()->startOfDay()->timestamp;
+        $in1dEnd = $todayCarbon->copy()->addDay()->endOfDay()->timestamp;
+        $in3dStart = $todayCarbon->copy()->addDays(3)->startOfDay()->timestamp;
+        $in3dEnd = $todayCarbon->copy()->addDays(3)->endOfDay()->timestamp;
 
         $totalSent = 0;
 
@@ -53,6 +59,7 @@ class SendExpiryNotifications extends Command
             $memberId = $panelUser->xui_id;
             $intervalSeconds = $setting->send_interval_seconds ?? 30;
 
+            // Remontar a lista a cada execução — clientes que renovaram não aparecerão mais
             $lines = Line::where('member_id', $memberId)
                 ->where('is_trial', 0)
                 ->where('admin_enabled', 1)
@@ -63,7 +70,7 @@ class SendExpiryNotifications extends Command
 
             $this->info("[{$setting->instance_name}] Encontrados {$lines->count()} clientes para notificar (intervalo: {$intervalSeconds}s).");
 
-            $today = Carbon::today()->toDateString();
+            $today = $todayCarbon->toDateString();
 
             foreach ($lines as $line) {
                 $expDate = (int) $line->exp_date;

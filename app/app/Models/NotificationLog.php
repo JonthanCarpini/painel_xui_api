@@ -9,7 +9,7 @@ class NotificationLog extends Model
     protected $connection = 'mysql';
     protected $table = 'notification_logs';
 
-    public $timestamps = false;
+    const UPDATED_AT = null;
 
     protected $fillable = [
         'whatsapp_setting_id',
@@ -22,6 +22,7 @@ class NotificationLog extends Model
     protected $casts = [
         'success' => 'boolean',
         'sent_date' => 'date',
+        'created_at' => 'datetime',
     ];
 
     public function whatsappSetting()

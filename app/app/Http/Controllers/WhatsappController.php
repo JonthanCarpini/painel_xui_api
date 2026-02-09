@@ -223,12 +223,14 @@ class WhatsappController extends Controller
         $memberId = $panelUser->xui_id;
         $intervalSeconds = $setting->send_interval_seconds ?? 30;
 
-        $todayStart = strtotime('today');
-        $todayEnd = strtotime('tomorrow') - 1;
-        $in1dStart = strtotime('+1 day 00:00:00');
-        $in1dEnd = strtotime('+1 day 23:59:59');
-        $in3dStart = strtotime('+3 days 00:00:00');
-        $in3dEnd = strtotime('+3 days 23:59:59');
+        $tz = 'America/Sao_Paulo';
+        $todayCarbon = Carbon::today($tz);
+        $todayStart = $todayCarbon->timestamp;
+        $todayEnd = $todayCarbon->copy()->endOfDay()->timestamp;
+        $in1dStart = $todayCarbon->copy()->addDay()->startOfDay()->timestamp;
+        $in1dEnd = $todayCarbon->copy()->addDay()->endOfDay()->timestamp;
+        $in3dStart = $todayCarbon->copy()->addDays(3)->startOfDay()->timestamp;
+        $in3dEnd = $todayCarbon->copy()->addDays(3)->endOfDay()->timestamp;
 
         $lines = Line::where('member_id', $memberId)
             ->where('is_trial', 0)
@@ -238,7 +240,7 @@ class WhatsappController extends Controller
             ->where('exp_date', '<=', $in3dEnd)
             ->get();
 
-        $today = Carbon::today()->toDateString();
+        $today = $todayCarbon->toDateString();
 
         $groups = [
             'today' => ['label' => 'Vence Hoje', 'color' => 'red', 'icon' => 'bi-exclamation-triangle-fill', 'clients' => []],
@@ -290,7 +292,7 @@ class WhatsappController extends Controller
                 $status = 'pending';
                 $statusLabel = 'Aguardando';
                 $queuePosition++;
-                $sentAt = Carbon::now()->addSeconds($queuePosition * $intervalSeconds);
+                $sentAt = Carbon::now('America/Sao_Paulo')->addSeconds($queuePosition * $intervalSeconds);
             }
 
             $groups[$notifType]['clients'][] = [

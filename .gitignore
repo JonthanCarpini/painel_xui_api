@@ -1,3 +1,5 @@
 Painelshark/
 app/deploy.zip
 app/temp_deploy/
+build.zip
+tmp_*.sh
