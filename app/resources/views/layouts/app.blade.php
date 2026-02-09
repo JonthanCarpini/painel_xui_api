@@ -166,6 +166,23 @@
                     </a>
                 </div>
 
+                <!-- WhatsApp -->
+                <div>
+                    <p class="text-gray-500 dark:text-gray-500 text-xs font-semibold uppercase tracking-wider mb-2 px-3">WhatsApp</p>
+                    <a href="{{ route('whatsapp.connection') }}" class="flex items-center gap-3 px-3 py-2 rounded-lg {{ request()->routeIs('whatsapp.connection') ? 'bg-gradient-to-r from-green-500 to-green-600 text-white shadow-md shadow-green-500/20' : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-dark-200 hover:text-gray-900 dark:hover:text-white' }} transition-all duration-200">
+                        <i class="bi bi-whatsapp text-lg"></i>
+                        <span class="font-medium">Conex&atilde;o</span>
+                    </a>
+                    <a href="{{ route('whatsapp.settings') }}" class="flex items-center gap-3 px-3 py-2 rounded-lg {{ request()->routeIs('whatsapp.settings') ? 'bg-gradient-to-r from-green-500 to-green-600 text-white shadow-md shadow-green-500/20' : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-dark-200 hover:text-gray-900 dark:hover:text-white' }} transition-all duration-200">
+                        <i class="bi bi-gear text-lg"></i>
+                        <span class="font-medium">Configura&ccedil;&otilde;es</span>
+                    </a>
+                    <a href="{{ route('whatsapp.notifications') }}" class="flex items-center gap-3 px-3 py-2 rounded-lg {{ request()->routeIs('whatsapp.notifications') ? 'bg-gradient-to-r from-green-500 to-green-600 text-white shadow-md shadow-green-500/20' : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-dark-200 hover:text-gray-900 dark:hover:text-white' }} transition-all duration-200">
+                        <i class="bi bi-bell text-lg"></i>
+                        <span class="font-medium">Notifica&ccedil;&otilde;es</span>
+                    </a>
+                </div>
+
                 <!-- Suporte e Comunicação -->
                 <div>
                     <p class="text-gray-500 dark:text-gray-500 text-xs font-semibold uppercase tracking-wider mb-2 px-3">Comunicação</p>

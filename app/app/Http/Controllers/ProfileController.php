@@ -3,11 +3,8 @@
 namespace App\Http\Controllers;
 
 use App\Models\PanelUser;
-use App\Models\WhatsappSetting;
-use App\Services\EvolutionService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Facades\Log;
 
 class ProfileController extends Controller
 {
@@ -15,7 +12,6 @@ class ProfileController extends Controller
     {
         $xuiUser = Auth::user();
         
-        // Busca ou cria o usuário local (caso não tenha logado ainda após a atualização)
         $panelUser = PanelUser::firstOrCreate(
             ['xui_id' => $xuiUser->id],
             [
@@ -24,7 +20,6 @@ class ProfileController extends Controller
             ]
         );
 
-        // Preferências padrão
         $preferences = [
             'panel_name' => $panelUser->getPreference('panel_name', 'Painel XUI'),
             'logo_url' => $panelUser->getPreference('logo_url', ''),
@@ -33,9 +28,7 @@ class ProfileController extends Controller
             'enable_notifications' => $panelUser->getPreference('enable_notifications', true),
         ];
 
-        $whatsappSetting = WhatsappSetting::where('panel_user_id', $panelUser->id)->first();
-
-        return view('profile.index', compact('xuiUser', 'panelUser', 'preferences', 'whatsappSetting'));
+        return view('profile.index', compact('xuiUser', 'panelUser', 'preferences'));
     }
 
     public function update(Request $request)
@@ -64,202 +57,5 @@ class ProfileController extends Controller
         $panelUser->setPreference('enable_notifications', $request->has('enable_notifications'));
 
         return redirect()->route('profile.index')->with('success', 'Preferências atualizadas com sucesso!');
-    }
-
-    public function createWhatsappInstance()
-    {
-        $xuiUser = Auth::user();
-        $panelUser = PanelUser::where('xui_id', $xuiUser->id)->firstOrFail();
-        $instanceName = strtolower(preg_replace('/[^a-zA-Z0-9_]/', '', $xuiUser->username));
-
-        $existing = WhatsappSetting::where('panel_user_id', $panelUser->id)->first();
-        if ($existing) {
-            return response()->json(['success' => false, 'message' => 'Você já possui uma instância WhatsApp.'], 422);
-        }
-
-        $evo = new EvolutionService();
-        $result = $evo->createInstance($instanceName);
-
-        if (!$result['success']) {
-            return response()->json(['success' => false, 'message' => 'Erro ao criar instância: ' . ($result['error'] ?? 'Desconhecido')], 500);
-        }
-
-        $setting = WhatsappSetting::create([
-            'panel_user_id' => $panelUser->id,
-            'instance_name' => $instanceName,
-        ]);
-
-        return response()->json(['success' => true, 'instance_name' => $instanceName]);
-    }
-
-    public function getWhatsappQrCode()
-    {
-        $setting = $this->getWhatsappSetting();
-        if (!$setting) {
-            return response()->json(['success' => false, 'message' => 'Instância não encontrada.'], 404);
-        }
-
-        $evo = new EvolutionService();
-        $result = $evo->getQrCode($setting->instance_name);
-
-        if (!$result['success']) {
-            return response()->json(['success' => false, 'message' => $result['error'] ?? 'Erro ao obter QR Code']);
-        }
-
-        $data = $result['data'] ?? [];
-        $base64 = $data['base64'] ?? null;
-        $code = $data['code'] ?? null;
-        $pairingCode = $data['pairingCode'] ?? null;
-
-        return response()->json([
-            'success' => true,
-            'qrcode' => $base64,
-            'code' => $code,
-            'pairingCode' => $pairingCode,
-        ]);
-    }
-
-    public function getWhatsappStatus()
-    {
-        $setting = $this->getWhatsappSetting();
-        if (!$setting) {
-            return response()->json(['success' => false, 'status' => 'none']);
-        }
-
-        $evo = new EvolutionService();
-        $result = $evo->getInstanceStatus($setting->instance_name);
-
-        // Evolution API retorna: open, close, connecting
-        $state = $result['data']['instance']['state'] ?? null;
-
-        // Fallback: tentar buscar via fetchInstances se connectionState falhar
-        if (!$state && $result['success']) {
-            $state = $result['data']['state'] ?? 'close';
-        }
-        if (!$state) {
-            $state = 'close';
-        }
-
-        Log::debug('WhatsApp status check', [
-            'instance' => $setting->instance_name,
-            'raw_state' => $state,
-            'api_response' => $result,
-        ]);
-
-        $isConnected = $state === 'open';
-
-        if ($isConnected && $setting->connection_status !== 'connected') {
-            $setting->update(['connection_status' => 'connected', 'connected_at' => now()]);
-        } elseif (!$isConnected && $setting->connection_status === 'connected') {
-            $setting->update(['connection_status' => 'disconnected', 'connected_at' => null]);
-        }
-
-        return response()->json([
-            'success' => true,
-            'status' => $isConnected ? 'connected' : $state,
-            'instance_name' => $setting->instance_name,
-        ]);
-    }
-
-    public function confirmWhatsappScan()
-    {
-        $setting = $this->getWhatsappSetting();
-        if (!$setting) {
-            return response()->json(['success' => false, 'message' => 'Instância não encontrada.'], 404);
-        }
-
-        $evo = new EvolutionService();
-
-        // Restart força a instância a sair do estado "connecting" e aplicar a sessão escaneada
-        $evo->restartInstance($setting->instance_name);
-
-        // Aguardar um momento para a instância reiniciar
-        sleep(3);
-
-        // Verificar o status após restart
-        $result = $evo->getInstanceStatus($setting->instance_name);
-        $state = $result['data']['instance']['state'] ?? 'close';
-
-        Log::info('WhatsApp confirm scan', [
-            'instance' => $setting->instance_name,
-            'state_after_restart' => $state,
-        ]);
-
-        if ($state === 'open') {
-            $setting->update(['connection_status' => 'connected', 'connected_at' => now()]);
-            return response()->json(['success' => true, 'status' => 'connected']);
-        }
-
-        // Se ainda não conectou, pode precisar de mais tempo
-        return response()->json([
-            'success' => true,
-            'status' => $state,
-            'message' => 'Instância reiniciada. Aguarde alguns segundos...',
-        ]);
-    }
-
-    public function disconnectWhatsapp()
-    {
-        $setting = $this->getWhatsappSetting();
-        if (!$setting) {
-            return response()->json(['success' => false, 'message' => 'Instância não encontrada.'], 404);
-        }
-
-        $evo = new EvolutionService();
-        $evo->logout($setting->instance_name);
-        $setting->update(['connection_status' => 'disconnected', 'connected_at' => null]);
-
-        return response()->json(['success' => true]);
-    }
-
-    public function deleteWhatsappInstance()
-    {
-        $setting = $this->getWhatsappSetting();
-        if (!$setting) {
-            return response()->json(['success' => false, 'message' => 'Instância não encontrada.'], 404);
-        }
-
-        $evo = new EvolutionService();
-        $evo->deleteInstance($setting->instance_name);
-        $setting->delete();
-
-        return response()->json(['success' => true]);
-    }
-
-    public function updateWhatsappSettings(Request $request)
-    {
-        $request->validate([
-            'notifications_enabled' => 'boolean',
-            'expiry_message_3d' => 'nullable|string|max:1000',
-            'expiry_message_1d' => 'nullable|string|max:1000',
-            'expiry_message_today' => 'nullable|string|max:1000',
-            'send_start_time' => 'required|date_format:H:i',
-            'send_interval_seconds' => 'required|integer|min:5|max:300',
-        ]);
-
-        $setting = $this->getWhatsappSetting();
-        if (!$setting) {
-            return response()->json(['success' => false, 'message' => 'Instância não encontrada.'], 404);
-        }
-
-        $setting->update([
-            'notifications_enabled' => $request->boolean('notifications_enabled'),
-            'expiry_message_3d' => $request->input('expiry_message_3d'),
-            'expiry_message_1d' => $request->input('expiry_message_1d'),
-            'expiry_message_today' => $request->input('expiry_message_today'),
-            'send_start_time' => $request->input('send_start_time'),
-            'send_interval_seconds' => $request->input('send_interval_seconds'),
-        ]);
-
-        return redirect()->route('profile.index', ['tab' => 'whatsapp'])->with('success', 'Configurações de WhatsApp atualizadas!');
-    }
-
-    private function getWhatsappSetting(): ?WhatsappSetting
-    {
-        $xuiUser = Auth::user();
-        $panelUser = PanelUser::where('xui_id', $xuiUser->id)->first();
-        if (!$panelUser) return null;
-
-        return WhatsappSetting::where('panel_user_id', $panelUser->id)->first();
     }
 }
