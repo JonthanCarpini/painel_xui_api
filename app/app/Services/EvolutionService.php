@@ -71,10 +71,10 @@ class EvolutionService
 
     public function sendText(string $instanceName, string $phone, string $message): array
     {
-        $chatId = preg_replace('/\D/', '', $phone) . '@s.whatsapp.net';
+        $number = preg_replace('/\D/', '', $phone);
 
         return $this->request('post', "/message/sendText/{$instanceName}", [
-            'number' => $chatId,
+            'number' => $number,
             'text' => $message,
         ]);
     }
