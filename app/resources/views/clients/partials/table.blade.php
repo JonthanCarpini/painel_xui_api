@@ -138,8 +138,11 @@
                         <button onclick="openRenewModal({{ $client->id }})" class="p-1.5 bg-green-50 dark:bg-green-500/10 text-green-600 dark:text-green-400 hover:bg-green-100 dark:hover:bg-green-500/20 rounded-lg transition-colors" title="Renovar">
                             <i class="bi bi-arrow-clockwise"></i>
                         </button>
-                        @if($client->contact)
-                        <button onclick="window.open('https://wa.me/{{ preg_replace('/[^0-9]/', '', $client->contact ?? '') }}', '_blank')" class="p-1.5 bg-orange-50 dark:bg-orange-500/10 text-orange-600 dark:text-orange-400 hover:bg-orange-100 dark:hover:bg-orange-500/20 rounded-lg transition-colors" title="WhatsApp">
+                        @php
+                            $clientPhone = $client->local_phone ?? $client->contact ?? null;
+                        @endphp
+                        @if($clientPhone)
+                        <button onclick="openWhatsappModal({{ $client->id }}, '{{ addslashes($client->username) }}', '{{ addslashes($clientPhone) }}', '{{ $client->password }}', '{{ date('d/m/Y H:i', $client->exp_date) }}', {{ $client->max_connections }})" class="p-1.5 bg-orange-50 dark:bg-orange-500/10 text-orange-600 dark:text-orange-400 hover:bg-orange-100 dark:hover:bg-orange-500/20 rounded-lg transition-colors" title="WhatsApp">
                             <i class="bi bi-whatsapp"></i>
                         </button>
                         @endif
@@ -200,6 +203,10 @@
                 
                 const message = `✅ RENOVAÇÃO EM CONFIANÇA REALIZADA!\n\n👤 Usuário: ${data.client.username}\n📅 Nova Validade: ${data.client.exp_date}\n\nObrigado pela preferência! 👍`;
                 document.getElementById('renewSuccessWhatsapp').value = message;
+                document.getElementById('renewSuccessPhone').value = data.client.phone || '';
+                document.getElementById('renewSuccessFeedback').classList.add('hidden');
+                document.getElementById('renewSuccessSendBtn').disabled = false;
+                document.getElementById('renewSuccessSendBtn').innerHTML = '<i class="bi bi-whatsapp"></i> Enviar via WhatsApp';
                 
                 document.getElementById('renewSuccessModal').classList.remove('hidden');
                 

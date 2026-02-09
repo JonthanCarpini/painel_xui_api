@@ -8,10 +8,13 @@ use App\Models\ClientDetail;
 use App\Models\Line;
 use App\Models\Package;
 use App\Models\XuiUser;
+use App\Models\WhatsappSetting;
+use App\Services\EvolutionService;
 use App\Services\LineService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 
 class ClientController extends Controller
 {
@@ -291,7 +294,8 @@ class ClientController extends Controller
 
             return redirect()->route('clients.index')
                 ->with('success', 'Cliente criado com sucesso!')
-                ->with('client_message', $clientMessage);
+                ->with('client_message', $clientMessage)
+                ->with('client_phone', $phone);
 
         } catch (\Exception $e) {
             return back()->withErrors(['error' => $e->getMessage()])
@@ -577,6 +581,9 @@ class ClientController extends Controller
 
             $line = $lineService->renewLine($id, $data);
 
+            $localDetail = ClientDetail::where('xui_client_id', $line->id)->first();
+            $clientPhone = $localDetail->phone ?? $line->contact ?? null;
+
             return response()->json([
                 'success' => true, 
                 'message' => 'Cliente renovado com sucesso!',
@@ -585,6 +592,7 @@ class ClientController extends Controller
                     'password' => $line->password,
                     'exp_date' => date('d/m/Y H:i', $line->exp_date),
                     'max_connections' => $line->max_connections,
+                    'phone' => $clientPhone,
                 ]
             ]);
 
@@ -629,12 +637,16 @@ class ClientController extends Controller
             // Executar renovação padrão usando o pacote de confiança
             $line = $lineService->renewLine($id, $data);
 
+            $localDetail = ClientDetail::where('xui_client_id', $line->id)->first();
+            $clientPhone = $localDetail->phone ?? $line->contact ?? null;
+
             return response()->json([
                 'success' => true, 
                 'message' => 'Renovação em confiança realizada com sucesso!',
                 'client' => [
                     'username' => $line->username,
                     'exp_date' => date('d/m/Y H:i', $line->exp_date),
+                    'phone' => $clientPhone,
                 ]
             ]);
 
@@ -738,6 +750,48 @@ class ClientController extends Controller
         return response()->json([
             'message' => $message
         ]);
+    }
+
+    public function sendWhatsapp(Request $request)
+    {
+        $request->validate([
+            'phone' => 'required|string',
+            'message' => 'required|string|max:4000',
+        ]);
+
+        $user = Auth::user();
+        $panelUser = $user->panelUser;
+
+        if (!$panelUser) {
+            return response()->json(['success' => false, 'message' => 'Perfil não encontrado.'], 403);
+        }
+
+        $setting = WhatsappSetting::where('panel_user_id', $panelUser->id)->first();
+
+        if (!$setting || $setting->connection_status !== 'connected') {
+            return response()->json(['success' => false, 'message' => 'WhatsApp não está conectado. Conecte na aba Perfil > WhatsApp.'], 422);
+        }
+
+        $phone = preg_replace('/\D/', '', $request->phone);
+
+        if (strlen($phone) <= 11) {
+            $phone = '55' . $phone;
+        }
+
+        $evo = new EvolutionService();
+        $result = $evo->sendText($setting->instance_name, $phone, $request->message);
+
+        Log::info('WhatsApp message sent', [
+            'user' => $user->username,
+            'phone' => $phone,
+            'success' => $result['success'],
+        ]);
+
+        if ($result['success']) {
+            return response()->json(['success' => true, 'message' => 'Mensagem enviada com sucesso!']);
+        }
+
+        return response()->json(['success' => false, 'message' => 'Falha ao enviar: ' . ($result['error'] ?? 'Erro desconhecido')], 500);
     }
 
     public function export()

@@ -339,17 +339,21 @@ function submitRenewTrust() {
                 <label class="block text-sm font-medium text-gray-700 dark:text-gray-400 mb-2">Mensagem para WhatsApp</label>
                 <div class="relative">
                     <textarea id="renewSuccessWhatsapp" readonly rows="6" class="w-full px-4 py-2 bg-gray-50 dark:bg-dark-200 border border-gray-300 dark:border-dark-100 rounded-lg text-gray-900 dark:text-white font-mono text-sm"></textarea>
-                    <button onclick="copyField('renewSuccessWhatsapp')" class="absolute top-2 right-2 px-3 py-1.5 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors flex items-center gap-2">
-                        <i class="bi bi-whatsapp"></i>
-                        Copiar para WhatsApp
+                    <button onclick="copyField('renewSuccessWhatsapp')" class="absolute top-2 right-2 px-3 py-1.5 bg-orange-500 text-white rounded-lg hover:bg-orange-600 transition-colors flex items-center gap-2">
+                        <i class="bi bi-clipboard"></i>
+                        Copiar
                     </button>
                 </div>
             </div>
-
+            <input type="hidden" id="renewSuccessPhone">
+            <div id="renewSuccessFeedback" class="hidden mb-3"></div>
             <div class="flex flex-col sm:flex-row gap-3">
-                <button onclick="closeRenewSuccessModal()" class="w-full sm:w-1/2 px-4 py-2 bg-gray-100 dark:bg-dark-200 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-200 dark:hover:bg-dark-100 transition-colors font-medium">Fechar</button>
-                <a href="{{ route('clients.index') }}" class="w-full sm:w-1/2 px-4 py-2 bg-gradient-to-r from-orange-500 to-orange-600 text-white rounded-lg hover:shadow-lg transition-all text-center font-medium">
-                    Ver Todos os Clientes
+                <button onclick="closeRenewSuccessModal()" class="w-full sm:w-1/3 px-4 py-2 bg-gray-100 dark:bg-dark-200 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-200 dark:hover:bg-dark-100 transition-colors font-medium">Fechar</button>
+                <button id="renewSuccessSendBtn" onclick="sendRenewWhatsapp()" class="w-full sm:w-1/3 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors font-medium flex items-center justify-center gap-2">
+                    <i class="bi bi-whatsapp"></i> Enviar via WhatsApp
+                </button>
+                <a href="{{ route('clients.index') }}" class="w-full sm:w-1/3 px-4 py-2 bg-gradient-to-r from-orange-500 to-orange-600 text-white rounded-lg hover:shadow-lg transition-all text-center font-medium">
+                    Ver Clientes
                 </a>
             </div>
         </div>
@@ -380,9 +384,9 @@ function submitRenewTrust() {
                     </button>
                 </div>
                 <div class="mt-2 flex justify-end">
-                    <button onclick="window.open('https://wa.me/?text=' + encodeURIComponent(document.getElementById('m3uMessageText').value), '_blank')" class="w-full sm:w-auto px-3 py-1.5 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors text-sm flex items-center justify-center gap-2">
-                        <i class="bi bi-whatsapp"></i>
-                        Enviar no WhatsApp
+                    <button onclick="copyToClipboard('m3uMessageText')" class="w-full sm:w-auto px-3 py-1.5 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors text-sm flex items-center justify-center gap-2">
+                        <i class="bi bi-clipboard"></i>
+                        Copiar Mensagem
                     </button>
                 </div>
             </div>
@@ -590,18 +594,86 @@ function submitRenewTrust() {
                     </button>
                 </div>
             </div>
-            
+            <div id="clientMsgFeedback" class="hidden mb-3"></div>
             <div class="flex flex-col sm:flex-row gap-3">
                 <button onclick="document.getElementById('clientMessageModal').remove()" class="w-full sm:w-1/2 px-4 py-2 bg-gray-100 dark:bg-dark-200 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-200 dark:hover:bg-dark-100 transition-colors font-medium">Fechar</button>
-                <button onclick="window.open('https://wa.me/?text=' + encodeURIComponent(document.getElementById('clientMessageText').value), '_blank')" class="w-full sm:w-1/2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors font-medium flex items-center justify-center gap-2">
+                @if(session('client_phone'))
+                <button id="clientMsgSendBtn" onclick="sendViaEvolution('{{ session('client_phone') }}', document.getElementById('clientMessageText').value, 'clientMsgSendBtn', 'clientMsgFeedback')" class="w-full sm:w-1/2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors font-medium flex items-center justify-center gap-2">
                     <i class="bi bi-whatsapp"></i>
-                    Enviar no WhatsApp
+                    Enviar via WhatsApp
                 </button>
+                @else
+                <button onclick="copyToClipboard('clientMessageText')" class="w-full sm:w-1/2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors font-medium flex items-center justify-center gap-2">
+                    <i class="bi bi-clipboard"></i>
+                    Copiar Mensagem
+                </button>
+                @endif
             </div>
         </div>
     </div>
 </div>
 @endif
+
+<!-- Modal WhatsApp - Envio via Evolution API -->
+<div id="whatsappModal" class="hidden fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
+    <div class="bg-white dark:bg-dark-300 rounded-xl max-w-lg w-full border border-gray-200 dark:border-dark-200 shadow-2xl">
+        <div class="p-5 border-b border-gray-200 dark:border-dark-200 flex justify-between items-center bg-gradient-to-r from-green-600 to-green-700">
+            <h3 class="text-lg font-bold text-white flex items-center gap-2">
+                <i class="bi bi-whatsapp"></i>
+                Enviar Mensagem WhatsApp
+            </h3>
+            <button onclick="closeWhatsappModal()" class="text-white hover:text-gray-200">
+                <i class="bi bi-x-lg"></i>
+            </button>
+        </div>
+        <div class="p-5">
+            <input type="hidden" id="waPhone">
+            <input type="hidden" id="waClientId">
+
+            <div class="mb-3">
+                <label class="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Destinat&aacute;rio</label>
+                <div class="flex items-center gap-2 px-3 py-2 bg-gray-50 dark:bg-dark-200 rounded-lg border border-gray-200 dark:border-dark-100">
+                    <i class="bi bi-person text-gray-400"></i>
+                    <span id="waClientName" class="text-sm font-medium text-gray-900 dark:text-white"></span>
+                    <span class="text-gray-400">-</span>
+                    <span id="waPhoneDisplay" class="text-sm text-gray-500 dark:text-gray-400"></span>
+                </div>
+            </div>
+
+            <div class="mb-3">
+                <label class="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">A&ccedil;&otilde;es R&aacute;pidas</label>
+                <div class="flex flex-wrap gap-2">
+                    <button onclick="waQuickAction('access')" class="px-3 py-1.5 bg-blue-50 dark:bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-200 dark:border-blue-500/30 rounded-lg hover:bg-blue-100 dark:hover:bg-blue-500/20 transition-colors text-xs font-medium flex items-center gap-1">
+                        <i class="bi bi-key"></i> Dados de Acesso
+                    </button>
+                    <button onclick="waQuickAction('expiry')" class="px-3 py-1.5 bg-yellow-50 dark:bg-yellow-500/10 text-yellow-600 dark:text-yellow-400 border border-yellow-200 dark:border-yellow-500/30 rounded-lg hover:bg-yellow-100 dark:hover:bg-yellow-500/20 transition-colors text-xs font-medium flex items-center gap-1">
+                        <i class="bi bi-calendar-event"></i> Data de Vencimento
+                    </button>
+                    <button onclick="waQuickAction('renewal')" class="px-3 py-1.5 bg-green-50 dark:bg-green-500/10 text-green-600 dark:text-green-400 border border-green-200 dark:border-green-500/30 rounded-lg hover:bg-green-100 dark:hover:bg-green-500/20 transition-colors text-xs font-medium flex items-center gap-1">
+                        <i class="bi bi-arrow-clockwise"></i> Lembrete Renova&ccedil;&atilde;o
+                    </button>
+                    <button onclick="document.getElementById('waMessage').value = ''" class="px-3 py-1.5 bg-gray-50 dark:bg-gray-500/10 text-gray-500 dark:text-gray-400 border border-gray-200 dark:border-gray-500/30 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-500/20 transition-colors text-xs font-medium flex items-center gap-1">
+                        <i class="bi bi-eraser"></i> Limpar
+                    </button>
+                </div>
+            </div>
+
+            <div class="mb-4">
+                <label class="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Mensagem</label>
+                <textarea id="waMessage" rows="8" class="w-full px-3 py-2 bg-gray-50 dark:bg-dark-200 border border-gray-300 dark:border-dark-100 rounded-lg text-gray-900 dark:text-white text-sm focus:border-green-500 focus:outline-none focus:ring-1 focus:ring-green-500 transition-colors resize-none" placeholder="Digite sua mensagem..."></textarea>
+            </div>
+
+            <div id="waSendFeedback" class="hidden mb-3"></div>
+
+            <div class="flex gap-3">
+                <button onclick="closeWhatsappModal()" class="flex-1 px-4 py-2.5 bg-gray-100 dark:bg-dark-200 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-200 dark:hover:bg-dark-100 transition-colors font-medium text-sm">Cancelar</button>
+                <button onclick="sendWhatsappMessage()" id="waSendBtn" class="flex-1 px-4 py-2.5 bg-gradient-to-r from-green-500 to-green-600 text-white rounded-lg hover:shadow-lg transition-all font-medium text-sm flex items-center justify-center gap-2">
+                    <i class="bi bi-send"></i> Enviar
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
 
 @push('scripts')
 <script>
@@ -905,6 +977,10 @@ function submitRenew(event) {
             // Gerar mensagem Whatsapp simples
             const zapMsg = `✅ Renovação Concluída!\n\n👤 Usuário: ${data.client.username}\n🔑 Senha: ${data.client.password}\n📅 Validade: ${data.client.exp_date}\n📺 Conexões: ${data.client.max_connections}`;
             document.getElementById('renewSuccessWhatsapp').value = zapMsg;
+            document.getElementById('renewSuccessPhone').value = data.client.phone || '';
+            document.getElementById('renewSuccessFeedback').classList.add('hidden');
+            document.getElementById('renewSuccessSendBtn').disabled = false;
+            document.getElementById('renewSuccessSendBtn').innerHTML = '<i class="bi bi-whatsapp"></i> Enviar via WhatsApp';
             
             document.getElementById('renewSuccessModal').classList.remove('hidden');
         } else {
@@ -1209,9 +1285,9 @@ function submitTrial(event) {
                             
                             <div class="flex gap-3">
                                 <button onclick="document.getElementById('ajaxClientMessageModal').remove()" class="flex-1 px-4 py-2 bg-gray-100 dark:bg-dark-200 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-200 dark:hover:bg-dark-100 transition-colors font-medium">Fechar</button>
-                                <button onclick="window.open('https://wa.me/?text=' + encodeURIComponent(document.getElementById('ajaxClientMessageText').value), '_blank')" class="flex-1 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors font-medium flex items-center justify-center gap-2">
-                                    <i class="bi bi-whatsapp"></i>
-                                    Enviar no WhatsApp
+                                <button onclick="copyToClipboard('ajaxClientMessageText')" class="flex-1 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors font-medium flex items-center justify-center gap-2">
+                                    <i class="bi bi-clipboard"></i>
+                                    Copiar Mensagem
                                 </button>
                             </div>
                         </div>
@@ -1231,6 +1307,128 @@ function submitTrial(event) {
     .finally(() => {
         btn.disabled = false;
         btn.classList.remove('opacity-50');
+    });
+}
+
+// ===== WhatsApp Modal Functions =====
+let waClientData = {};
+
+function openWhatsappModal(clientId, username, phone, password, expDate, maxConnections) {
+    waClientData = { clientId, username, phone, password, expDate, maxConnections };
+    document.getElementById('waClientId').value = clientId;
+    document.getElementById('waPhone').value = phone;
+    document.getElementById('waClientName').textContent = username;
+    document.getElementById('waPhoneDisplay').textContent = phone;
+    document.getElementById('waMessage').value = '';
+    document.getElementById('waSendFeedback').classList.add('hidden');
+    document.getElementById('waSendBtn').disabled = false;
+    document.getElementById('waSendBtn').innerHTML = '<i class="bi bi-send"></i> Enviar';
+    document.getElementById('whatsappModal').classList.remove('hidden');
+}
+
+function closeWhatsappModal() {
+    document.getElementById('whatsappModal').classList.add('hidden');
+}
+
+function waQuickAction(type) {
+    const d = waClientData;
+    let msg = '';
+    switch(type) {
+        case 'access':
+            msg = `*Seus Dados de Acesso:*\n\n` +
+                  `👤 Usuário: ${d.username}\n` +
+                  `🔑 Senha: ${d.password}\n` +
+                  `📺 Conexões: ${d.maxConnections}\n` +
+                  `📅 Validade: ${d.expDate}\n\n` +
+                  `Qualquer dúvida estamos à disposição!`;
+            break;
+        case 'expiry':
+            msg = `⚠️ *Aviso de Vencimento*\n\n` +
+                  `Olá! Informamos que seu plano vence em *${d.expDate}*.\n\n` +
+                  `Entre em contato para renovar e não ficar sem acesso! 😊`;
+            break;
+        case 'renewal':
+            msg = `🔄 *Lembrete de Renovação*\n\n` +
+                  `Olá! Seu plano está próximo do vencimento (${d.expDate}).\n\n` +
+                  `Renove agora e continue aproveitando! 📺\n` +
+                  `Entre em contato para mais informações.`;
+            break;
+    }
+    document.getElementById('waMessage').value = msg;
+}
+
+function sendWhatsappMessage() {
+    const phone = document.getElementById('waPhone').value;
+    const message = document.getElementById('waMessage').value.trim();
+    if (!message) { alert('Digite uma mensagem.'); return; }
+    sendViaEvolution(phone, message, 'waSendBtn', 'waSendFeedback');
+}
+
+function sendRenewWhatsapp() {
+    const phone = document.getElementById('renewSuccessPhone').value;
+    if (!phone) { alert('Este cliente não possui telefone cadastrado.'); return; }
+    const message = document.getElementById('renewSuccessWhatsapp').value;
+    if (!message) { alert('Nenhuma mensagem para enviar.'); return; }
+    sendViaEvolution(phone, message, 'renewSuccessSendBtn', 'renewSuccessFeedback');
+}
+
+function sendViaEvolution(phone, message, btnId, feedbackId) {
+    const btn = document.getElementById(btnId);
+    const feedback = feedbackId ? document.getElementById(feedbackId) : null;
+    
+    if (btn) {
+        btn.disabled = true;
+        btn.innerHTML = '<i class="bi bi-arrow-repeat animate-spin"></i> Enviando...';
+    }
+    if (feedback) feedback.classList.add('hidden');
+
+    fetch('{{ route("clients.send-whatsapp") }}', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content,
+            'Accept': 'application/json'
+        },
+        body: JSON.stringify({ phone, message })
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.success) {
+            if (feedback) {
+                feedback.classList.remove('hidden');
+                feedback.innerHTML = '<div class="px-3 py-2 bg-green-50 dark:bg-green-500/10 text-green-600 dark:text-green-400 rounded-lg text-sm flex items-center gap-2"><i class="bi bi-check-circle-fill"></i> Mensagem enviada com sucesso!</div>';
+            }
+            if (btn) {
+                btn.innerHTML = '<i class="bi bi-check-circle"></i> Enviado!';
+                setTimeout(() => {
+                    btn.disabled = false;
+                    btn.innerHTML = '<i class="bi bi-send"></i> Enviar';
+                }, 3000);
+            }
+        } else {
+            if (feedback) {
+                feedback.classList.remove('hidden');
+                feedback.innerHTML = `<div class="px-3 py-2 bg-red-50 dark:bg-red-500/10 text-red-600 dark:text-red-400 rounded-lg text-sm flex items-center gap-2"><i class="bi bi-exclamation-triangle"></i> ${data.message}</div>`;
+            } else {
+                alert(data.message);
+            }
+            if (btn) {
+                btn.disabled = false;
+                btn.innerHTML = '<i class="bi bi-send"></i> Enviar';
+            }
+        }
+    })
+    .catch(() => {
+        if (feedback) {
+            feedback.classList.remove('hidden');
+            feedback.innerHTML = '<div class="px-3 py-2 bg-red-50 dark:bg-red-500/10 text-red-600 dark:text-red-400 rounded-lg text-sm flex items-center gap-2"><i class="bi bi-exclamation-triangle"></i> Erro de conexão ao enviar.</div>';
+        } else {
+            alert('Erro ao enviar mensagem.');
+        }
+        if (btn) {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="bi bi-send"></i> Enviar';
+        }
     });
 }
 </script>
@@ -1258,13 +1456,20 @@ function submitTrial(event) {
                     </button>
                 </div>
             </div>
-            
+            <div id="sessionMsgFeedback" class="hidden mb-3"></div>
             <div class="flex gap-3">
                 <button onclick="document.getElementById('sessionClientMessageModal').remove()" class="flex-1 px-4 py-2 bg-gray-100 dark:bg-dark-200 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-200 dark:hover:bg-dark-100 transition-colors font-medium">Fechar</button>
-                <button onclick="window.open('https://wa.me/?text=' + encodeURIComponent(document.getElementById('sessionClientMessageText').value), '_blank')" class="flex-1 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors font-medium flex items-center justify-center gap-2">
+                @if(session('client_phone'))
+                <button id="sessionMsgSendBtn" onclick="sendViaEvolution('{{ session('client_phone') }}', document.getElementById('sessionClientMessageText').value, 'sessionMsgSendBtn', 'sessionMsgFeedback')" class="flex-1 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors font-medium flex items-center justify-center gap-2">
                     <i class="bi bi-whatsapp"></i>
-                    Enviar no WhatsApp
+                    Enviar via WhatsApp
                 </button>
+                @else
+                <button onclick="copyToClipboard('sessionClientMessageText')" class="flex-1 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors font-medium flex items-center justify-center gap-2">
+                    <i class="bi bi-clipboard"></i>
+                    Copiar Mensagem
+                </button>
+                @endif
             </div>
         </div>
     </div>
