@@ -123,6 +123,7 @@ Route::middleware(['auth', 'maintenance'])->group(function () {
             Route::post('/create-instance', [\App\Http\Controllers\ProfileController::class, 'createWhatsappInstance'])->name('create-instance');
             Route::get('/qrcode', [\App\Http\Controllers\ProfileController::class, 'getWhatsappQrCode'])->name('qrcode');
             Route::get('/status', [\App\Http\Controllers\ProfileController::class, 'getWhatsappStatus'])->name('status');
+            Route::post('/confirm-scan', [\App\Http\Controllers\ProfileController::class, 'confirmWhatsappScan'])->name('confirm-scan');
             Route::post('/disconnect', [\App\Http\Controllers\ProfileController::class, 'disconnectWhatsapp'])->name('disconnect');
             Route::delete('/delete', [\App\Http\Controllers\ProfileController::class, 'deleteWhatsappInstance'])->name('delete');
             Route::put('/settings', [\App\Http\Controllers\ProfileController::class, 'updateWhatsappSettings'])->name('settings');

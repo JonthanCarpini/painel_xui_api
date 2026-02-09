@@ -51,7 +51,10 @@
                             <i class="bi bi-arrow-repeat animate-spin text-3xl text-gray-400"></i>
                         </div>
                     </div>
-                    <p class="text-xs text-gray-400 dark:text-gray-500">O QR Code atualiza automaticamente a cada 15 segundos.</p>
+                    <p class="text-xs text-gray-400 dark:text-gray-500 mb-4">Ap&oacute;s escanear, clique no bot&atilde;o abaixo para confirmar.</p>
+                    <button onclick="confirmScanned()" id="btnConfirmScan" class="px-6 py-3 bg-gradient-to-r from-green-500 to-green-600 text-white rounded-xl hover:shadow-lg transition-all font-medium flex items-center gap-2 mx-auto">
+                        <i class="bi bi-check-circle"></i> J&aacute; escaneei o QR Code
+                    </button>
                 </div>
             </div>
 
@@ -177,13 +180,17 @@
 <script>
 (function() {
     const csrfToken = '{{ csrf_token() }}';
-    let qrInterval = null;
     let statusInterval = null;
+    let qrRenewTimeout = null;
+    let waitingForScan = false;
     const hasInstance = {{ $whatsappSetting ? 'true' : 'false' }};
+    const QR_LIFETIME_MS = 45000;
+    const POLL_FAST_MS = 3000;
+    const POLL_IDLE_MS = 15000;
 
     if (hasInstance) {
         checkStatus();
-        statusInterval = setInterval(checkStatus, 10000);
+        statusInterval = setInterval(checkStatus, POLL_IDLE_MS);
     }
 
     window.createWhatsappInstance = function() {
@@ -203,39 +210,54 @@
             } else {
                 alert('Erro: ' + data.message);
                 btn.disabled = false;
-                btn.innerHTML = '<i class="bi bi-plus-circle"></i> Criar Inst&acirc;ncia WhatsApp';
+                btn.innerHTML = '<i class="bi bi-plus-circle"></i> Criar Inst\u00e2ncia WhatsApp';
             }
         })
         .catch(() => {
             alert('Erro ao criar inst\u00e2ncia.');
             btn.disabled = false;
-            btn.innerHTML = '<i class="bi bi-plus-circle"></i> Criar Inst&acirc;ncia WhatsApp';
+            btn.innerHTML = '<i class="bi bi-plus-circle"></i> Criar Inst\u00e2ncia WhatsApp';
         });
     };
 
     window.fetchQrCode = function() {
+        waitingForScan = true;
         document.getElementById('qrcodeArea')?.classList.remove('hidden');
         document.getElementById('disconnectedArea')?.classList.add('hidden');
         document.getElementById('connectedArea')?.classList.add('hidden');
-        loadQr();
-        if (qrInterval) clearInterval(qrInterval);
-        qrInterval = setInterval(loadQr, 15000);
+
+        loadQrOnce();
+
+        if (statusInterval) clearInterval(statusInterval);
+        statusInterval = setInterval(checkStatus, POLL_FAST_MS);
     };
 
-    function loadQr() {
+    function loadQrOnce() {
+        const container = document.getElementById('qrcodeContainer');
+        container.innerHTML = '<div class="w-64 h-64 flex items-center justify-center"><i class="bi bi-arrow-repeat animate-spin text-3xl text-gray-400"></i></div>';
+
         fetch('{{ route("profile.whatsapp.qrcode") }}', {
             headers: { 'Accept': 'application/json', 'X-CSRF-TOKEN': csrfToken }
         })
         .then(r => r.json())
         .then(data => {
             if (data.success && data.qrcode) {
-                const container = document.getElementById('qrcodeContainer');
-                container.innerHTML = '<img src="' + data.qrcode + '" class="w-64 h-64" alt="QR Code">';
+                const src = data.qrcode.startsWith('data:') ? data.qrcode : 'data:image/png;base64,' + data.qrcode;
+                container.innerHTML = '<img src="' + src + '" class="w-64 h-64" alt="QR Code">';
+
+                if (qrRenewTimeout) clearTimeout(qrRenewTimeout);
+                qrRenewTimeout = setTimeout(function() {
+                    if (waitingForScan) {
+                        loadQrOnce();
+                    }
+                }, QR_LIFETIME_MS);
             } else if (data.success && !data.qrcode) {
                 checkStatus();
             }
         })
-        .catch(() => {});
+        .catch(() => {
+            container.innerHTML = '<div class="w-64 h-64 flex items-center justify-center text-red-500"><i class="bi bi-exclamation-triangle text-3xl"></i></div>';
+        });
     }
 
     function checkStatus() {
@@ -254,11 +276,13 @@
                 qrArea?.classList.add('hidden');
                 connArea?.classList.remove('hidden');
                 discArea?.classList.add('hidden');
-                if (qrInterval) { clearInterval(qrInterval); qrInterval = null; }
+                stopWaiting();
+            } else if (data.status === 'connecting') {
+                if (badge) badge.innerHTML = '<span class="px-3 py-1.5 rounded-full text-xs font-bold bg-yellow-100 dark:bg-yellow-500/10 text-yellow-600 dark:text-yellow-500 border border-yellow-200 dark:border-yellow-500/30"><i class="bi bi-arrow-repeat animate-spin"></i> Conectando...</span>';
             } else {
                 if (badge) badge.innerHTML = '<span class="px-3 py-1.5 rounded-full text-xs font-bold bg-red-100 dark:bg-red-500/10 text-red-600 dark:text-red-500 border border-red-200 dark:border-red-500/30"><i class="bi bi-x-circle-fill"></i> Desconectado</span>';
                 connArea?.classList.add('hidden');
-                if (!qrInterval) {
+                if (!waitingForScan) {
                     discArea?.classList.remove('hidden');
                     qrArea?.classList.add('hidden');
                 }
@@ -266,6 +290,47 @@
         })
         .catch(() => {});
     }
+
+    function stopWaiting() {
+        waitingForScan = false;
+        if (qrRenewTimeout) { clearTimeout(qrRenewTimeout); qrRenewTimeout = null; }
+        if (statusInterval) clearInterval(statusInterval);
+        statusInterval = setInterval(checkStatus, POLL_IDLE_MS);
+    }
+
+    window.confirmScanned = function() {
+        const btn = document.getElementById('btnConfirmScan');
+        btn.disabled = true;
+        btn.innerHTML = '<i class="bi bi-arrow-repeat animate-spin"></i> Verificando conex\u00e3o...';
+
+        if (qrRenewTimeout) { clearTimeout(qrRenewTimeout); qrRenewTimeout = null; }
+
+        document.getElementById('qrcodeContainer').innerHTML = '<div class="w-64 h-64 flex items-center justify-center"><div class="text-center"><i class="bi bi-arrow-repeat animate-spin text-3xl text-green-500 mb-2"></i><p class="text-sm text-gray-400">Reiniciando inst\u00e2ncia...</p></div></div>';
+
+        fetch('{{ route("profile.whatsapp.confirm-scan") }}', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': csrfToken, 'Accept': 'application/json' }
+        })
+        .then(r => r.json())
+        .then(data => {
+            if (data.status === 'connected') {
+                checkStatus();
+            } else {
+                btn.disabled = false;
+                btn.innerHTML = '<i class="bi bi-check-circle"></i> J\u00e1 escaneei o QR Code';
+                if (statusInterval) clearInterval(statusInterval);
+                statusInterval = setInterval(checkStatus, 2000);
+                setTimeout(function() {
+                    if (statusInterval) clearInterval(statusInterval);
+                    statusInterval = setInterval(checkStatus, POLL_IDLE_MS);
+                }, 20000);
+            }
+        })
+        .catch(() => {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="bi bi-check-circle"></i> J\u00e1 escaneei o QR Code';
+        });
+    };
 
     window.disconnectWhatsapp = function() {
         if (!confirm('Deseja desconectar o WhatsApp?')) return;

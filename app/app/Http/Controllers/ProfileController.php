@@ -129,18 +129,72 @@ class ProfileController extends Controller
         $evo = new EvolutionService();
         $result = $evo->getInstanceStatus($setting->instance_name);
 
-        $state = $result['data']['instance']['state'] ?? 'close';
+        // Evolution API retorna: open, close, connecting
+        $state = $result['data']['instance']['state'] ?? null;
 
-        if ($state === 'open' && $setting->connection_status !== 'connected') {
+        // Fallback: tentar buscar via fetchInstances se connectionState falhar
+        if (!$state && $result['success']) {
+            $state = $result['data']['state'] ?? 'close';
+        }
+        if (!$state) {
+            $state = 'close';
+        }
+
+        Log::debug('WhatsApp status check', [
+            'instance' => $setting->instance_name,
+            'raw_state' => $state,
+            'api_response' => $result,
+        ]);
+
+        $isConnected = $state === 'open';
+
+        if ($isConnected && $setting->connection_status !== 'connected') {
             $setting->update(['connection_status' => 'connected', 'connected_at' => now()]);
-        } elseif ($state !== 'open' && $setting->connection_status === 'connected') {
+        } elseif (!$isConnected && $setting->connection_status === 'connected') {
             $setting->update(['connection_status' => 'disconnected', 'connected_at' => null]);
         }
 
         return response()->json([
             'success' => true,
-            'status' => $state === 'open' ? 'connected' : $state,
+            'status' => $isConnected ? 'connected' : $state,
             'instance_name' => $setting->instance_name,
+        ]);
+    }
+
+    public function confirmWhatsappScan()
+    {
+        $setting = $this->getWhatsappSetting();
+        if (!$setting) {
+            return response()->json(['success' => false, 'message' => 'Instância não encontrada.'], 404);
+        }
+
+        $evo = new EvolutionService();
+
+        // Restart força a instância a sair do estado "connecting" e aplicar a sessão escaneada
+        $evo->restartInstance($setting->instance_name);
+
+        // Aguardar um momento para a instância reiniciar
+        sleep(3);
+
+        // Verificar o status após restart
+        $result = $evo->getInstanceStatus($setting->instance_name);
+        $state = $result['data']['instance']['state'] ?? 'close';
+
+        Log::info('WhatsApp confirm scan', [
+            'instance' => $setting->instance_name,
+            'state_after_restart' => $state,
+        ]);
+
+        if ($state === 'open') {
+            $setting->update(['connection_status' => 'connected', 'connected_at' => now()]);
+            return response()->json(['success' => true, 'status' => 'connected']);
+        }
+
+        // Se ainda não conectou, pode precisar de mais tempo
+        return response()->json([
+            'success' => true,
+            'status' => $state,
+            'message' => 'Instância reiniciada. Aguarde alguns segundos...',
         ]);
     }
 

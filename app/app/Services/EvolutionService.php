@@ -78,6 +78,11 @@ class EvolutionService
         ]);
     }
 
+    public function restartInstance(string $instanceName): array
+    {
+        return $this->request('put', "/instance/restart/{$instanceName}");
+    }
+
     public function fetchInstances(): array
     {
         return $this->request('get', '/instance/fetchInstances');
