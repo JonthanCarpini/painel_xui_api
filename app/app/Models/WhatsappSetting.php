@@ -18,11 +18,14 @@ class WhatsappSetting extends Model
         'expiry_message_today',
         'connection_status',
         'connected_at',
+        'send_start_time',
+        'send_interval_seconds',
     ];
 
     protected $casts = [
         'notifications_enabled' => 'boolean',
         'connected_at' => 'datetime',
+        'send_interval_seconds' => 'integer',
     ];
 
     public function panelUser()

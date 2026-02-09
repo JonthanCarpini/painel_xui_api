@@ -128,6 +128,34 @@
                 </div>
             </label>
 
+            {{-- Hor&aacute;rio e Intervalo de Envio --}}
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                        <i class="bi bi-clock text-blue-500"></i> Hor&aacute;rio de in&iacute;cio dos envios
+                    </label>
+                    <input type="time" name="send_start_time" value="{{ $whatsappSetting->send_start_time ?? '09:00' }}" class="w-full px-4 py-3 bg-gray-50 dark:bg-dark-200 border border-gray-300 dark:border-dark-100 rounded-lg text-gray-900 dark:text-white focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-colors text-sm" required>
+                    <p class="mt-1 text-xs text-gray-400">Hor&aacute;rio em que o sistema come&ccedil;a a enviar as notifica&ccedil;&otilde;es di&aacute;rias.</p>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                        <i class="bi bi-hourglass-split text-purple-500"></i> Intervalo entre envios
+                    </label>
+                    <select name="send_interval_seconds" class="w-full px-4 py-3 bg-gray-50 dark:bg-dark-200 border border-gray-300 dark:border-dark-100 rounded-lg text-gray-900 dark:text-white focus:outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500 transition-colors text-sm" required>
+                        <option value="10" {{ ($whatsappSetting->send_interval_seconds ?? 30) == 10 ? 'selected' : '' }}>10 segundos</option>
+                        <option value="15" {{ ($whatsappSetting->send_interval_seconds ?? 30) == 15 ? 'selected' : '' }}>15 segundos</option>
+                        <option value="20" {{ ($whatsappSetting->send_interval_seconds ?? 30) == 20 ? 'selected' : '' }}>20 segundos</option>
+                        <option value="30" {{ ($whatsappSetting->send_interval_seconds ?? 30) == 30 ? 'selected' : '' }}>30 segundos</option>
+                        <option value="45" {{ ($whatsappSetting->send_interval_seconds ?? 30) == 45 ? 'selected' : '' }}>45 segundos</option>
+                        <option value="60" {{ ($whatsappSetting->send_interval_seconds ?? 30) == 60 ? 'selected' : '' }}>1 minuto</option>
+                        <option value="120" {{ ($whatsappSetting->send_interval_seconds ?? 30) == 120 ? 'selected' : '' }}>2 minutos</option>
+                        <option value="180" {{ ($whatsappSetting->send_interval_seconds ?? 30) == 180 ? 'selected' : '' }}>3 minutos</option>
+                        <option value="300" {{ ($whatsappSetting->send_interval_seconds ?? 30) == 300 ? 'selected' : '' }}>5 minutos</option>
+                    </select>
+                    <p class="mt-1 text-xs text-gray-400">Tempo de espera entre cada mensagem enviada (evita bloqueio do WhatsApp).</p>
+                </div>
+            </div>
+
             <div class="bg-blue-50 dark:bg-blue-500/5 border border-blue-200 dark:border-blue-500/20 rounded-lg p-4">
                 <p class="text-sm text-blue-700 dark:text-blue-400 font-medium mb-2"><i class="bi bi-info-circle"></i> Vari&aacute;veis dispon&iacute;veis:</p>
                 <div class="flex flex-wrap gap-2">

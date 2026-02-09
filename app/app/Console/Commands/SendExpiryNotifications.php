@@ -4,10 +4,11 @@ namespace App\Console\Commands;
 
 use App\Models\ClientDetail;
 use App\Models\Line;
-use App\Models\PanelUser;
+use App\Models\NotificationLog;
 use App\Models\WhatsappSetting;
 use App\Services\EvolutionService;
 use Illuminate\Console\Command;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Log;
 
 class SendExpiryNotifications extends Command
@@ -17,6 +18,8 @@ class SendExpiryNotifications extends Command
 
     public function handle(): int
     {
+        $nowTime = Carbon::now()->format('H:i');
+
         $settings = WhatsappSetting::where('notifications_enabled', true)
             ->where('connection_status', 'connected')
             ->get();
@@ -27,7 +30,6 @@ class SendExpiryNotifications extends Command
         }
 
         $evo = new EvolutionService();
-        $now = time();
         $todayStart = strtotime('today');
         $todayEnd = strtotime('tomorrow') - 1;
         $in1dStart = strtotime('+1 day 00:00:00');
@@ -38,10 +40,18 @@ class SendExpiryNotifications extends Command
         $totalSent = 0;
 
         foreach ($settings as $setting) {
+            $startTime = $setting->send_start_time ?? '09:00';
+
+            if ($nowTime < $startTime) {
+                $this->line("[{$setting->instance_name}] Ainda não é hora de enviar (início: {$startTime}, agora: {$nowTime}). Pulando.");
+                continue;
+            }
+
             $panelUser = $setting->panelUser;
             if (!$panelUser) continue;
 
             $memberId = $panelUser->xui_id;
+            $intervalSeconds = $setting->send_interval_seconds ?? 30;
 
             $lines = Line::where('member_id', $memberId)
                 ->where('is_trial', 0)
@@ -51,19 +61,36 @@ class SendExpiryNotifications extends Command
                 ->where('exp_date', '<=', $in3dEnd)
                 ->get();
 
+            $this->info("[{$setting->instance_name}] Encontrados {$lines->count()} clientes para notificar (intervalo: {$intervalSeconds}s).");
+
+            $today = Carbon::today()->toDateString();
+
             foreach ($lines as $line) {
                 $expDate = (int) $line->exp_date;
+                $notifType = null;
                 $template = null;
 
                 if ($expDate >= $todayStart && $expDate <= $todayEnd) {
+                    $notifType = 'today';
                     $template = $setting->getEffectiveMessageToday();
                 } elseif ($expDate >= $in1dStart && $expDate <= $in1dEnd) {
+                    $notifType = '1d';
                     $template = $setting->getEffectiveMessage1d();
                 } elseif ($expDate >= $in3dStart && $expDate <= $in3dEnd) {
+                    $notifType = '3d';
                     $template = $setting->getEffectiveMessage3d();
                 }
 
-                if (!$template) continue;
+                if (!$template || !$notifType) continue;
+
+                $alreadySent = NotificationLog::where('whatsapp_setting_id', $setting->id)
+                    ->where('xui_client_id', $line->id)
+                    ->where('notification_type', $notifType)
+                    ->where('sent_date', $today)
+                    ->where('success', true)
+                    ->exists();
+
+                if ($alreadySent) continue;
 
                 $detail = ClientDetail::where('xui_client_id', $line->id)->first();
                 $phone = $detail->phone ?? null;
@@ -81,6 +108,14 @@ class SendExpiryNotifications extends Command
 
                 $result = $evo->sendText($setting->instance_name, $phone, $message);
 
+                NotificationLog::create([
+                    'whatsapp_setting_id' => $setting->id,
+                    'xui_client_id' => $line->id,
+                    'notification_type' => $notifType,
+                    'sent_date' => $today,
+                    'success' => $result['success'],
+                ]);
+
                 if ($result['success']) {
                     $totalSent++;
                     $this->line("  ✓ Enviado para {$line->username} ({$phone})");
@@ -94,7 +129,7 @@ class SendExpiryNotifications extends Command
                     $this->warn("  ✗ Falha para {$line->username}: " . ($result['error'] ?? 'Erro desconhecido'));
                 }
 
-                usleep(500000);
+                sleep($intervalSeconds);
             }
         }
 

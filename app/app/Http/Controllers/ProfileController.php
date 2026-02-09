@@ -233,6 +233,8 @@ class ProfileController extends Controller
             'expiry_message_3d' => 'nullable|string|max:1000',
             'expiry_message_1d' => 'nullable|string|max:1000',
             'expiry_message_today' => 'nullable|string|max:1000',
+            'send_start_time' => 'required|date_format:H:i',
+            'send_interval_seconds' => 'required|integer|min:5|max:300',
         ]);
 
         $setting = $this->getWhatsappSetting();
@@ -245,6 +247,8 @@ class ProfileController extends Controller
             'expiry_message_3d' => $request->input('expiry_message_3d'),
             'expiry_message_1d' => $request->input('expiry_message_1d'),
             'expiry_message_today' => $request->input('expiry_message_today'),
+            'send_start_time' => $request->input('send_start_time'),
+            'send_interval_seconds' => $request->input('send_interval_seconds'),
         ]);
 
         return redirect()->route('profile.index', ['tab' => 'whatsapp'])->with('success', 'Configurações de WhatsApp atualizadas!');
