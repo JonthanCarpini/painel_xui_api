@@ -114,13 +114,15 @@ class SendExpiryNotifications extends Command
 
                 $result = $evo->sendText($setting->instance_name, $phone, $message);
 
-                NotificationLog::create([
-                    'whatsapp_setting_id' => $setting->id,
-                    'xui_client_id' => $line->id,
-                    'notification_type' => $notifType,
-                    'sent_date' => $today,
-                    'success' => $result['success'],
-                ]);
+                NotificationLog::updateOrCreate(
+                    [
+                        'whatsapp_setting_id' => $setting->id,
+                        'xui_client_id' => $line->id,
+                        'notification_type' => $notifType,
+                        'sent_date' => $today,
+                    ],
+                    ['success' => $result['success']]
+                );
 
                 if ($result['success']) {
                     $totalSent++;
