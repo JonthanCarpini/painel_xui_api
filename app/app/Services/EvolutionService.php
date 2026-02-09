@@ -75,14 +75,7 @@ class EvolutionService
 
         return $this->request('post', "/message/sendText/{$instanceName}", [
             'number' => $number,
-            'options' => [
-                'delay' => 1200,
-                'presence' => 'composing',
-                'linkPreview' => false,
-            ],
-            'textMessage' => [
-                'text' => $message,
-            ],
+            'text' => $message,
         ]);
     }
 
