@@ -29,7 +29,8 @@ class EvolutionService
                     'status' => $response->status(),
                     'body' => $response->body(),
                 ]);
-                return ['success' => false, 'error' => $response->json('response.message') ?? $response->body()];
+                $errorMsg = $response->json('response.message') ?? $response->body();
+                return ['success' => false, 'error' => is_array($errorMsg) ? json_encode($errorMsg) : (string) $errorMsg];
             }
 
             return ['success' => true, 'data' => $response->json()];
