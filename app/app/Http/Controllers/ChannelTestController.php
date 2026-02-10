@@ -24,11 +24,8 @@ class ChannelTestController extends Controller
             ->get()
             ->groupBy('type');
 
-        $hasDns = DnsServer::where('is_active', true)->exists();
-        
         return view('channel-test.index', [
             'categoriesByType' => $categoriesByType,
-            'hasDns' => $hasDns,
         ]);
     }
 
@@ -52,23 +49,12 @@ class ChannelTestController extends Controller
             return response()->json(['error' => 'Nenhum item encontrado nesta categoria'], 404);
         }
 
-        $hasDns = $this->getDnsBase() !== null;
-        $proxyUrl = route('channel-test.proxy-image');
-
-        $result = $channels->map(function ($channel) use ($hasDns, $proxyUrl) {
-            $icon = $this->ensureHttps($channel->logo_url);
-            $streamUrl = $this->ensureHttps($channel->stream_url);
-
-            // Se não tem DNS e a imagem ainda é HTTP, usar proxy
-            if (!$hasDns && $icon && str_starts_with($icon, 'http://')) {
-                $icon = $proxyUrl . '?url=' . urlencode($icon);
-            }
-
+        $result = $channels->map(function ($channel) {
             return [
                 'id' => $channel->id,
                 'name' => $channel->name,
-                'icon' => $icon,
-                'stream_url' => $streamUrl,
+                'icon' => $this->ensureHttps($channel->logo_url),
+                'stream_url' => $this->ensureHttps($channel->stream_url),
                 'stream_id' => $channel->stream_id,
             ];
         });
@@ -237,11 +223,15 @@ class ChannelTestController extends Controller
 
         $serverIp = '109.205.178.143';
         if (str_contains($url, $serverIp)) {
+            // 1. Tentar DNS com HTTPS
             $dnsBase = $this->getDnsBase();
-
             if ($dnsBase) {
                 return preg_replace('#https?://' . preg_quote($serverIp, '#') . '(:\d+)?#', $dnsBase, $url);
             }
+
+            // 2. Fallback: usar proxy reverso do Nginx (/xui-stream/)
+            $path = preg_replace('#https?://' . preg_quote($serverIp, '#') . '(:\d+)?/#', '', $url);
+            return '/xui-stream/' . $path;
         }
 
         return $url;

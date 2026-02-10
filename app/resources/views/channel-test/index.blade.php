@@ -34,17 +34,6 @@
     </div>
 </div>
 
-@if(!$hasDns)
-<div class="bg-yellow-50 dark:bg-yellow-500/10 border border-yellow-200 dark:border-yellow-500/30 rounded-xl p-4 mb-6">
-    <div class="flex items-start gap-3">
-        <i class="bi bi-exclamation-triangle text-yellow-500 text-xl mt-0.5"></i>
-        <div>
-            <p class="text-yellow-700 dark:text-yellow-400 text-sm font-semibold">DNS não configurado</p>
-            <p class="text-yellow-600 dark:text-yellow-400/80 text-xs mt-1">Os streams usam HTTP e não podem ser reproduzidos em páginas HTTPS. Configure um DNS com SSL em <a href="{{ route('settings.index') }}" class="underline font-medium">Configurações</a> para habilitar a reprodução.</p>
-        </div>
-    </div>
-</div>
-@endif
 
 <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
     <!-- Coluna da Esquerda: Seleção -->
