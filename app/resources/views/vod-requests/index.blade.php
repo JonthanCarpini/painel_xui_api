@@ -119,8 +119,8 @@
                     </div>
                 </div>
 
-                <!-- Resultado: já existe no servidor -->
-                <div x-show="!checking && !checkError && checkResult?.exists" x-cloak>
+                <!-- Resultado: FILME já existe no servidor -->
+                <div x-show="!checking && !checkError && checkResult?.exists && type === 'movie'" x-cloak>
                     <div class="bg-green-50 dark:bg-green-500/10 border border-green-200 dark:border-green-500/30 rounded-xl p-4 mb-4">
                         <div class="flex items-center gap-2 mb-3">
                             <i class="bi bi-check-circle-fill text-green-500 text-lg"></i>
@@ -139,16 +139,6 @@
                                 <span class="text-gray-500 dark:text-gray-400">Adicionado em:</span>
                                 <span class="text-gray-900 dark:text-white font-medium" x-text="checkResult?.data?.added_date"></span>
                             </div>
-                            <div class="flex justify-between" x-show="checkResult?.data?.year">
-                                <span class="text-gray-500 dark:text-gray-400">Ano:</span>
-                                <span class="text-gray-900 dark:text-white font-medium" x-text="checkResult?.data?.year"></span>
-                            </div>
-                            <div class="flex justify-between" x-show="checkResult?.data?.rating > 0">
-                                <span class="text-gray-500 dark:text-gray-400">Nota:</span>
-                                <span class="text-yellow-500 font-medium flex items-center gap-1">
-                                    <i class="bi bi-star-fill"></i> <span x-text="checkResult?.data?.rating"></span>
-                                </span>
-                            </div>
                         </div>
                     </div>
                     <button @click="selectedItem = null; checkResult = null" class="w-full py-3 bg-gray-200 dark:bg-dark-200 hover:bg-gray-300 dark:hover:bg-dark-100 text-gray-700 dark:text-gray-300 rounded-xl font-medium transition-colors">
@@ -156,9 +146,94 @@
                     </button>
                 </div>
 
-                <!-- Resultado: não existe, pode solicitar -->
-                <div x-show="!checking && !checkError && checkResult && !checkResult.exists" x-cloak>
-                    <!-- Info do filme -->
+                <!-- Resultado: SÉRIE - busca profunda com temporadas -->
+                <div x-show="!checking && !checkError && checkResult && type === 'series'" x-cloak>
+                    <p class="text-gray-600 dark:text-gray-400 text-sm mb-4 line-clamp-3" x-text="selectedItem?.overview"></p>
+
+                    <!-- Info da série no XUI -->
+                    <template x-if="checkResult?.exists">
+                        <div class="bg-green-50 dark:bg-green-500/10 border border-green-200 dark:border-green-500/30 rounded-xl p-3 mb-4">
+                            <div class="flex items-center gap-2 mb-1">
+                                <i class="bi bi-check-circle-fill text-green-500"></i>
+                                <span class="text-green-700 dark:text-green-400 font-semibold text-sm">Série encontrada no servidor</span>
+                            </div>
+                            <p class="text-xs text-gray-500 dark:text-gray-400" x-text="checkResult?.data?.name + ' — ' + checkResult?.data?.category"></p>
+                        </div>
+                    </template>
+                    <template x-if="!checkResult?.exists">
+                        <div class="bg-yellow-50 dark:bg-yellow-500/10 border border-yellow-200 dark:border-yellow-500/30 rounded-xl p-3 mb-4">
+                            <p class="text-yellow-700 dark:text-yellow-400 text-sm flex items-center gap-2">
+                                <i class="bi bi-exclamation-triangle"></i>
+                                Série não encontrada no servidor.
+                            </p>
+                        </div>
+                    </template>
+
+                    <!-- Lista de Temporadas -->
+                    <template x-if="seasonsData && seasonsData.seasons && seasonsData.seasons.length > 0">
+                        <div class="mb-4">
+                            <h4 class="text-sm font-bold text-gray-900 dark:text-white mb-3 flex items-center gap-2">
+                                <i class="bi bi-collection-play text-orange-500"></i>
+                                Temporadas
+                                <span class="text-xs font-normal text-gray-400" x-text="'(' + seasonsData.seasons.length + ' no TMDB, ' + (seasonsData.xui_seasons?.length || 0) + ' no servidor)'"></span>
+                            </h4>
+                            <div class="space-y-2 max-h-60 overflow-y-auto pr-1">
+                                <template x-for="season in seasonsData.seasons" :key="season.season_number">
+                                    <div class="flex items-center justify-between p-3 rounded-lg border transition-colors"
+                                         :class="season.exists_in_xui ? 'bg-green-50 dark:bg-green-500/5 border-green-200 dark:border-green-500/20' : 'bg-gray-50 dark:bg-dark-200 border-gray-200 dark:border-dark-100'">
+                                        <div class="flex items-center gap-3 min-w-0">
+                                            <div class="w-8 h-8 rounded-lg flex items-center justify-center shrink-0 text-sm font-bold"
+                                                 :class="season.exists_in_xui ? 'bg-green-100 dark:bg-green-500/20 text-green-600 dark:text-green-400' : 'bg-gray-200 dark:bg-dark-100 text-gray-500 dark:text-gray-400'">
+                                                <span x-text="season.season_number"></span>
+                                            </div>
+                                            <div class="min-w-0">
+                                                <p class="text-sm font-medium text-gray-900 dark:text-white truncate" x-text="season.name"></p>
+                                                <p class="text-xs text-gray-500 dark:text-gray-400">
+                                                    <span x-text="season.episode_count + ' episódios'"></span>
+                                                    <span x-show="season.air_date" x-text="' · ' + (season.air_date ? season.air_date.substring(0, 4) : '')"></span>
+                                                </p>
+                                            </div>
+                                        </div>
+                                        <div class="shrink-0 ml-2">
+                                            <template x-if="season.exists_in_xui">
+                                                <span class="inline-flex items-center gap-1 text-xs font-medium px-2.5 py-1 rounded-full bg-green-100 dark:bg-green-500/20 text-green-600 dark:text-green-400">
+                                                    <i class="bi bi-check-circle"></i> No servidor
+                                                </span>
+                                            </template>
+                                            <template x-if="!season.exists_in_xui">
+                                                <button @click="submitRequest(season.season_number)" :disabled="submitting"
+                                                    class="inline-flex items-center gap-1 text-xs font-medium px-3 py-1.5 rounded-full bg-orange-500 hover:bg-orange-600 disabled:opacity-50 text-white transition-colors">
+                                                    <i class="bi" :class="submitting ? 'bi-arrow-repeat animate-spin' : 'bi-send'"></i> Solicitar
+                                                </button>
+                                            </template>
+                                        </div>
+                                    </div>
+                                </template>
+                            </div>
+                        </div>
+                    </template>
+
+                    <!-- Solicitar série inteira (se não existe no XUI) -->
+                    <template x-if="!checkResult?.exists">
+                        <div class="flex gap-3">
+                            <button @click="selectedItem = null; checkResult = null; seasonsData = null" class="flex-1 py-3 bg-gray-200 dark:bg-dark-200 hover:bg-gray-300 dark:hover:bg-dark-100 text-gray-700 dark:text-gray-300 rounded-xl font-medium transition-colors">
+                                Cancelar
+                            </button>
+                            <button @click="submitRequest()" :disabled="submitting" class="flex-1 py-3 bg-orange-500 hover:bg-orange-600 disabled:opacity-50 text-white rounded-xl font-medium transition-colors flex items-center justify-center gap-2">
+                                <i class="bi" :class="submitting ? 'bi-arrow-repeat animate-spin' : 'bi-send'"></i>
+                                Solicitar Série Completa
+                            </button>
+                        </div>
+                    </template>
+                    <template x-if="checkResult?.exists">
+                        <button @click="selectedItem = null; checkResult = null; seasonsData = null" class="w-full py-3 bg-gray-200 dark:bg-dark-200 hover:bg-gray-300 dark:hover:bg-dark-100 text-gray-700 dark:text-gray-300 rounded-xl font-medium transition-colors">
+                            Fechar
+                        </button>
+                    </template>
+                </div>
+
+                <!-- Resultado: FILME não existe, pode solicitar -->
+                <div x-show="!checking && !checkError && checkResult && !checkResult.exists && type === 'movie'" x-cloak>
                     <p class="text-gray-600 dark:text-gray-400 text-sm mb-4 line-clamp-4" x-text="selectedItem?.overview"></p>
 
                     <div class="flex items-center gap-4 text-sm text-gray-500 dark:text-gray-400 mb-4">
@@ -170,7 +245,6 @@
                         </span>
                     </div>
 
-                    <!-- Já solicitado por alguém -->
                     <div x-show="checkResult?.already_requested" class="bg-blue-50 dark:bg-blue-500/10 border border-blue-200 dark:border-blue-500/30 rounded-xl p-3 mb-4">
                         <p class="text-blue-700 dark:text-blue-400 text-sm flex items-center gap-2">
                             <i class="bi bi-info-circle"></i>
@@ -206,69 +280,84 @@
 </div>
 
 <!-- Meus Pedidos -->
-<div class="bg-white dark:bg-dark-300 rounded-xl border border-gray-200 dark:border-dark-200 shadow-sm dark:shadow-none overflow-hidden">
+<div class="bg-white dark:bg-dark-300 rounded-xl border border-gray-200 dark:border-dark-200 shadow-sm dark:shadow-none overflow-hidden" x-data="{ activeTab: 'pending' }">
     <div class="px-6 py-4 border-b border-gray-200 dark:border-dark-200">
-        <h2 class="text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2">
+        <h2 class="text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2 mb-4">
             <i class="bi bi-list-check"></i> Meus Pedidos
         </h2>
-    </div>
-
-    @if($myRequests->isEmpty())
-    <div class="text-center py-12 text-gray-500 dark:text-gray-400">
-        <i class="bi bi-inbox text-4xl mb-3 block"></i>
-        <p>Você ainda não fez nenhum pedido.</p>
-    </div>
-    @else
-    <div class="divide-y divide-gray-200 dark:divide-dark-200">
-        @foreach($myRequests as $req)
-        <div class="flex items-center gap-4 px-6 py-4 hover:bg-gray-50 dark:hover:bg-dark-200 transition-colors">
-            <!-- Poster -->
-            <div class="w-12 h-16 rounded-lg overflow-hidden bg-gray-200 dark:bg-dark-100 shrink-0">
-                <img src="{{ $req->poster_url }}" alt="{{ $req->title }}" class="w-full h-full object-cover" loading="lazy">
-            </div>
-
-            <!-- Info -->
-            <div class="flex-1 min-w-0">
-                <div class="flex items-center gap-2 mb-1">
-                    <span class="text-xs font-medium px-2 py-0.5 rounded-full {{ $req->type === 'movie' ? 'bg-purple-100 dark:bg-purple-500/20 text-purple-700 dark:text-purple-400' : 'bg-blue-100 dark:bg-blue-500/20 text-blue-700 dark:text-blue-400' }}">
-                        {{ $req->type === 'movie' ? 'Filme' : 'Série' }}
-                    </span>
-                    @if($req->vote_average > 0)
-                    <span class="text-xs text-yellow-500 flex items-center gap-1">
-                        <i class="bi bi-star-fill"></i> {{ number_format($req->vote_average, 1) }}
-                    </span>
-                    @endif
-                </div>
-                <h4 class="text-sm font-bold text-gray-900 dark:text-white truncate">{{ $req->title }}</h4>
-                <p class="text-xs text-gray-500 dark:text-gray-400">{{ $req->release_date ? substr($req->release_date, 0, 4) : '' }} &middot; Pedido em {{ $req->created_at->format('d/m/Y H:i') }}</p>
-            </div>
-
-            <!-- Status -->
-            <div class="shrink-0">
-                @if($req->status === 'pending')
-                    <span class="inline-flex items-center gap-1 text-xs font-medium px-3 py-1.5 rounded-full bg-yellow-100 dark:bg-yellow-500/20 text-yellow-700 dark:text-yellow-400">
-                        <i class="bi bi-clock"></i> Pendente
-                    </span>
-                @elseif($req->status === 'completed')
-                    <span class="inline-flex items-center gap-1 text-xs font-medium px-3 py-1.5 rounded-full bg-green-100 dark:bg-green-500/20 text-green-700 dark:text-green-400">
-                        <i class="bi bi-check-circle"></i> Concluído
-                    </span>
-                @else
-                    <span class="inline-flex items-center gap-1 text-xs font-medium px-3 py-1.5 rounded-full bg-red-100 dark:bg-red-500/20 text-red-700 dark:text-red-400">
-                        <i class="bi bi-x-circle"></i> Recusado
-                    </span>
+        <!-- Tabs -->
+        <div class="flex gap-1 bg-gray-100 dark:bg-dark-200 rounded-lg p-1">
+            <button @click="activeTab = 'pending'" :class="activeTab === 'pending' ? 'bg-yellow-500 text-white shadow-sm' : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'" class="flex-1 py-2 px-3 rounded-md text-sm font-medium transition-all flex items-center justify-center gap-2">
+                <i class="bi bi-clock"></i> Pendentes
+                @if($pendingRequests->count() > 0)
+                <span class="bg-white/20 text-xs px-1.5 py-0.5 rounded-full" x-show="activeTab === 'pending'">{{ $pendingRequests->count() }}</span>
+                <span class="bg-yellow-100 dark:bg-yellow-500/20 text-yellow-700 dark:text-yellow-400 text-xs px-1.5 py-0.5 rounded-full" x-show="activeTab !== 'pending'">{{ $pendingRequests->count() }}</span>
                 @endif
-            </div>
+            </button>
+            <button @click="activeTab = 'completed'" :class="activeTab === 'completed' ? 'bg-green-500 text-white shadow-sm' : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'" class="flex-1 py-2 px-3 rounded-md text-sm font-medium transition-all flex items-center justify-center gap-2">
+                <i class="bi bi-check-circle"></i> Concluídos
+                @if($completedRequests->count() > 0)
+                <span class="bg-white/20 text-xs px-1.5 py-0.5 rounded-full" x-show="activeTab === 'completed'">{{ $completedRequests->count() }}</span>
+                <span class="bg-green-100 dark:bg-green-500/20 text-green-700 dark:text-green-400 text-xs px-1.5 py-0.5 rounded-full" x-show="activeTab !== 'completed'">{{ $completedRequests->count() }}</span>
+                @endif
+            </button>
+            <button @click="activeTab = 'rejected'" :class="activeTab === 'rejected' ? 'bg-red-500 text-white shadow-sm' : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'" class="flex-1 py-2 px-3 rounded-md text-sm font-medium transition-all flex items-center justify-center gap-2">
+                <i class="bi bi-x-circle"></i> Recusados
+                @if($rejectedRequests->count() > 0)
+                <span class="bg-white/20 text-xs px-1.5 py-0.5 rounded-full" x-show="activeTab === 'rejected'">{{ $rejectedRequests->count() }}</span>
+                <span class="bg-red-100 dark:bg-red-500/20 text-red-700 dark:text-red-400 text-xs px-1.5 py-0.5 rounded-full" x-show="activeTab !== 'rejected'">{{ $rejectedRequests->count() }}</span>
+                @endif
+            </button>
         </div>
-        @endforeach
     </div>
 
-    @if($myRequests->hasPages())
-    <div class="px-6 py-4 border-t border-gray-200 dark:border-dark-200">
-        {{ $myRequests->links() }}
+    <!-- Tab: Pendentes -->
+    <div x-show="activeTab === 'pending'">
+        @if($pendingRequests->isEmpty())
+        <div class="text-center py-12 text-gray-500 dark:text-gray-400">
+            <i class="bi bi-clock text-4xl mb-3 block text-yellow-400"></i>
+            <p>Nenhum pedido pendente.</p>
+        </div>
+        @else
+        <div class="divide-y divide-gray-200 dark:divide-dark-200">
+            @foreach($pendingRequests as $req)
+            @include('vod-requests._request-card', ['req' => $req, 'showAdminResponse' => false])
+            @endforeach
+        </div>
+        @endif
     </div>
-    @endif
-    @endif
+
+    <!-- Tab: Concluídos -->
+    <div x-show="activeTab === 'completed'" x-cloak>
+        @if($completedRequests->isEmpty())
+        <div class="text-center py-12 text-gray-500 dark:text-gray-400">
+            <i class="bi bi-check-circle text-4xl mb-3 block text-green-400"></i>
+            <p>Nenhum pedido concluído ainda.</p>
+        </div>
+        @else
+        <div class="divide-y divide-gray-200 dark:divide-dark-200">
+            @foreach($completedRequests as $req)
+            @include('vod-requests._request-card', ['req' => $req, 'showAdminResponse' => true])
+            @endforeach
+        </div>
+        @endif
+    </div>
+
+    <!-- Tab: Recusados -->
+    <div x-show="activeTab === 'rejected'" x-cloak>
+        @if($rejectedRequests->isEmpty())
+        <div class="text-center py-12 text-gray-500 dark:text-gray-400">
+            <i class="bi bi-x-circle text-4xl mb-3 block text-red-400"></i>
+            <p>Nenhum pedido recusado.</p>
+        </div>
+        @else
+        <div class="divide-y divide-gray-200 dark:divide-dark-200">
+            @foreach($rejectedRequests as $req)
+            @include('vod-requests._request-card', ['req' => $req, 'showAdminResponse' => true])
+            @endforeach
+        </div>
+        @endif
+    </div>
 </div>
 
 @push('scripts')
@@ -283,8 +372,13 @@ function vodSearch() {
         selectedItem: null,
         checking: false,
         checkResult: null,
+        checkError: null,
         submitting: false,
         submitSuccess: false,
+        // Séries - temporadas
+        seasonsData: null,
+        loadingSeasons: false,
+        selectedSeason: null,
 
         async search() {
             if (this.query.length < 2) return;
@@ -312,22 +406,40 @@ function vodSearch() {
             }
         },
 
-        checkError: null,
-
         async selectItem(item) {
             this.selectedItem = item;
             this.checking = true;
             this.checkResult = null;
             this.checkError = null;
             this.submitSuccess = false;
+            this.seasonsData = null;
+            this.selectedSeason = null;
 
             try {
-                const resp = await fetch(`{{ route('vod-requests.check') }}?tmdb_id=${item.tmdb_id}&type=${this.type}`);
-                if (!resp.ok) {
-                    this.checkError = 'Erro ao verificar no servidor (HTTP ' + resp.status + ')';
-                    return;
+                if (this.type === 'series') {
+                    // Busca profunda: verificar existência + temporadas
+                    const [checkResp, seasonsResp] = await Promise.all([
+                        fetch(`{{ route('vod-requests.check') }}?tmdb_id=${item.tmdb_id}&type=${this.type}`),
+                        fetch(`{{ route('vod-requests.check-seasons') }}?tmdb_id=${item.tmdb_id}`)
+                    ]);
+
+                    if (!checkResp.ok) {
+                        this.checkError = 'Erro ao verificar no servidor (HTTP ' + checkResp.status + ')';
+                        return;
+                    }
+                    this.checkResult = await checkResp.json();
+
+                    if (seasonsResp.ok) {
+                        this.seasonsData = await seasonsResp.json();
+                    }
+                } else {
+                    const resp = await fetch(`{{ route('vod-requests.check') }}?tmdb_id=${item.tmdb_id}&type=${this.type}`);
+                    if (!resp.ok) {
+                        this.checkError = 'Erro ao verificar no servidor (HTTP ' + resp.status + ')';
+                        return;
+                    }
+                    this.checkResult = await resp.json();
                 }
-                this.checkResult = await resp.json();
             } catch (e) {
                 this.checkError = 'Erro de conexão ao verificar no servidor.';
             } finally {
@@ -335,28 +447,34 @@ function vodSearch() {
             }
         },
 
-        async submitRequest() {
+        async submitRequest(seasonNumber = null) {
             if (!this.selectedItem) return;
             this.submitting = true;
 
             try {
+                const body = {
+                    type: this.type,
+                    tmdb_id: this.selectedItem.tmdb_id,
+                    title: this.selectedItem.title,
+                    original_title: this.selectedItem.original_title,
+                    poster_path: this.selectedItem.poster_path,
+                    backdrop_path: this.selectedItem.backdrop_path,
+                    overview: this.selectedItem.overview,
+                    release_date: this.selectedItem.release_date,
+                    vote_average: this.selectedItem.vote_average,
+                };
+
+                if (seasonNumber) {
+                    body.season_number = seasonNumber;
+                }
+
                 const resp = await fetch(`{{ route('vod-requests.store') }}`, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
                         'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content,
                     },
-                    body: JSON.stringify({
-                        type: this.type,
-                        tmdb_id: this.selectedItem.tmdb_id,
-                        title: this.selectedItem.title,
-                        original_title: this.selectedItem.original_title,
-                        poster_path: this.selectedItem.poster_path,
-                        backdrop_path: this.selectedItem.backdrop_path,
-                        overview: this.selectedItem.overview,
-                        release_date: this.selectedItem.release_date,
-                        vote_average: this.selectedItem.vote_average,
-                    }),
+                    body: JSON.stringify(body),
                 });
 
                 const data = await resp.json();
@@ -368,6 +486,7 @@ function vodSearch() {
 
                 this.submitSuccess = true;
                 this.checkResult = null;
+                this.seasonsData = null;
             } catch (e) {
                 this.error = 'Erro de conexão ao enviar pedido.';
             } finally {

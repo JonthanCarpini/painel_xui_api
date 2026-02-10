@@ -19,12 +19,29 @@ class VodRequestController extends Controller
 
     public function index(Request $request)
     {
-        $myRequests = VodRequest::where('user_id', Auth::id())
+        $userId = Auth::id();
+
+        $pendingRequests = VodRequest::where('user_id', $userId)
+            ->where('status', 'pending')
             ->orderBy('created_at', 'desc')
-            ->paginate(10);
+            ->get();
+
+        $completedRequests = VodRequest::where('user_id', $userId)
+            ->where('status', 'completed')
+            ->with('resolver')
+            ->orderBy('resolved_at', 'desc')
+            ->get();
+
+        $rejectedRequests = VodRequest::where('user_id', $userId)
+            ->where('status', 'rejected')
+            ->with('resolver')
+            ->orderBy('resolved_at', 'desc')
+            ->get();
 
         return view('vod-requests.index', [
-            'myRequests' => $myRequests,
+            'pendingRequests' => $pendingRequests,
+            'completedRequests' => $completedRequests,
+            'rejectedRequests' => $rejectedRequests,
             'hasTmdbKey' => $this->tmdb->hasApiKey(),
         ]);
     }
@@ -127,6 +144,40 @@ class VodRequestController extends Controller
         ]);
     }
 
+    public function checkSeasons(Request $request)
+    {
+        $request->validate([
+            'tmdb_id' => 'required|integer',
+        ]);
+
+        $tmdbId = (int) $request->input('tmdb_id');
+
+        try {
+            $tmdbData = $this->tmdb->getSeriesSeasons($tmdbId);
+            if (!$tmdbData) {
+                return response()->json(['error' => 'Não foi possível buscar temporadas no TMDB.'], 422);
+            }
+
+            $xuiSeasons = $this->tmdb->checkSeriesSeasonsInXui($tmdbId);
+
+            $seasons = collect($tmdbData['seasons'])->map(function ($s) use ($xuiSeasons) {
+                $s['exists_in_xui'] = in_array($s['season_number'], $xuiSeasons);
+                return $s;
+            })->toArray();
+
+            return response()->json([
+                'title' => $tmdbData['title'],
+                'total_seasons' => $tmdbData['total_seasons'],
+                'seasons' => $seasons,
+                'xui_seasons' => $xuiSeasons,
+                'series_exists' => !empty($xuiSeasons),
+            ]);
+        } catch (\Exception $e) {
+            \Log::error('VodRequest: checkSeasons failed', ['tmdb_id' => $tmdbId, 'error' => $e->getMessage()]);
+            return response()->json(['error' => 'Erro ao verificar temporadas: ' . $e->getMessage()], 500);
+        }
+    }
+
     public function store(Request $request)
     {
         $request->validate([
@@ -139,21 +190,30 @@ class VodRequestController extends Controller
             'overview' => 'nullable|string',
             'release_date' => 'nullable|string|max:20',
             'vote_average' => 'nullable|numeric',
+            'season_number' => 'nullable|integer|min:1',
         ]);
 
         $tmdbId = (int) $request->input('tmdb_id');
         $type = $request->input('type');
+        $seasonNumber = $request->input('season_number');
 
-        $existsInXui = $this->tmdb->checkExistsInXui($tmdbId, $type);
-        if ($existsInXui) {
-            return response()->json(['error' => 'Este título já existe no servidor.'], 422);
+        if ($type === 'movie') {
+            $existsInXui = $this->tmdb->checkExistsInXui($tmdbId, $type);
+            if ($existsInXui) {
+                return response()->json(['error' => 'Este título já existe no servidor.'], 422);
+            }
+        }
+
+        $title = $request->input('title');
+        if ($seasonNumber) {
+            $title .= " - Temporada {$seasonNumber}";
         }
 
         VodRequest::create([
             'user_id' => Auth::id(),
             'type' => $type,
             'tmdb_id' => $tmdbId,
-            'title' => $request->input('title'),
+            'title' => $title,
             'original_title' => $request->input('original_title'),
             'poster_path' => $request->input('poster_path'),
             'backdrop_path' => $request->input('backdrop_path'),

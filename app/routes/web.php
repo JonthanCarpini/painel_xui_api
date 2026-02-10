@@ -59,6 +59,7 @@ Route::middleware(['auth', 'maintenance'])->group(function () {
         Route::get('/', [App\Http\Controllers\VodRequestController::class, 'index'])->name('index');
         Route::get('/search', [App\Http\Controllers\VodRequestController::class, 'search'])->name('search');
         Route::get('/check', [App\Http\Controllers\VodRequestController::class, 'checkExists'])->name('check');
+        Route::get('/check-seasons', [App\Http\Controllers\VodRequestController::class, 'checkSeasons'])->name('check-seasons');
         Route::post('/', [App\Http\Controllers\VodRequestController::class, 'store'])->name('store');
     });
 

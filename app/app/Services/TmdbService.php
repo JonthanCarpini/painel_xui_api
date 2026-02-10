@@ -109,6 +109,66 @@ class TmdbService
             ->first();
     }
 
+    public function getSeriesSeasons(int $tmdbId): ?array
+    {
+        if (!$this->hasApiKey()) {
+            return null;
+        }
+
+        try {
+            $response = Http::timeout(10)->get("{$this->baseUrl}/tv/{$tmdbId}", [
+                'api_key' => $this->apiKey,
+                'language' => $this->language,
+            ]);
+
+            if ($response->successful()) {
+                $data = $response->json();
+                $seasons = collect($data['seasons'] ?? [])->filter(function ($s) {
+                    return ($s['season_number'] ?? 0) > 0;
+                })->map(function ($s) {
+                    return [
+                        'season_number' => $s['season_number'],
+                        'name' => $s['name'] ?? "Temporada {$s['season_number']}",
+                        'episode_count' => $s['episode_count'] ?? 0,
+                        'air_date' => $s['air_date'] ?? null,
+                        'poster_path' => $s['poster_path'] ?? null,
+                    ];
+                })->values()->toArray();
+
+                return [
+                    'title' => $data['name'] ?? '',
+                    'total_seasons' => $data['number_of_seasons'] ?? 0,
+                    'seasons' => $seasons,
+                ];
+            }
+
+            return null;
+        } catch (\Exception $e) {
+            Log::error('TmdbService: getSeriesSeasons exception', ['error' => $e->getMessage()]);
+            return null;
+        }
+    }
+
+    public function checkSeriesSeasonsInXui(int $tmdbId): array
+    {
+        $series = DB::connection('xui')->table('streams_series')
+            ->where('tmdb_id', $tmdbId)
+            ->select('id')
+            ->first();
+
+        if (!$series) {
+            return [];
+        }
+
+        $episodes = DB::connection('xui')->table('streams_episodes')
+            ->where('series_id', $series->id)
+            ->selectRaw('DISTINCT season_num')
+            ->pluck('season_num')
+            ->toArray();
+
+        return array_map('intval', $episodes);
+    }
+
     public function getCategoryName(?string $categoryIdJson): string
     {
         if (empty($categoryIdJson)) {
