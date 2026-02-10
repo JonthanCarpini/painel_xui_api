@@ -54,6 +54,14 @@ Route::middleware(['auth', 'maintenance'])->group(function () {
     Route::get('/notices', [App\Http\Controllers\NoticeController::class, 'index'])->name('notices.index');
     Route::get('/updates', [App\Http\Controllers\UpdatesController::class, 'index'])->name('updates.index');
 
+    // Pedidos de Filmes/Séries
+    Route::prefix('vod-requests')->name('vod-requests.')->group(function () {
+        Route::get('/', [App\Http\Controllers\VodRequestController::class, 'index'])->name('index');
+        Route::get('/search', [App\Http\Controllers\VodRequestController::class, 'search'])->name('search');
+        Route::get('/check', [App\Http\Controllers\VodRequestController::class, 'checkExists'])->name('check');
+        Route::post('/', [App\Http\Controllers\VodRequestController::class, 'store'])->name('store');
+    });
+
     // Rotas de Tickets
     Route::prefix('tickets')->name('tickets.')->group(function () {
         Route::get('/', [App\Http\Controllers\TicketController::class, 'index'])->name('index');
@@ -187,6 +195,11 @@ Route::middleware(['auth', 'maintenance'])->group(function () {
             Route::get('servers', [App\Http\Controllers\Admin\ServerController::class, 'index'])->name('servers.index');
             Route::get('servers/{id}', [App\Http\Controllers\Admin\ServerController::class, 'show'])->name('servers.show');
             Route::post('servers/{id}/action', [App\Http\Controllers\Admin\ServerController::class, 'action'])->name('servers.action');
+
+            // Pedidos de Filmes/Séries (Admin)
+            Route::get('vod-requests', [App\Http\Controllers\Admin\VodRequestController::class, 'index'])->name('vod-requests.index');
+            Route::get('vod-requests/{id}', [App\Http\Controllers\Admin\VodRequestController::class, 'show'])->name('vod-requests.show');
+            Route::put('vod-requests/{id}/resolve', [App\Http\Controllers\Admin\VodRequestController::class, 'resolve'])->name('vod-requests.resolve');
         });
     });
 });

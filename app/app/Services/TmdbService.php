@@ -1,0 +1,131 @@
+<?php
+
+namespace App\Services;
+
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
+
+class TmdbService
+{
+    protected ?string $apiKey;
+    protected string $baseUrl = 'https://api.themoviedb.org/3';
+    protected string $language = 'pt-BR';
+
+    public function __construct()
+    {
+        $settings = DB::connection('xui')->table('settings')->where('id', 1)->first();
+        $this->apiKey = $settings->tmdb_api_key ?? null;
+    }
+
+    public function hasApiKey(): bool
+    {
+        return !empty($this->apiKey);
+    }
+
+    public function searchMovies(string $query, int $page = 1): array
+    {
+        return $this->search('movie', $query, $page);
+    }
+
+    public function searchSeries(string $query, int $page = 1): array
+    {
+        return $this->search('tv', $query, $page);
+    }
+
+    public function getMovieDetails(int $tmdbId): ?array
+    {
+        return $this->getDetails('movie', $tmdbId);
+    }
+
+    public function getSeriesDetails(int $tmdbId): ?array
+    {
+        return $this->getDetails('tv', $tmdbId);
+    }
+
+    protected function search(string $type, string $query, int $page): array
+    {
+        if (!$this->hasApiKey()) {
+            return ['results' => [], 'total_results' => 0, 'error' => 'API Key do TMDB não configurada.'];
+        }
+
+        try {
+            $response = Http::timeout(10)->get("{$this->baseUrl}/search/{$type}", [
+                'api_key' => $this->apiKey,
+                'language' => $this->language,
+                'query' => $query,
+                'page' => $page,
+            ]);
+
+            if ($response->successful()) {
+                return $response->json();
+            }
+
+            Log::warning('TmdbService: search failed', ['type' => $type, 'query' => $query, 'status' => $response->status()]);
+            return ['results' => [], 'total_results' => 0, 'error' => 'Erro na busca TMDB (HTTP ' . $response->status() . ')'];
+        } catch (\Exception $e) {
+            Log::error('TmdbService: search exception', ['error' => $e->getMessage()]);
+            return ['results' => [], 'total_results' => 0, 'error' => 'Erro de conexão com TMDB.'];
+        }
+    }
+
+    protected function getDetails(string $type, int $tmdbId): ?array
+    {
+        if (!$this->hasApiKey()) {
+            return null;
+        }
+
+        try {
+            $response = Http::timeout(10)->get("{$this->baseUrl}/{$type}/{$tmdbId}", [
+                'api_key' => $this->apiKey,
+                'language' => $this->language,
+                'append_to_response' => 'credits',
+            ]);
+
+            if ($response->successful()) {
+                return $response->json();
+            }
+
+            return null;
+        } catch (\Exception $e) {
+            Log::error('TmdbService: details exception', ['error' => $e->getMessage()]);
+            return null;
+        }
+    }
+
+    public function checkExistsInXui(int $tmdbId, string $type): ?object
+    {
+        if ($type === 'movie') {
+            return DB::connection('xui')->table('streams')
+                ->where('tmdb_id', $tmdbId)
+                ->where('type', 2)
+                ->select('id', 'stream_display_name', 'stream_icon', 'category_id', 'added', 'year', 'rating')
+                ->first();
+        }
+
+        return DB::connection('xui')->table('streams_series')
+            ->where('tmdb_id', $tmdbId)
+            ->select('id', 'title', 'cover', 'category_id', 'last_modified', 'year', 'rating', 'genre')
+            ->first();
+    }
+
+    public function getCategoryName(?string $categoryIdJson): string
+    {
+        if (empty($categoryIdJson)) {
+            return 'Sem categoria';
+        }
+
+        $categoryIds = json_decode($categoryIdJson, true);
+        if (!is_array($categoryIds) || empty($categoryIds)) {
+            // Pode ser um ID direto
+            $categoryIds = [(int) $categoryIdJson];
+        }
+
+        $categories = DB::connection('xui')->table('streams_categories')
+            ->whereIn('id', $categoryIds)
+            ->pluck('category_name')
+            ->toArray();
+
+        return !empty($categories) ? implode(', ', $categories) : 'Sem categoria';
+    }
+}

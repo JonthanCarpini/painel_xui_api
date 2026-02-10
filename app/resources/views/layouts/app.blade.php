@@ -164,6 +164,10 @@
                         <i class="bi bi-play-btn text-lg"></i>
                         <span class="font-medium">Teste de Canais</span>
                     </a>
+                    <a href="{{ route('vod-requests.index') }}" class="flex items-center gap-3 px-3 py-2 rounded-lg {{ request()->routeIs('vod-requests.*') ? 'bg-gradient-to-r from-orange-500 to-orange-600 text-white shadow-md shadow-orange-500/20' : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-dark-200 hover:text-gray-900 dark:hover:text-white' }} transition-all duration-200">
+                        <i class="bi bi-film text-lg"></i>
+                        <span class="font-medium">Pedidos VOD</span>
+                    </a>
                 </div>
 
                 <!-- WhatsApp -->
@@ -240,6 +244,16 @@
                     <a href="{{ route('updates.index') }}" class="flex items-center gap-3 px-3 py-2 rounded-lg {{ request()->routeIs('updates.*') ? 'bg-gradient-to-r from-orange-500 to-orange-600 text-white shadow-md shadow-orange-500/20' : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-dark-200 hover:text-gray-900 dark:hover:text-white' }} transition-all duration-200">
                         <i class="bi bi-stars text-lg"></i>
                         <span class="font-medium">Atualizações</span>
+                    </a>
+                    <a href="{{ route('settings.admin.vod-requests.index') }}" class="flex items-center gap-3 px-3 py-2 rounded-lg {{ request()->routeIs('settings.admin.vod-requests.*') ? 'bg-gradient-to-r from-orange-500 to-orange-600 text-white shadow-md shadow-orange-500/20' : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-dark-200 hover:text-gray-900 dark:hover:text-white' }} transition-all duration-200 justify-between">
+                        <div class="flex items-center gap-3">
+                            <i class="bi bi-film text-lg"></i>
+                            <span class="font-medium">Pedidos VOD</span>
+                        </div>
+                        @php $pendingVodCount = \App\Models\VodRequest::pending()->count(); @endphp
+                        @if($pendingVodCount > 0)
+                            <span class="bg-red-500 text-white text-xs font-bold px-2 py-0.5 rounded-full shadow-sm">{{ $pendingVodCount }}</span>
+                        @endif
                     </a>
                 </div>
                 @endif
