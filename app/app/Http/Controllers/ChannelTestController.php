@@ -198,7 +198,6 @@ class ChannelTestController extends Controller
             abort(400);
         }
 
-        // Segurança: bloquear path traversal
         if (str_contains($path, '..')) {
             abort(400);
         }
@@ -209,27 +208,72 @@ class ChannelTestController extends Controller
         try {
             $client = new \GuzzleHttp\Client();
             $response = $client->request('GET', $targetUrl, [
-                'stream' => true,
                 'timeout' => 60,
                 'connect_timeout' => 10,
             ]);
 
             $contentType = $response->getHeaderLine('Content-Type') ?: 'application/octet-stream';
-            $stream = $response->getBody();
+            $body = (string) $response->getBody();
 
-            return response()->stream(function () use ($stream) {
-                while (!$stream->eof()) {
-                    echo $stream->read(8192);
-                    flush();
-                }
-            }, $response->getStatusCode(), [
+            $isManifest = str_contains($contentType, 'mpegurl')
+                || str_contains($contentType, 'vnd.apple')
+                || str_ends_with($path, '.m3u8')
+                || str_starts_with($body, '#EXTM3U');
+
+            if ($isManifest) {
+                $body = $this->rewriteManifestUrls($body, $serverIp);
+            }
+
+            return response($body, $response->getStatusCode(), [
                 'Content-Type' => $contentType,
-                'Cache-Control' => 'public, max-age=3600',
+                'Cache-Control' => 'no-cache',
                 'Access-Control-Allow-Origin' => '*',
             ]);
         } catch (\Exception $e) {
             abort(502, 'Erro ao conectar no servidor');
         }
+    }
+
+    private function rewriteManifestUrls(string $body, string $serverIp): string
+    {
+        $proxyBase = route('channel-test.proxy-xui');
+        $lines = explode("\n", $body);
+        $rewritten = [];
+
+        foreach ($lines as $line) {
+            $trimmed = trim($line);
+
+            if (empty($trimmed) || str_starts_with($trimmed, '#')) {
+                // Reescrever URIs dentro de tags como #EXT-X-MAP:URI="..."
+                if (preg_match('/URI="([^"]+)"/', $trimmed, $m)) {
+                    $uri = $m[1];
+                    $newUri = $this->resolveManifestUrl($uri, $serverIp, $proxyBase);
+                    $trimmed = str_replace('URI="' . $uri . '"', 'URI="' . $newUri . '"', $trimmed);
+                }
+                $rewritten[] = $trimmed;
+                continue;
+            }
+
+            // Linha é uma URL (absoluta ou relativa)
+            $rewritten[] = $this->resolveManifestUrl($trimmed, $serverIp, $proxyBase);
+        }
+
+        return implode("\n", $rewritten);
+    }
+
+    private function resolveManifestUrl(string $url, string $serverIp, string $proxyBase): string
+    {
+        // URL absoluta com IP do servidor → converter para proxy
+        if (preg_match('#https?://' . preg_quote($serverIp, '#') . '(:\d+)?/(.+)#', $url, $m)) {
+            return $proxyBase . '?path=' . urlencode($m[2]);
+        }
+
+        // URL relativa (ex: hls/xxx, hlsr/xxx, yyy.ts) → converter para proxy
+        if (!str_starts_with($url, 'http://') && !str_starts_with($url, 'https://')) {
+            return $proxyBase . '?path=' . urlencode($url);
+        }
+
+        return $url;
     }
 
     private function ensureHttps(?string $url): ?string
