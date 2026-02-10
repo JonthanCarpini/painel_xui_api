@@ -78,7 +78,7 @@
     </div>
 
     <!-- Modal de detalhes / verificação -->
-    <div x-show="selectedItem" x-cloak class="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4" @click.self="selectedItem = null" @keydown.escape.window="selectedItem = null">
+    <div x-show="selectedItem !== null" x-cloak class="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4" @click.self="selectedItem = null" @keydown.escape.window="selectedItem = null">
         <div class="bg-white dark:bg-dark-300 rounded-2xl max-w-lg w-full max-h-[90vh] overflow-y-auto shadow-2xl" @click.stop>
             <!-- Header com backdrop -->
             <div class="relative h-48 bg-gray-200 dark:bg-dark-200 overflow-hidden rounded-t-2xl">
