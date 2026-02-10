@@ -211,6 +211,15 @@
                     </a>
                 </div>
 
+                <!-- Conteúdo -->
+                <div>
+                    <p class="text-gray-500 dark:text-gray-500 text-xs font-semibold uppercase tracking-wider mb-2 px-3">Conteúdo</p>
+                    <a href="{{ route('updates.index') }}" class="flex items-center gap-3 px-3 py-2 rounded-lg {{ request()->routeIs('updates.*') ? 'bg-gradient-to-r from-orange-500 to-orange-600 text-white shadow-md shadow-orange-500/20' : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-dark-200 hover:text-gray-900 dark:hover:text-white' }} transition-all duration-200">
+                        <i class="bi bi-stars text-lg"></i>
+                        <span class="font-medium">Atualizações</span>
+                    </a>
+                </div>
+
                 <!-- Financeiro & Logs -->
                 <div>
                     <p class="text-gray-500 dark:text-gray-500 text-xs font-semibold uppercase tracking-wider mb-2 px-3">Financeiro & Logs</p>
@@ -241,10 +250,6 @@
                     <a href="{{ route('settings.maintenance.index') }}" class="flex items-center gap-3 px-3 py-2 rounded-lg {{ request()->routeIs('settings.maintenance.*') ? 'bg-gradient-to-r from-orange-500 to-orange-600 text-white shadow-md shadow-orange-500/20' : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-dark-200 hover:text-gray-900 dark:hover:text-white' }} transition-all duration-200">
                         <i class="bi bi-tools text-lg"></i>
                         <span class="font-medium">Manutenção</span>
-                    </a>
-                    <a href="{{ route('updates.index') }}" class="flex items-center gap-3 px-3 py-2 rounded-lg {{ request()->routeIs('updates.*') ? 'bg-gradient-to-r from-orange-500 to-orange-600 text-white shadow-md shadow-orange-500/20' : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-dark-200 hover:text-gray-900 dark:hover:text-white' }} transition-all duration-200">
-                        <i class="bi bi-stars text-lg"></i>
-                        <span class="font-medium">Atualizações</span>
                     </a>
                     <a href="{{ route('settings.admin.vod-requests.index') }}" class="flex items-center gap-3 px-3 py-2 rounded-lg {{ request()->routeIs('settings.admin.vod-requests.*') ? 'bg-gradient-to-r from-orange-500 to-orange-600 text-white shadow-md shadow-orange-500/20' : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-dark-200 hover:text-gray-900 dark:hover:text-white' }} transition-all duration-200 justify-between">
                         <div class="flex items-center gap-3">
