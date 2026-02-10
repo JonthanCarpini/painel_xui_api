@@ -26,14 +26,19 @@ server {
         proxy_set_header Host XUI_IP_PLACEHOLDER;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-Forwarded-Proto https;
         proxy_buffering off;
         proxy_read_timeout 300s;
         proxy_connect_timeout 10s;
+
+        # Reescrever redirects HTTP do XUI para HTTPS via proxy
+        proxy_redirect ~^http://XUI_IP_PLACEHOLDER_ESCAPED(:\d+)?(.*)$ https://$host$2;
     }
 }
 EOF
 
+XUI_IP_ESCAPED=$(echo "$XUI_IP" | sed 's/\./\\\\./g')
+sed -i "s/XUI_IP_PLACEHOLDER_ESCAPED/${XUI_IP_ESCAPED}/g" "$CONF_PATH"
 sed -i "s/XUI_IP_PLACEHOLDER/${XUI_IP}/g" "$CONF_PATH"
 
 # Remover container antigo se existir
