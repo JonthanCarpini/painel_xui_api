@@ -118,6 +118,7 @@ Route::middleware(['auth', 'maintenance'])->group(function () {
     Route::prefix('channel-test')->name('channel-test.')->group(function () {
         Route::get('/', [\App\Http\Controllers\ChannelTestController::class, 'index'])->name('index');
         Route::get('/streams', [\App\Http\Controllers\ChannelTestController::class, 'getStreams'])->name('get-streams');
+        Route::get('/proxy-image', [\App\Http\Controllers\ChannelTestController::class, 'proxyImage'])->name('proxy-image');
         Route::get('/details/{id}', [\App\Http\Controllers\ChannelTestController::class, 'getChannelDetails'])->name('details');
         Route::post('/restart/{id}', [\App\Http\Controllers\ChannelTestController::class, 'restartChannel'])->name('restart');
         Route::post('/report', [\App\Http\Controllers\ChannelTestController::class, 'report'])->name('report');

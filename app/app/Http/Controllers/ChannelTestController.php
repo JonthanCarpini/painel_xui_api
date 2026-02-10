@@ -17,16 +17,18 @@ class ChannelTestController extends Controller
 {
     public function index()
     {
-        // Listar categorias disponíveis no banco local, agrupadas por tipo
         $categoriesByType = TestChannel::select('group_title', 'type')
             ->whereNotNull('group_title')
             ->distinct()
             ->orderBy('group_title')
             ->get()
             ->groupBy('type');
+
+        $hasDns = DnsServer::where('is_active', true)->exists();
         
         return view('channel-test.index', [
-            'categoriesByType' => $categoriesByType
+            'categoriesByType' => $categoriesByType,
+            'hasDns' => $hasDns,
         ]);
     }
 
@@ -50,14 +52,24 @@ class ChannelTestController extends Controller
             return response()->json(['error' => 'Nenhum item encontrado nesta categoria'], 404);
         }
 
-        // Mapear para o formato esperado pelo frontend
-        $result = $channels->map(function ($channel) {
+        $hasDns = $this->getDnsBase() !== null;
+        $proxyUrl = route('channel-test.proxy-image');
+
+        $result = $channels->map(function ($channel) use ($hasDns, $proxyUrl) {
+            $icon = $this->ensureHttps($channel->logo_url);
+            $streamUrl = $this->ensureHttps($channel->stream_url);
+
+            // Se não tem DNS e a imagem ainda é HTTP, usar proxy
+            if (!$hasDns && $icon && str_starts_with($icon, 'http://')) {
+                $icon = $proxyUrl . '?url=' . urlencode($icon);
+            }
+
             return [
                 'id' => $channel->id,
                 'name' => $channel->name,
-                'icon' => $this->ensureHttps($channel->logo_url),
-                'stream_url' => $this->ensureHttps($channel->stream_url),
-                'stream_id' => $channel->stream_id
+                'icon' => $icon,
+                'stream_url' => $streamUrl,
+                'stream_id' => $channel->stream_id,
             ];
         });
 
@@ -193,37 +205,63 @@ class ChannelTestController extends Controller
         }
     }
 
+    public function proxyImage(Request $request)
+    {
+        $url = $request->input('url');
+        if (empty($url) || !str_starts_with($url, 'http://')) {
+            abort(400);
+        }
+
+        try {
+            $response = Http::timeout(10)->get($url);
+            if ($response->successful()) {
+                $contentType = $response->header('Content-Type') ?: 'image/jpeg';
+                return response($response->body(), 200)
+                    ->header('Content-Type', $contentType)
+                    ->header('Cache-Control', 'public, max-age=86400');
+            }
+        } catch (\Exception $e) {
+            // silently fail
+        }
+
+        abort(404);
+    }
+
     private function ensureHttps(?string $url): ?string
     {
         if (empty($url)) return $url;
 
-        // Se já é HTTPS, retorna como está
         if (str_starts_with($url, 'https://')) {
             return $url;
         }
 
-        // Substituir http://IP pelo DNS com HTTPS
         $serverIp = '109.205.178.143';
         if (str_contains($url, $serverIp)) {
-            static $dnsBase = null;
-            static $dnsLoaded = false;
-            if (!$dnsLoaded) {
-                $dns = DnsServer::where('is_active', true)->first();
-                if ($dns && !empty($dns->url)) {
-                    $dnsBase = rtrim($dns->url, '/');
-                    if (!str_starts_with($dnsBase, 'http')) {
-                        $dnsBase = 'https://' . $dnsBase;
-                    }
-                }
-                $dnsLoaded = true;
-            }
+            $dnsBase = $this->getDnsBase();
 
             if ($dnsBase) {
-                $url = preg_replace('#https?://' . preg_quote($serverIp, '#') . '(:\d+)?#', $dnsBase, $url);
+                return preg_replace('#https?://' . preg_quote($serverIp, '#') . '(:\d+)?#', $dnsBase, $url);
             }
         }
 
         return $url;
+    }
+
+    private function getDnsBase(): ?string
+    {
+        static $cache = null;
+        static $loaded = false;
+        if (!$loaded) {
+            $dns = DnsServer::where('is_active', true)->first();
+            if ($dns && !empty($dns->url)) {
+                $cache = rtrim($dns->url, '/');
+                if (!str_starts_with($cache, 'http')) {
+                    $cache = 'https://' . $cache;
+                }
+            }
+            $loaded = true;
+        }
+        return $cache;
     }
 
     public function report(Request $request)
