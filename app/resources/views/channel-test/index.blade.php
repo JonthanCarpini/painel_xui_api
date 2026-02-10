@@ -386,8 +386,12 @@
         videoPlayer.src = "";
 
         const streamUrl = proxyUrl(channel.stream_url);
+        const isDirectVideo = /\.(mp4|mkv|avi|mov|wmv|flv|webm|ts)(\?|$)/i.test(streamUrl);
 
-        if (Hls.isSupported()) {
+        if (isDirectVideo) {
+            videoPlayer.src = streamUrl;
+            videoPlayer.play().catch(e => console.log("Autoplay blocked", e));
+        } else if (Hls.isSupported()) {
             hls = new Hls({
                 xhrSetup: function(xhr, url) {
                     const proxied = proxyUrl(url);
