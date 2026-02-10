@@ -101,6 +101,8 @@ Route::middleware(['auth', 'maintenance'])->group(function () {
         Route::post('/kill/{activityId}', [MonitorController::class, 'kill'])->name('kill');
     });
 
+    Route::get('/reseller-stats', [\App\Http\Controllers\ResellerStatsController::class, 'index'])->name('reseller-stats.index');
+
     Route::prefix('resellers')->name('resellers.')->group(function () {
         Route::get('/', [ResellerController::class, 'index'])->name('index');
         Route::get('/create', [ResellerController::class, 'create'])->name('create');

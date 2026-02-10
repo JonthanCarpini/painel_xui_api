@@ -152,6 +152,10 @@
                         <i class="bi bi-shop text-lg"></i>
                         <span class="font-medium">Revendedores</span>
                     </a>
+                    <a href="{{ route('reseller-stats.index') }}" class="flex items-center gap-3 px-3 py-2 rounded-lg {{ request()->routeIs('reseller-stats.*') ? 'bg-gradient-to-r from-orange-500 to-orange-600 text-white shadow-md shadow-orange-500/20' : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-dark-200 hover:text-gray-900 dark:hover:text-white' }} transition-all duration-200">
+                        <i class="bi bi-bar-chart-line text-lg"></i>
+                        <span class="font-medium">Estatísticas</span>
+                    </a>
                 </div>
                 @endif
 

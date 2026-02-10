@@ -69,9 +69,18 @@ class ChannelService
                         }
                         
                         // Extrair ID se possível
-                        preg_match('/\/([0-9]+)\.(ts|m3u8|mp4)$/', $streamUrl, $idMatch);
+                        preg_match('/\/([0-9]+)\.(ts|m3u8|mp4|mkv|avi)$/', $streamUrl, $idMatch);
                         $streamId = $idMatch[1] ?? null;
 
+                        // Detectar tipo baseado na URL
+                        $type = 'live';
+                        if (preg_match('#/movie/#i', $streamUrl)) {
+                            $type = 'movie';
+                        } elseif (preg_match('#/series/#i', $streamUrl)) {
+                            $type = 'series';
+                        }
+
+                        $currentChannel['type'] = $type;
                         $currentChannel['stream_url'] = $streamUrl;
                         $currentChannel['stream_id'] = $streamId;
                         $currentChannel['created_at'] = now();
