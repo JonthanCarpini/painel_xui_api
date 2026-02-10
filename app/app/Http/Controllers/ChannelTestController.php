@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
+use App\Models\DnsServer;
 use App\Models\TestChannel;
 use App\Models\Ticket;
 use App\Models\TicketCategory;
@@ -54,9 +55,9 @@ class ChannelTestController extends Controller
             return [
                 'id' => $channel->id,
                 'name' => $channel->name,
-                'icon' => $channel->logo_url,
-                'stream_url' => $channel->stream_url,
-                'stream_id' => $channel->stream_id // Importante para buscar status
+                'icon' => $this->ensureHttps($channel->logo_url),
+                'stream_url' => $this->ensureHttps($channel->stream_url),
+                'stream_id' => $channel->stream_id
             ];
         });
 
@@ -190,6 +191,39 @@ class ChannelTestController extends Controller
         } catch (\Exception $e) {
             return response()->json(['error' => 'Erro ao reiniciar: ' . $e->getMessage()], 500);
         }
+    }
+
+    private function ensureHttps(?string $url): ?string
+    {
+        if (empty($url)) return $url;
+
+        // Se já é HTTPS, retorna como está
+        if (str_starts_with($url, 'https://')) {
+            return $url;
+        }
+
+        // Substituir http://IP pelo DNS com HTTPS
+        $serverIp = '109.205.178.143';
+        if (str_contains($url, $serverIp)) {
+            static $dnsBase = null;
+            static $dnsLoaded = false;
+            if (!$dnsLoaded) {
+                $dns = DnsServer::where('is_active', true)->first();
+                if ($dns && !empty($dns->url)) {
+                    $dnsBase = rtrim($dns->url, '/');
+                    if (!str_starts_with($dnsBase, 'http')) {
+                        $dnsBase = 'https://' . $dnsBase;
+                    }
+                }
+                $dnsLoaded = true;
+            }
+
+            if ($dnsBase) {
+                $url = preg_replace('#https?://' . preg_quote($serverIp, '#') . '(:\d+)?#', $dnsBase, $url);
+            }
+        }
+
+        return $url;
     }
 
     public function report(Request $request)

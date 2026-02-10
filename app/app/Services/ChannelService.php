@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Models\DnsServer;
 use App\Models\TestChannel;
 use App\Models\AppSetting;
 use Illuminate\Support\Facades\Http;
@@ -15,8 +16,10 @@ class ChannelService
     public function syncChannels($username, $password)
     {
         try {
-            // URL fixa fornecida: http://109.205.178.143:80/playlist/{USERNAME}/{SENHA}/m3u_plus
-            $url = "http://109.205.178.143:80/playlist/{$username}/{$password}/m3u_plus";
+            $serverIp = $this->getServerIp();
+            $dnsBase = $this->getDnsBase();
+
+            $url = "http://{$serverIp}:80/playlist/{$username}/{$password}/m3u_plus";
             
             $response = Http::timeout(120)->get($url); // Aumentei timeout para 120s
             
@@ -80,6 +83,14 @@ class ChannelService
                             $type = 'series';
                         }
 
+                        // Converter URLs para usar DNS com HTTPS
+                        if ($dnsBase) {
+                            $streamUrl = $this->convertToDns($streamUrl, $serverIp, $dnsBase);
+                            if (!empty($currentChannel['logo_url'])) {
+                                $currentChannel['logo_url'] = $this->convertToDns($currentChannel['logo_url'], $serverIp, $dnsBase);
+                            }
+                        }
+
                         $currentChannel['type'] = $type;
                         $currentChannel['stream_url'] = $streamUrl;
                         $currentChannel['stream_id'] = $streamId;
@@ -111,5 +122,30 @@ class ChannelService
             Log::error('Erro ao sincronizar canais: ' . $e->getMessage());
             return ['success' => false, 'message' => $e->getMessage()];
         }
+    }
+
+    private function getServerIp(): string
+    {
+        return '109.205.178.143';
+    }
+
+    private function getDnsBase(): ?string
+    {
+        $dns = DnsServer::where('is_active', true)->first();
+        if ($dns && !empty($dns->url)) {
+            $url = rtrim($dns->url, '/');
+            if (!str_starts_with($url, 'http')) {
+                $url = 'https://' . $url;
+            }
+            return $url;
+        }
+        return null;
+    }
+
+    private function convertToDns(string $url, string $serverIp, string $dnsBase): string
+    {
+        // Substituir http://IP(:porta) pelo DNS base com HTTPS
+        $url = preg_replace('#https?://' . preg_quote($serverIp, '#') . '(:\d+)?#', $dnsBase, $url);
+        return $url;
     }
 }
