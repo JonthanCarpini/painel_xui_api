@@ -193,6 +193,44 @@ class VodRequestController extends Controller
         return response()->json(['exists' => false]);
     }
 
+    public function checkSeasons(Request $request)
+    {
+        if (!Auth::user()->isAdmin()) {
+            return response()->json(['error' => 'Não autorizado'], 403);
+        }
+
+        $request->validate([
+            'tmdb_id' => 'required|integer',
+        ]);
+
+        $tmdbId = (int) $request->input('tmdb_id');
+
+        try {
+            $tmdbData = $this->tmdb->getSeriesSeasons($tmdbId);
+            if (!$tmdbData) {
+                return response()->json(['error' => 'Não foi possível buscar temporadas no TMDB.'], 422);
+            }
+
+            $xuiSeasons = $this->tmdb->checkSeriesSeasonsInXui($tmdbId);
+
+            $seasons = collect($tmdbData['seasons'])->map(function ($s) use ($xuiSeasons) {
+                $s['exists_in_xui'] = in_array($s['season_number'], $xuiSeasons);
+                return $s;
+            })->toArray();
+
+            return response()->json([
+                'title' => $tmdbData['title'],
+                'total_seasons' => $tmdbData['total_seasons'],
+                'seasons' => $seasons,
+                'xui_seasons' => $xuiSeasons,
+                'series_exists' => !empty($xuiSeasons),
+            ]);
+        } catch (\Exception $e) {
+            Log::error('Admin VodRequest: checkSeasons failed', ['tmdb_id' => $tmdbId, 'error' => $e->getMessage()]);
+            return response()->json(['error' => 'Erro ao verificar temporadas: ' . $e->getMessage()], 500);
+        }
+    }
+
     public function resolve(Request $request, $id)
     {
         if (!Auth::user()->isAdmin()) {

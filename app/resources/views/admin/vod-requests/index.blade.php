@@ -199,15 +199,15 @@
                 </button>
             </div>
 
-            <div class="p-6">
+            <div class="p-6 max-h-[70vh] overflow-y-auto">
                 <!-- Loading -->
                 <div x-show="checking" class="flex items-center justify-center py-8">
                     <i class="bi bi-arrow-repeat animate-spin text-blue-500 text-2xl mr-3"></i>
                     <span class="text-gray-500 dark:text-gray-400">Buscando no servidor...</span>
                 </div>
 
-                <!-- Encontrado -->
-                <div x-show="!checking && xuiResult && xuiResult.exists" x-cloak>
+                <!-- FILME: Encontrado -->
+                <div x-show="!checking && xuiResult && xuiResult.exists && modalType === 'movie'" x-cloak>
                     <div class="bg-green-50 dark:bg-green-500/10 border border-green-200 dark:border-green-500/30 rounded-xl p-4 mb-4">
                         <div class="flex items-center gap-2 mb-3">
                             <i class="bi bi-check-circle-fill text-green-500 text-lg"></i>
@@ -229,30 +229,118 @@
                         </div>
                     </div>
 
-                    <!-- Ação: Marcar como concluído com info -->
                     <form :action="resolveUrl" method="POST">
                         @csrf
                         @method('PUT')
                         <input type="hidden" name="status" value="completed">
                         <textarea name="admin_note" x-model="autoNote" rows="3" class="w-full px-3 py-2 bg-gray-100 dark:bg-dark-200 border border-gray-200 dark:border-dark-100 rounded-lg text-sm text-gray-900 dark:text-white mb-3 resize-none"></textarea>
                         <button type="submit" class="w-full py-3 bg-green-500 hover:bg-green-600 text-white rounded-xl font-medium text-sm transition-colors flex items-center justify-center gap-2">
-                            <i class="bi bi-check-circle"></i> Marcar como Concluído (todos os solicitantes)
+                            <i class="bi bi-check-circle"></i> Marcar como Concluído
                         </button>
                     </form>
                 </div>
 
-                <!-- Não encontrado -->
-                <div x-show="!checking && xuiResult && !xuiResult.exists" x-cloak>
+                <!-- FILME: Não encontrado -->
+                <div x-show="!checking && xuiResult && !xuiResult.exists && modalType === 'movie'" x-cloak>
                     <div class="bg-yellow-50 dark:bg-yellow-500/10 border border-yellow-200 dark:border-yellow-500/30 rounded-xl p-4 mb-4">
                         <div class="flex items-center gap-2">
                             <i class="bi bi-exclamation-triangle text-yellow-500 text-lg"></i>
                             <span class="text-yellow-700 dark:text-yellow-400 font-semibold">Não encontrado no servidor</span>
                         </div>
-                        <p class="text-yellow-600 dark:text-yellow-400/80 text-sm mt-1" x-text="'O título \"' + modalTitle + '\" ainda não foi adicionado ao XUI.'"></p>
+                        <p class="text-yellow-600 dark:text-yellow-400/80 text-sm mt-1" x-text="'O filme \"' + modalTitle + '\" ainda não foi adicionado ao XUI.'"></p>
                     </div>
                     <button @click="showModal = false" class="w-full py-3 bg-gray-200 dark:bg-dark-200 hover:bg-gray-300 dark:hover:bg-dark-100 text-gray-700 dark:text-gray-300 rounded-xl font-medium text-sm transition-colors">
                         Fechar
                     </button>
+                </div>
+
+                <!-- SÉRIE: Resultado com temporadas -->
+                <div x-show="!checking && xuiResult && modalType === 'series'" x-cloak>
+                    <!-- Status da série no XUI -->
+                    <template x-if="xuiResult?.exists">
+                        <div class="bg-green-50 dark:bg-green-500/10 border border-green-200 dark:border-green-500/30 rounded-xl p-3 mb-4">
+                            <div class="flex items-center gap-2 mb-1">
+                                <i class="bi bi-check-circle-fill text-green-500"></i>
+                                <span class="text-green-700 dark:text-green-400 font-semibold text-sm">Série encontrada no servidor</span>
+                            </div>
+                            <p class="text-xs text-gray-500 dark:text-gray-400" x-text="xuiResult?.data?.name + ' — ' + xuiResult?.data?.category"></p>
+                        </div>
+                    </template>
+                    <template x-if="!xuiResult?.exists">
+                        <div class="bg-yellow-50 dark:bg-yellow-500/10 border border-yellow-200 dark:border-yellow-500/30 rounded-xl p-3 mb-4">
+                            <p class="text-yellow-700 dark:text-yellow-400 text-sm flex items-center gap-2">
+                                <i class="bi bi-exclamation-triangle"></i>
+                                Série não encontrada no servidor.
+                            </p>
+                        </div>
+                    </template>
+
+                    <!-- Lista de Temporadas -->
+                    <template x-if="seasonsData && seasonsData.seasons && seasonsData.seasons.length > 0">
+                        <div class="mb-4">
+                            <h4 class="text-sm font-bold text-gray-900 dark:text-white mb-3 flex items-center gap-2">
+                                <i class="bi bi-collection-play text-orange-500"></i>
+                                Temporadas
+                                <span class="text-xs font-normal text-gray-400" x-text="'(' + seasonsData.seasons.length + ' no TMDB, ' + (seasonsData.xui_seasons?.length || 0) + ' no servidor)'"></span>
+                            </h4>
+                            <div class="space-y-2 max-h-64 overflow-y-auto pr-1">
+                                <template x-for="season in seasonsData.seasons" :key="season.season_number">
+                                    <div class="flex items-center justify-between p-3 rounded-lg border transition-colors"
+                                         :class="season.exists_in_xui ? 'bg-green-50 dark:bg-green-500/5 border-green-200 dark:border-green-500/20' : 'bg-gray-50 dark:bg-dark-200 border-gray-200 dark:border-dark-100'">
+                                        <div class="flex items-center gap-3 min-w-0">
+                                            <div class="w-8 h-8 rounded-lg flex items-center justify-center shrink-0 text-sm font-bold"
+                                                 :class="season.exists_in_xui ? 'bg-green-100 dark:bg-green-500/20 text-green-600 dark:text-green-400' : 'bg-gray-200 dark:bg-dark-100 text-gray-500 dark:text-gray-400'">
+                                                <span x-text="season.season_number"></span>
+                                            </div>
+                                            <div class="min-w-0">
+                                                <p class="text-sm font-medium text-gray-900 dark:text-white truncate" x-text="season.name"></p>
+                                                <p class="text-xs text-gray-500 dark:text-gray-400">
+                                                    <span x-text="season.episode_count + ' episódios'"></span>
+                                                    <span x-show="season.air_date" x-text="' · ' + (season.air_date ? season.air_date.substring(0, 4) : '')"></span>
+                                                </p>
+                                            </div>
+                                        </div>
+                                        <div class="shrink-0 ml-2">
+                                            <template x-if="season.exists_in_xui">
+                                                <span class="inline-flex items-center gap-1 text-xs font-medium px-2.5 py-1 rounded-full bg-green-100 dark:bg-green-500/20 text-green-600 dark:text-green-400">
+                                                    <i class="bi bi-check-circle"></i> No servidor
+                                                </span>
+                                            </template>
+                                            <template x-if="!season.exists_in_xui">
+                                                <span class="inline-flex items-center gap-1 text-xs font-medium px-2.5 py-1 rounded-full bg-red-100 dark:bg-red-500/20 text-red-600 dark:text-red-400">
+                                                    <i class="bi bi-x-circle"></i> Ausente
+                                                </span>
+                                            </template>
+                                        </div>
+                                    </div>
+                                </template>
+                            </div>
+                        </div>
+                    </template>
+
+                    <!-- Resumo + ação de resolver -->
+                    <div class="bg-blue-50 dark:bg-blue-500/10 border border-blue-200 dark:border-blue-500/30 rounded-lg p-3 mb-4" x-show="seasonsData">
+                        <p class="text-blue-700 dark:text-blue-400 text-xs">
+                            <template x-if="seasonsData && seasonsData.xui_seasons">
+                                <span x-text="seasonsData.xui_seasons.length + '/' + seasonsData.seasons.length + ' temporadas no servidor. ' + (seasonsData.seasons.length - seasonsData.xui_seasons.length > 0 ? (seasonsData.seasons.length - seasonsData.xui_seasons.length) + ' ausente(s).' : 'Todas presentes!')"></span>
+                            </template>
+                        </p>
+                    </div>
+
+                    <form :action="resolveUrl" method="POST">
+                        @csrf
+                        @method('PUT')
+                        <input type="hidden" name="status" value="completed">
+                        <textarea name="admin_note" x-model="autoNote" rows="3" class="w-full px-3 py-2 bg-gray-100 dark:bg-dark-200 border border-gray-200 dark:border-dark-100 rounded-lg text-sm text-gray-900 dark:text-white mb-3 resize-none"></textarea>
+                        <div class="flex gap-2">
+                            <button type="submit" class="flex-1 py-3 bg-green-500 hover:bg-green-600 text-white rounded-xl font-medium text-sm transition-colors flex items-center justify-center gap-2">
+                                <i class="bi bi-check-circle"></i> Concluir
+                            </button>
+                            <button type="submit" name="status" value="rejected" class="flex-1 py-3 bg-red-500 hover:bg-red-600 text-white rounded-xl font-medium text-sm transition-colors flex items-center justify-center gap-2">
+                                <i class="bi bi-x-circle"></i> Recusar
+                            </button>
+                        </div>
+                    </form>
                 </div>
 
                 <!-- Erro -->
@@ -278,38 +366,91 @@ function vodAdmin() {
         xuiResult: null,
         xuiError: null,
         modalTitle: '',
+        modalType: '',
         autoNote: '',
         resolveUrl: '',
+        seasonsData: null,
 
         async checkXui(tmdbId, type, title, requestId) {
             this.showModal = true;
             this.checking = true;
             this.xuiResult = null;
             this.xuiError = null;
+            this.seasonsData = null;
             this.modalTitle = title;
+            this.modalType = type;
+            this.autoNote = '';
             this.resolveUrl = `{{ url('settings/admin/vod-requests') }}/${requestId}/resolve`;
 
             try {
-                const resp = await fetch(`{{ route('settings.admin.vod-requests.check-xui') }}?tmdb_id=${tmdbId}&type=${type}`);
-                if (!resp.ok) {
-                    this.xuiError = 'Erro HTTP ' + resp.status;
-                    return;
-                }
-                this.xuiResult = await resp.json();
+                if (type === 'series') {
+                    const [checkResp, seasonsResp] = await Promise.all([
+                        fetch(`{{ route('settings.admin.vod-requests.check-xui') }}?tmdb_id=${tmdbId}&type=${type}`),
+                        fetch(`{{ route('settings.admin.vod-requests.check-seasons') }}?tmdb_id=${tmdbId}`)
+                    ]);
 
-                if (this.xuiResult.exists) {
-                    const d = this.xuiResult.data;
-                    let note = `Pedido Adicionado\ud83d\udc4f\ud83c\udffb\n`;
-                    note += `Nome: ${d.name}\n`;
-                    if (d.category) note += `Categoria: ${d.category}\n`;
-                    if (d.added_date) note += `Adicionado em: ${d.added_date}`;
-                    this.autoNote = note;
+                    if (!checkResp.ok) {
+                        this.xuiError = 'Erro HTTP ' + checkResp.status;
+                        return;
+                    }
+                    this.xuiResult = await checkResp.json();
+
+                    if (seasonsResp.ok) {
+                        this.seasonsData = await seasonsResp.json();
+                    }
+
+                    // Gerar nota automática com info de temporadas
+                    this.buildSeriesNote();
+                } else {
+                    const resp = await fetch(`{{ route('settings.admin.vod-requests.check-xui') }}?tmdb_id=${tmdbId}&type=${type}`);
+                    if (!resp.ok) {
+                        this.xuiError = 'Erro HTTP ' + resp.status;
+                        return;
+                    }
+                    this.xuiResult = await resp.json();
+
+                    if (this.xuiResult.exists) {
+                        const d = this.xuiResult.data;
+                        let note = `Pedido Adicionado\ud83d\udc4f\ud83c\udffb\n`;
+                        note += `Nome: ${d.name}\n`;
+                        if (d.category) note += `Categoria: ${d.category}\n`;
+                        if (d.added_date) note += `Adicionado em: ${d.added_date}`;
+                        this.autoNote = note;
+                    }
                 }
             } catch (e) {
                 this.xuiError = 'Erro de conexão ao verificar servidor.';
             } finally {
                 this.checking = false;
             }
+        },
+
+        buildSeriesNote() {
+            let note = '';
+            if (this.xuiResult?.exists) {
+                const d = this.xuiResult.data;
+                note += `Série encontrada no servidor\n`;
+                note += `Nome: ${d.name}\n`;
+                if (d.category) note += `Categoria: ${d.category}\n`;
+            } else {
+                note += `Série não encontrada no servidor\n`;
+            }
+
+            if (this.seasonsData?.seasons) {
+                const total = this.seasonsData.seasons.length;
+                const inXui = this.seasonsData.xui_seasons?.length || 0;
+                const missing = total - inXui;
+                note += `\nTemporadas: ${inXui}/${total} no servidor`;
+                if (missing > 0) {
+                    const missingNums = this.seasonsData.seasons
+                        .filter(s => !s.exists_in_xui)
+                        .map(s => s.season_number);
+                    note += `\nAusentes: ${missingNums.join(', ')}`;
+                } else {
+                    note += ` (todas presentes)`;
+                }
+            }
+            this.autoNote = note;
         }
     };
 }

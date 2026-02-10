@@ -202,6 +202,7 @@ Route::middleware(['auth', 'maintenance'])->group(function () {
             // Pedidos de Filmes/Séries (Admin)
             Route::get('vod-requests', [App\Http\Controllers\Admin\VodRequestController::class, 'index'])->name('vod-requests.index');
             Route::get('vod-requests/check-xui', [App\Http\Controllers\Admin\VodRequestController::class, 'checkXui'])->name('vod-requests.check-xui');
+            Route::get('vod-requests/check-seasons', [App\Http\Controllers\Admin\VodRequestController::class, 'checkSeasons'])->name('vod-requests.check-seasons');
             Route::get('vod-requests/{id}', [App\Http\Controllers\Admin\VodRequestController::class, 'show'])->name('vod-requests.show');
             Route::put('vod-requests/{id}/resolve', [App\Http\Controllers\Admin\VodRequestController::class, 'resolve'])->name('vod-requests.resolve');
         });
