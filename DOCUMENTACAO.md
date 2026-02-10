@@ -1,6 +1,6 @@
 # Painelshark (Painel XUI) — Documentação Técnica Completa
 
-> **Última atualização:** 09/02/2026
+> **Última atualização:** 10/02/2026
 > **Repositório:** `JonthanCarpini/Painelshark` (GitHub privado)
 > **Imagem Docker:** `carpini/painelshark:latest`
 
@@ -270,8 +270,10 @@ O painel **não usa** o sistema de autenticação padrão do Laravel. Em vez dis
 ### 8.6. Teste de Canais (`ChannelTestController`)
 
 - Lista de canais sincronizados de uma "revenda fantasma" (M3U).
-- Player integrado para teste ao vivo.
+- Player integrado para teste ao vivo (HLS.js para `.m3u8`, nativo para `.mp4`).
 - Sincronização automática via comando agendado.
+- **URLs opacas:** As URLs de stream são geradas sem credenciais do fantasma. Em vez de `https://xui.domain/live/user/pass/6.m3u8`, o browser recebe `https://xui.domain/stream/live/6.m3u8`. O proxy Nginx (ver seção 8.11) injeta as credenciais internamente.
+- **`buildOpaqueStreamUrl()`:** Método privado que gera URLs no formato `/stream/{type}/{id}.{ext}` usando o `stream_id` e extensão extraída da URL original.
 
 ### 8.7. Configurações Admin (`SettingsController`)
 
@@ -280,7 +282,7 @@ O painel **não usa** o sistema de autenticação padrão do Laravel. Em vez dis
 - **DNS:** CRUD de servidores DNS para geração de URLs.
 - **Avisos:** CRUD de notices para revendedores.
 - **Mensagem do Cliente:** Template global com variáveis.
-- **Revenda Fantasma:** Credenciais para sync de canais de teste.
+- **Revenda Fantasma:** Credenciais para sync de canais de teste. Ao salvar novas credenciais, notifica o SaaS via HTTP para atualizar o proxy Nginx (`notifySaasGhostUpdate()`).
 - **Pacote de Confiança:** Pacote padrão para renovação rápida.
 
 ### 8.8. Manutenção (`MaintenanceController`)
@@ -300,6 +302,38 @@ O painel **não usa** o sistema de autenticação padrão do Laravel. Em vez dis
 
 - Histórico completo de movimentações de créditos.
 - Filtros por período e tipo.
+
+### 8.11. Proxy XUI para Streams HTTPS
+
+O XUI serve streams via HTTP no IP direto (ex: `http://109.205.178.143/live/user/pass/6.m3u8`). Isso causa **Mixed Content** quando o painel é acessado via HTTPS. Além disso, o XUI valida o IP TCP do cliente, impedindo proxy server-side via Laravel.
+
+**Solução:** Um container **Nginx proxy** (`xui_proxy_{id}`) por instância, com SSL via Traefik:
+
+```
+Browser (HTTPS) → Traefik → xui_proxy_{id} (Nginx) → XUI (HTTP)
+                   ↑ SSL                              ↑ proxy_pass
+```
+
+**Domínio:** `xui.{domain}` (ex: `xui.genial.vp1.officex.site`)
+
+**Funcionalidades do proxy:**
+- **`location /stream/`** — URLs opacas sem credenciais. O Nginx injeta `user/pass` do fantasma internamente via `proxy_pass`.
+- **`location /`** — Fallback para proxy direto (tokens, auth, HLS chunks após redirect).
+- **`proxy_redirect`** — Reescreve redirects 302 do XUI de `http://IP` para `https://xui.domain`.
+
+**Ciclo de vida:**
+- Criado automaticamente pelo SaaS ao provisionar/atualizar instância (`DockerService::ensureXuiProxy()`).
+- Removido ao deletar instância (`DockerService::removeXuiProxy()`).
+- Credenciais atualizadas quando o fantasma rotaciona (via API do SaaS).
+
+**Fluxo de atualização de credenciais:**
+```
+ghost:rotate (ou SettingsController)
+  → Salva nova senha no banco local
+  → POST {SAAS_API_URL}/api/instance/{INSTANCE_TOKEN}/ghost-credentials
+  → SaaS reescreve config Nginx com novas credenciais
+  → docker exec xui_proxy_{id} nginx -s reload
+```
 
 ---
 
@@ -415,7 +449,7 @@ Definidos em `routes/console.php`:
 
 | Comando | Frequência | Descrição |
 |---------|-----------|-----------|
-| `ghost:rotate` | Diário (configurável) | Rotaciona credenciais da revenda fantasma e re-sincroniza canais de teste |
+| `ghost:rotate` | Diário (configurável) | Rotaciona credenciais da revenda fantasma, re-sincroniza canais de teste e notifica o SaaS para atualizar o proxy Nginx |
 | `notifications:send-expiry` | A cada 5 minutos | Envia notificações WhatsApp de vencimento |
 
 **Importante:** O scheduler do Laravel deve estar configurado no cron do container:
@@ -599,9 +633,17 @@ Referência completa baseada no `.env.example`:
 
 ### Evolution API (WhatsApp)
 | Variável | Descrição | Exemplo |
-|----------|-----------|---------|
+|----------|-----------|--------|
 | `EVOLUTION_API_URL` | URL da Evolution API | `https://evo.onpanel.site` |
 | `EVOLUTION_API_KEY` | API Key | `evo_standalone_key_2026` |
+
+### SaaS API (Comunicação com o Painel SaaS)
+| Variável | Descrição | Exemplo |
+|----------|-----------|--------|
+| `SAAS_API_URL` | URL base da API do SaaS | `https://admin.onpanel.site` |
+| `INSTANCE_TOKEN` | Token único da instância (gerado pelo SaaS) | `abc123...` |
+
+> Essas variáveis são injetadas automaticamente pelo `DockerService` do SaaS ao criar/atualizar containers. São usadas pelo `ghost:rotate` e `SettingsController` para notificar o SaaS quando as credenciais do fantasma mudam, permitindo que o proxy Nginx seja atualizado com as novas credenciais.
 
 ### Cache e Sessão
 | Variável | Descrição | Exemplo |
