@@ -229,7 +229,20 @@
 
     let hls = null;
     let allChannels = [];
-    let currentChannelData = null; // Armazena dados completos do canal atual
+    let currentChannelData = null;
+
+    const SERVER_IP = '109.205.178.143';
+    const PROXY_BASE = '{{ route("channel-test.proxy-xui") }}';
+
+    function proxyUrl(url) {
+        if (!url) return url;
+        const regex = new RegExp('https?://' + SERVER_IP.replace(/\./g, '\\.') + '(:\\d+)?/');
+        if (regex.test(url)) {
+            const path = url.replace(regex, '');
+            return PROXY_BASE + '?path=' + encodeURIComponent(path);
+        }
+        return url;
+    }
 
     // Inicializar Tabs
     function switchTab(type) {
@@ -370,9 +383,18 @@
         videoPlayer.pause();
         videoPlayer.src = "";
 
+        const streamUrl = proxyUrl(channel.stream_url);
+
         if (Hls.isSupported()) {
-            hls = new Hls();
-            hls.loadSource(channel.stream_url);
+            hls = new Hls({
+                xhrSetup: function(xhr, url) {
+                    const proxied = proxyUrl(url);
+                    if (proxied !== url) {
+                        xhr.open('GET', proxied, true);
+                    }
+                }
+            });
+            hls.loadSource(streamUrl);
             hls.attachMedia(videoPlayer);
             hls.on(Hls.Events.MANIFEST_PARSED, function() {
                 videoPlayer.play().catch(e => console.log("Autoplay blocked", e));
@@ -395,7 +417,7 @@
                 }
             });
         } else if (videoPlayer.canPlayType('application/vnd.apple.mpegurl')) {
-            videoPlayer.src = channel.stream_url;
+            videoPlayer.src = streamUrl;
             videoPlayer.addEventListener('loadedmetadata', function() {
                 videoPlayer.play();
             });

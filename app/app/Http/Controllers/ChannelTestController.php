@@ -191,26 +191,45 @@ class ChannelTestController extends Controller
         }
     }
 
-    public function proxyImage(Request $request)
+    public function proxyXui(Request $request)
     {
-        $url = $request->input('url');
-        if (empty($url) || !str_starts_with($url, 'http://')) {
+        $path = $request->input('path');
+        if (empty($path)) {
             abort(400);
         }
 
-        try {
-            $response = Http::timeout(10)->get($url);
-            if ($response->successful()) {
-                $contentType = $response->header('Content-Type') ?: 'image/jpeg';
-                return response($response->body(), 200)
-                    ->header('Content-Type', $contentType)
-                    ->header('Cache-Control', 'public, max-age=86400');
-            }
-        } catch (\Exception $e) {
-            // silently fail
+        // Segurança: bloquear path traversal
+        if (str_contains($path, '..')) {
+            abort(400);
         }
 
-        abort(404);
+        $serverIp = '109.205.178.143';
+        $targetUrl = 'http://' . $serverIp . '/' . ltrim($path, '/');
+
+        try {
+            $client = new \GuzzleHttp\Client();
+            $response = $client->request('GET', $targetUrl, [
+                'stream' => true,
+                'timeout' => 60,
+                'connect_timeout' => 10,
+            ]);
+
+            $contentType = $response->getHeaderLine('Content-Type') ?: 'application/octet-stream';
+            $stream = $response->getBody();
+
+            return response()->stream(function () use ($stream) {
+                while (!$stream->eof()) {
+                    echo $stream->read(8192);
+                    flush();
+                }
+            }, $response->getStatusCode(), [
+                'Content-Type' => $contentType,
+                'Cache-Control' => 'public, max-age=3600',
+                'Access-Control-Allow-Origin' => '*',
+            ]);
+        } catch (\Exception $e) {
+            abort(502, 'Erro ao conectar no servidor');
+        }
     }
 
     private function ensureHttps(?string $url): ?string
@@ -229,9 +248,9 @@ class ChannelTestController extends Controller
                 return preg_replace('#https?://' . preg_quote($serverIp, '#') . '(:\d+)?#', $dnsBase, $url);
             }
 
-            // 2. Fallback: usar proxy reverso do Nginx (/xui-stream/)
+            // 2. Fallback: proxy Laravel
             $path = preg_replace('#https?://' . preg_quote($serverIp, '#') . '(:\d+)?/#', '', $url);
-            return '/xui-stream/' . $path;
+            return route('channel-test.proxy-xui') . '?path=' . urlencode($path);
         }
 
         return $url;
