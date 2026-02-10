@@ -11,8 +11,6 @@ use App\Models\TicketExtra;
 use App\Models\TicketReply;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Http;
-use Illuminate\Support\Facades\Log;
 
 class ChannelTestController extends Controller
 {
@@ -28,6 +26,7 @@ class ChannelTestController extends Controller
         return view('channel-test.index', [
             'categoriesByType' => $categoriesByType,
             'xuiIp' => $this->getXuiIp(),
+            'xuiProxyBase' => $this->getXuiProxyBase(),
         ]);
     }
 
@@ -193,106 +192,6 @@ class ChannelTestController extends Controller
         }
     }
 
-    public function proxyXui(Request $request)
-    {
-        $path = $request->input('path');
-        if (empty($path)) {
-            abort(400);
-        }
-
-        if (str_contains($path, '..')) {
-            abort(400);
-        }
-
-        $serverIp = $this->getXuiIp();
-        $targetUrl = 'http://' . $serverIp . '/' . ltrim($path, '/');
-
-        try {
-            Log::debug('[ProxyXUI] Fetching: ' . $targetUrl);
-
-            $response = Http::timeout(60)
-                ->connectTimeout(10)
-                ->withoutVerifying()
-                ->get($targetUrl);
-
-            if ($response->failed()) {
-                Log::warning('[ProxyXUI] Upstream returned ' . $response->status() . ' for: ' . $targetUrl);
-                return response($response->body(), $response->status(), [
-                    'Content-Type' => $response->header('Content-Type') ?: 'text/plain',
-                    'Access-Control-Allow-Origin' => '*',
-                ]);
-            }
-
-            $contentType = $response->header('Content-Type') ?: 'application/octet-stream';
-            $body = $response->body();
-
-            $isManifest = str_contains($contentType, 'mpegurl')
-                || str_contains($contentType, 'vnd.apple')
-                || str_ends_with($path, '.m3u8')
-                || (strlen($body) < 100000 && str_starts_with(trim($body), '#EXTM3U'));
-
-            if ($isManifest) {
-                Log::debug('[ProxyXUI] Rewriting manifest: ' . $path);
-                $body = $this->rewriteManifestUrls($body, $serverIp);
-            }
-
-            return response($body, 200, [
-                'Content-Type' => $contentType,
-                'Cache-Control' => 'no-cache',
-                'Access-Control-Allow-Origin' => '*',
-            ]);
-        } catch (\Exception $e) {
-            Log::error('[ProxyXUI] Exception: ' . $e->getMessage() . ' | URL: ' . $targetUrl);
-            return response()->json([
-                'error' => 'Erro ao conectar no servidor XUI',
-                'details' => $e->getMessage(),
-                'url' => $targetUrl,
-            ], 502);
-        }
-    }
-
-    private function rewriteManifestUrls(string $body, string $serverIp): string
-    {
-        $proxyBase = route('channel-test.proxy-xui');
-        $lines = explode("\n", $body);
-        $rewritten = [];
-
-        foreach ($lines as $line) {
-            $trimmed = trim($line);
-
-            if (empty($trimmed) || str_starts_with($trimmed, '#')) {
-                // Reescrever URIs dentro de tags como #EXT-X-MAP:URI="..."
-                if (preg_match('/URI="([^"]+)"/', $trimmed, $m)) {
-                    $uri = $m[1];
-                    $newUri = $this->resolveManifestUrl($uri, $serverIp, $proxyBase);
-                    $trimmed = str_replace('URI="' . $uri . '"', 'URI="' . $newUri . '"', $trimmed);
-                }
-                $rewritten[] = $trimmed;
-                continue;
-            }
-
-            // Linha é uma URL (absoluta ou relativa)
-            $rewritten[] = $this->resolveManifestUrl($trimmed, $serverIp, $proxyBase);
-        }
-
-        return implode("\n", $rewritten);
-    }
-
-    private function resolveManifestUrl(string $url, string $serverIp, string $proxyBase): string
-    {
-        // URL absoluta com IP do servidor → converter para proxy
-        if (preg_match('#https?://' . preg_quote($serverIp, '#') . '(:\d+)?/(.+)#', $url, $m)) {
-            return $proxyBase . '?path=' . urlencode($m[2]);
-        }
-
-        // URL relativa (ex: hls/xxx, hlsr/xxx, yyy.ts) → converter para proxy
-        if (!str_starts_with($url, 'http://') && !str_starts_with($url, 'https://')) {
-            return $proxyBase . '?path=' . urlencode($url);
-        }
-
-        return $url;
-    }
-
     private function ensureHttps(?string $url): ?string
     {
         if (empty($url)) return $url;
@@ -303,15 +202,8 @@ class ChannelTestController extends Controller
 
         $serverIp = $this->getXuiIp();
         if (str_contains($url, $serverIp)) {
-            // 1. Tentar DNS com HTTPS
-            $dnsBase = $this->getDnsBase();
-            if ($dnsBase) {
-                return preg_replace('#https?://' . preg_quote($serverIp, '#') . '(:\d+)?#', $dnsBase, $url);
-            }
-
-            // 2. Fallback: proxy Laravel
-            $path = preg_replace('#https?://' . preg_quote($serverIp, '#') . '(:\d+)?/#', '', $url);
-            return route('channel-test.proxy-xui') . '?path=' . urlencode($path);
+            $xuiBase = $this->getXuiProxyBase();
+            return preg_replace('#https?://' . preg_quote($serverIp, '#') . '(:\d+)?#', $xuiBase, $url);
         }
 
         return $url;
@@ -322,19 +214,24 @@ class ChannelTestController extends Controller
         return env('XUI_DB_HOST', '109.205.178.143');
     }
 
-    private function getDnsBase(): ?string
+    private function getXuiProxyBase(): string
     {
         static $cache = null;
-        static $loaded = false;
-        if (!$loaded) {
+        if ($cache === null) {
+            // 1. Tentar DNS configurado pelo admin
             $dns = DnsServer::where('is_active', true)->first();
             if ($dns && !empty($dns->url)) {
                 $cache = rtrim($dns->url, '/');
                 if (!str_starts_with($cache, 'http')) {
                     $cache = 'https://' . $cache;
                 }
+                return $cache;
             }
-            $loaded = true;
+
+            // 2. Usar subdomínio xui.{domain} (proxy Nginx com SSL via Traefik)
+            $appUrl = config('app.url', '');
+            $host = parse_url($appUrl, PHP_URL_HOST) ?: request()->getHost();
+            $cache = 'https://xui.' . $host;
         }
         return $cache;
     }

@@ -232,34 +232,15 @@
     let currentChannelData = null;
 
     const SERVER_IP = '{{ $xuiIp }}';
-    const PROXY_BASE = '{{ route("channel-test.proxy-xui") }}';
+    const XUI_PROXY_BASE = '{{ $xuiProxyBase }}';
 
     function proxyUrl(url) {
         if (!url) return url;
 
-        // 1. URL com IP direto do XUI
+        // Converter http://IP(:porta)/path → https://xui.domain/path
         const ipRegex = new RegExp('https?://' + SERVER_IP.replace(/\./g, '\\.') + '(:\\d+)?/');
         if (ipRegex.test(url)) {
-            const path = url.replace(ipRegex, '');
-            return PROXY_BASE + '?path=' + encodeURIComponent(path);
-        }
-
-        // 2. URL absoluta do domínio do painel com path do XUI (resolvida pelo HLS.js)
-        const currentOrigin = window.location.origin;
-        const xuiPaths = /^\/(hls|hlsr|live|movie|series|timeshift)\//;
-        if (url.startsWith(currentOrigin + '/hls') || url.startsWith(currentOrigin + '/hlsr') ||
-            url.startsWith(currentOrigin + '/live') || url.startsWith(currentOrigin + '/movie') ||
-            url.startsWith(currentOrigin + '/series') || url.startsWith(currentOrigin + '/timeshift')) {
-            const path = url.replace(currentOrigin + '/', '');
-            return PROXY_BASE + '?path=' + encodeURIComponent(path);
-        }
-
-        // 3. Path relativo do XUI
-        if (xuiPaths.test(url) || (url.startsWith('/') && !url.startsWith('/channel-test'))) {
-            const path = url.startsWith('/') ? url.substring(1) : url;
-            if (/^(hls|hlsr|live|movie|series|timeshift)\//.test(path)) {
-                return PROXY_BASE + '?path=' + encodeURIComponent(path);
-            }
+            return url.replace(ipRegex, XUI_PROXY_BASE + '/');
         }
 
         return url;
