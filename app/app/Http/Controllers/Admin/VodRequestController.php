@@ -9,6 +9,7 @@ use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 
 class VodRequestController extends Controller
 {
@@ -29,10 +30,20 @@ class VodRequestController extends Controller
         $type = $request->input('type');
         $search = $request->input('search');
 
-        $query = VodRequest::query()->with('user');
+        $query = VodRequest::query()
+            ->select('tmdb_id', 'type', 'title', 'poster_path', 'release_date', 'vote_average')
+            ->selectRaw('MIN(id) as id')
+            ->selectRaw('COUNT(*) as request_count')
+            ->selectRaw('MIN(created_at) as first_request_at')
+            ->selectRaw('MAX(created_at) as last_request_at')
+            ->selectRaw("MIN(CASE WHEN status = 'pending' THEN 0 WHEN status = 'completed' THEN 1 ELSE 2 END) as status_priority")
+            ->selectRaw("CASE MIN(CASE WHEN status = 'pending' THEN 0 WHEN status = 'completed' THEN 1 ELSE 2 END) WHEN 0 THEN 'pending' WHEN 1 THEN 'completed' ELSE 'rejected' END as group_status")
+            ->groupBy('tmdb_id', 'type', 'title', 'poster_path', 'release_date', 'vote_average');
 
         if ($status && $status !== 'all') {
-            $query->where('status', $status);
+            $statusMap = ['pending' => 0, 'completed' => 1, 'rejected' => 2];
+            $statusVal = $statusMap[$status] ?? 0;
+            $query->havingRaw("MIN(CASE WHEN status = 'pending' THEN 0 WHEN status = 'completed' THEN 1 ELSE 2 END) = ?", [$statusVal]);
         }
 
         if ($type) {
@@ -43,10 +54,19 @@ class VodRequestController extends Controller
             $query->where('title', 'like', "%{$search}%");
         }
 
-        $requests = $query->orderByRaw("FIELD(status, 'pending', 'completed', 'rejected')")
-            ->orderBy('created_at', 'desc')
+        $requests = $query->orderBy('status_priority', 'asc')
+            ->orderBy('last_request_at', 'desc')
             ->paginate(20)
             ->appends($request->query());
+
+        // Buscar solicitantes para cada grupo
+        foreach ($requests as $req) {
+            $req->requesters = VodRequest::where('tmdb_id', $req->tmdb_id)
+                ->where('type', $req->type)
+                ->with('user')
+                ->orderBy('created_at', 'desc')
+                ->get();
+        }
 
         $stats = [
             'pending' => VodRequest::pending()->count(),
@@ -55,7 +75,16 @@ class VodRequestController extends Controller
             'total' => VodRequest::count(),
         ];
 
-        return view('admin.vod-requests.index', compact('requests', 'stats', 'status', 'type', 'search'));
+        // Stats agrupados (títulos únicos)
+        $table = (new VodRequest)->getTable();
+        $groupStats = [
+            'pending' => (int) DB::selectOne("SELECT COUNT(DISTINCT tmdb_id, type) as c FROM {$table} WHERE status = 'pending'")->c,
+            'completed' => (int) DB::selectOne("SELECT COUNT(DISTINCT tmdb_id, type) as c FROM {$table} WHERE status = 'completed'")->c,
+            'rejected' => (int) DB::selectOne("SELECT COUNT(DISTINCT tmdb_id, type) as c FROM {$table} WHERE status = 'rejected'")->c,
+            'total' => (int) DB::selectOne("SELECT COUNT(DISTINCT tmdb_id, type) as c FROM {$table}")->c,
+        ];
+
+        return view('admin.vod-requests.index', compact('requests', 'stats', 'groupStats', 'status', 'type', 'search'));
     }
 
     public function show($id)
@@ -105,6 +134,63 @@ class VodRequestController extends Controller
             'addedDate' => $addedDate,
             'tmdbDetails' => $tmdbDetails,
         ]);
+    }
+
+    public function checkXui(Request $request)
+    {
+        if (!Auth::user()->isAdmin()) {
+            return response()->json(['error' => 'Não autorizado'], 403);
+        }
+
+        $request->validate([
+            'tmdb_id' => 'required|integer',
+            'type' => 'required|in:movie,series',
+        ]);
+
+        $tmdbId = (int) $request->input('tmdb_id');
+        $type = $request->input('type');
+
+        try {
+            $existing = $this->tmdb->checkExistsInXui($tmdbId, $type);
+        } catch (\Exception $e) {
+            Log::error('Admin VodRequest: checkXui failed', ['tmdb_id' => $tmdbId, 'error' => $e->getMessage()]);
+            return response()->json(['exists' => false, 'error' => 'Erro ao consultar servidor: ' . $e->getMessage()]);
+        }
+
+        if ($existing) {
+            $categoryName = 'Sem categoria';
+            try {
+                $categoryName = $this->tmdb->getCategoryName($existing->category_id ?? null);
+            } catch (\Exception $e) {
+                Log::warning('Admin VodRequest: getCategoryName failed', ['error' => $e->getMessage()]);
+            }
+
+            $addedDate = null;
+            try {
+                if ($type === 'movie' && !empty($existing->added)) {
+                    $addedDate = Carbon::createFromTimestamp((int) $existing->added)->format('d/m/Y H:i');
+                } elseif ($type === 'series' && !empty($existing->last_modified)) {
+                    $addedDate = Carbon::createFromTimestamp((int) $existing->last_modified)->format('d/m/Y H:i');
+                }
+            } catch (\Exception $e) {
+                Log::warning('Admin VodRequest: date parse failed', ['error' => $e->getMessage()]);
+            }
+
+            $name = $type === 'movie' ? ($existing->stream_display_name ?? 'Sem nome') : ($existing->title ?? 'Sem nome');
+
+            return response()->json([
+                'exists' => true,
+                'data' => [
+                    'name' => $name,
+                    'category' => $categoryName,
+                    'added_date' => $addedDate,
+                    'year' => $existing->year ?? null,
+                    'rating' => $existing->rating ?? null,
+                ],
+            ]);
+        }
+
+        return response()->json(['exists' => false]);
     }
 
     public function resolve(Request $request, $id)
