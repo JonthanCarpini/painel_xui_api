@@ -12,6 +12,7 @@ use App\Models\TicketReply;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
 
 class ChannelTestController extends Controller
 {
@@ -206,31 +207,46 @@ class ChannelTestController extends Controller
         $targetUrl = 'http://' . $serverIp . '/' . ltrim($path, '/');
 
         try {
-            $client = new \GuzzleHttp\Client();
-            $response = $client->request('GET', $targetUrl, [
-                'timeout' => 60,
-                'connect_timeout' => 10,
-            ]);
+            Log::debug('[ProxyXUI] Fetching: ' . $targetUrl);
 
-            $contentType = $response->getHeaderLine('Content-Type') ?: 'application/octet-stream';
-            $body = (string) $response->getBody();
+            $response = Http::timeout(60)
+                ->connectTimeout(10)
+                ->withoutVerifying()
+                ->get($targetUrl);
+
+            if ($response->failed()) {
+                Log::warning('[ProxyXUI] Upstream returned ' . $response->status() . ' for: ' . $targetUrl);
+                return response($response->body(), $response->status(), [
+                    'Content-Type' => $response->header('Content-Type') ?: 'text/plain',
+                    'Access-Control-Allow-Origin' => '*',
+                ]);
+            }
+
+            $contentType = $response->header('Content-Type') ?: 'application/octet-stream';
+            $body = $response->body();
 
             $isManifest = str_contains($contentType, 'mpegurl')
                 || str_contains($contentType, 'vnd.apple')
                 || str_ends_with($path, '.m3u8')
-                || str_starts_with($body, '#EXTM3U');
+                || (strlen($body) < 100000 && str_starts_with(trim($body), '#EXTM3U'));
 
             if ($isManifest) {
+                Log::debug('[ProxyXUI] Rewriting manifest: ' . $path);
                 $body = $this->rewriteManifestUrls($body, $serverIp);
             }
 
-            return response($body, $response->getStatusCode(), [
+            return response($body, 200, [
                 'Content-Type' => $contentType,
                 'Cache-Control' => 'no-cache',
                 'Access-Control-Allow-Origin' => '*',
             ]);
         } catch (\Exception $e) {
-            abort(502, 'Erro ao conectar no servidor');
+            Log::error('[ProxyXUI] Exception: ' . $e->getMessage() . ' | URL: ' . $targetUrl);
+            return response()->json([
+                'error' => 'Erro ao conectar no servidor XUI',
+                'details' => $e->getMessage(),
+                'url' => $targetUrl,
+            ], 502);
         }
     }
 
