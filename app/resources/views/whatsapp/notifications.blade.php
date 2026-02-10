@@ -63,7 +63,13 @@
     </div>
 
     {{-- Abas por período --}}
-    <div x-data="{ activeTab: '{{ collect($groups)->first(fn($g) => count($g['clients']) > 0) ? collect($groups)->search(fn($g) => count($g['clients']) > 0) : 'today' }}' }">
+    @php
+        $defaultTab = 'today';
+        foreach ($groups as $key => $g) {
+            if (count($g['clients']) > 0) { $defaultTab = $key; break; }
+        }
+    @endphp
+    <div x-data="{ activeTab: '{{ $defaultTab }}' }">
         {{-- Navegação das abas --}}
         <div class="flex bg-white dark:bg-dark-300 border border-gray-200 dark:border-dark-200 rounded-xl p-1 mb-6 shadow-sm">
             @foreach($groups as $type => $group)
@@ -78,7 +84,7 @@
 
         {{-- Conteúdo das abas --}}
         @foreach($groups as $type => $group)
-        <div x-show="activeTab === '{{ $type }}'" x-cloak>
+        <div x-show="activeTab === '{{ $type }}'" x-transition>
             @if(count($group['clients']) > 0)
             <div class="bg-white dark:bg-dark-300 border border-gray-200 dark:border-dark-200 rounded-xl overflow-hidden shadow-sm">
                 <div class="overflow-x-auto">

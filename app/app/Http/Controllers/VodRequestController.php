@@ -77,27 +77,41 @@ class VodRequestController extends Controller
         $tmdbId = (int) $request->input('tmdb_id');
         $type = $request->input('type');
 
-        $existing = $this->tmdb->checkExistsInXui($tmdbId, $type);
+        try {
+            $existing = $this->tmdb->checkExistsInXui($tmdbId, $type);
+        } catch (\Exception $e) {
+            \Log::error('VodRequest: checkExistsInXui failed', ['tmdb_id' => $tmdbId, 'type' => $type, 'error' => $e->getMessage()]);
+            $existing = null;
+        }
 
         if ($existing) {
-            $categoryName = $this->tmdb->getCategoryName($existing->category_id ?? null);
+            $categoryName = 'Sem categoria';
+            try {
+                $categoryName = $this->tmdb->getCategoryName($existing->category_id ?? null);
+            } catch (\Exception $e) {
+                \Log::warning('VodRequest: getCategoryName failed', ['error' => $e->getMessage()]);
+            }
 
             $addedDate = null;
-            if ($type === 'movie' && $existing->added) {
-                $addedDate = Carbon::createFromTimestamp($existing->added)->format('d/m/Y H:i');
-            } elseif ($type === 'series' && $existing->last_modified) {
-                $addedDate = Carbon::createFromTimestamp($existing->last_modified)->format('d/m/Y H:i');
+            try {
+                if ($type === 'movie' && !empty($existing->added)) {
+                    $addedDate = Carbon::createFromTimestamp((int) $existing->added)->format('d/m/Y H:i');
+                } elseif ($type === 'series' && !empty($existing->last_modified)) {
+                    $addedDate = Carbon::createFromTimestamp((int) $existing->last_modified)->format('d/m/Y H:i');
+                }
+            } catch (\Exception $e) {
+                \Log::warning('VodRequest: date parse failed', ['error' => $e->getMessage()]);
             }
 
             return response()->json([
                 'exists' => true,
                 'data' => [
-                    'name' => $type === 'movie' ? $existing->stream_display_name : $existing->title,
-                    'cover' => $type === 'movie' ? $existing->stream_icon : $existing->cover,
+                    'name' => $type === 'movie' ? ($existing->stream_display_name ?? 'Sem nome') : ($existing->title ?? 'Sem nome'),
+                    'cover' => $type === 'movie' ? ($existing->stream_icon ?? null) : ($existing->cover ?? null),
                     'category' => $categoryName,
                     'added_date' => $addedDate,
-                    'year' => $existing->year,
-                    'rating' => $existing->rating,
+                    'year' => $existing->year ?? null,
+                    'rating' => $existing->rating ?? null,
                 ],
             ]);
         }

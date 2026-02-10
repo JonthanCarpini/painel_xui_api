@@ -100,8 +100,27 @@
                     <span class="text-gray-500 dark:text-gray-400">Verificando no servidor...</span>
                 </div>
 
+                <!-- Erro na verificação -->
+                <div x-show="!checking && checkError" x-cloak>
+                    <div class="bg-red-50 dark:bg-red-500/10 border border-red-200 dark:border-red-500/30 rounded-xl p-4 mb-4">
+                        <div class="flex items-center gap-2 mb-2">
+                            <i class="bi bi-exclamation-triangle-fill text-red-500 text-lg"></i>
+                            <span class="text-red-700 dark:text-red-400 font-semibold">Erro na verificação</span>
+                        </div>
+                        <p class="text-red-600 dark:text-red-400 text-sm" x-text="checkError"></p>
+                    </div>
+                    <div class="flex gap-3">
+                        <button @click="selectedItem = null; checkError = null" class="flex-1 py-3 bg-gray-200 dark:bg-dark-200 hover:bg-gray-300 dark:hover:bg-dark-100 text-gray-700 dark:text-gray-300 rounded-xl font-medium transition-colors">
+                            Fechar
+                        </button>
+                        <button @click="selectItem(selectedItem)" class="flex-1 py-3 bg-orange-500 hover:bg-orange-600 text-white rounded-xl font-medium transition-colors flex items-center justify-center gap-2">
+                            <i class="bi bi-arrow-repeat"></i> Tentar novamente
+                        </button>
+                    </div>
+                </div>
+
                 <!-- Resultado: já existe no servidor -->
-                <div x-show="!checking && checkResult?.exists" x-cloak>
+                <div x-show="!checking && !checkError && checkResult?.exists" x-cloak>
                     <div class="bg-green-50 dark:bg-green-500/10 border border-green-200 dark:border-green-500/30 rounded-xl p-4 mb-4">
                         <div class="flex items-center gap-2 mb-3">
                             <i class="bi bi-check-circle-fill text-green-500 text-lg"></i>
@@ -138,7 +157,7 @@
                 </div>
 
                 <!-- Resultado: não existe, pode solicitar -->
-                <div x-show="!checking && checkResult && !checkResult.exists" x-cloak>
+                <div x-show="!checking && !checkError && checkResult && !checkResult.exists" x-cloak>
                     <!-- Info do filme -->
                     <p class="text-gray-600 dark:text-gray-400 text-sm mb-4 line-clamp-4" x-text="selectedItem?.overview"></p>
 
@@ -293,17 +312,24 @@ function vodSearch() {
             }
         },
 
+        checkError: null,
+
         async selectItem(item) {
             this.selectedItem = item;
             this.checking = true;
             this.checkResult = null;
+            this.checkError = null;
             this.submitSuccess = false;
 
             try {
                 const resp = await fetch(`{{ route('vod-requests.check') }}?tmdb_id=${item.tmdb_id}&type=${this.type}`);
+                if (!resp.ok) {
+                    this.checkError = 'Erro ao verificar no servidor (HTTP ' + resp.status + ')';
+                    return;
+                }
                 this.checkResult = await resp.json();
             } catch (e) {
-                this.checkResult = { exists: false, already_requested: false };
+                this.checkError = 'Erro de conexão ao verificar no servidor.';
             } finally {
                 this.checking = false;
             }
