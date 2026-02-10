@@ -50,12 +50,14 @@ class ChannelTestController extends Controller
             return response()->json(['error' => 'Nenhum item encontrado nesta categoria'], 404);
         }
 
-        $result = $channels->map(function ($channel) {
+        $xuiProxyBase = $this->getXuiProxyBase();
+
+        $result = $channels->map(function ($channel) use ($type, $xuiProxyBase) {
             return [
                 'id' => $channel->id,
                 'name' => $channel->name,
                 'icon' => $this->ensureHttps($channel->logo_url),
-                'stream_url' => $this->ensureHttps($channel->stream_url),
+                'stream_url' => $this->buildOpaqueStreamUrl($channel, $type, $xuiProxyBase),
                 'stream_id' => $channel->stream_id,
             ];
         });
@@ -190,6 +192,32 @@ class ChannelTestController extends Controller
         } catch (\Exception $e) {
             return response()->json(['error' => 'Erro ao reiniciar: ' . $e->getMessage()], 500);
         }
+    }
+
+    /**
+     * Gera URL opaca sem credenciais do fantasma.
+     * Ex: https://xui.domain/stream/live/6.m3u8
+     * O Nginx proxy injeta as credenciais internamente.
+     */
+    private function buildOpaqueStreamUrl($channel, string $type, string $xuiProxyBase): string
+    {
+        $streamUrl = $channel->stream_url ?? '';
+
+        // Extrair extensão da URL original
+        $ext = 'm3u8'; // default para live
+        if (preg_match('/\.(\w+)(\?|$)/', $streamUrl, $m)) {
+            $ext = $m[1];
+        } elseif ($type === 'movie') {
+            $ext = 'mp4';
+        }
+
+        $streamId = $channel->stream_id;
+        if (empty($streamId)) {
+            // Fallback: usar URL original convertida
+            return $this->ensureHttps($streamUrl);
+        }
+
+        return "{$xuiProxyBase}/stream/{$type}/{$streamId}.{$ext}";
     }
 
     private function ensureHttps(?string $url): ?string

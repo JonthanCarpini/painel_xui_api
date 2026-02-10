@@ -124,6 +124,9 @@ class SettingsController extends Controller
                     if (!$syncResult['success']) {
                         return back()->withErrors(['error' => 'Credenciais salvas, mas falha ao baixar lista de canais: ' . $syncResult['message']])->withInput();
                     }
+
+                    // Notificar SaaS para atualizar proxy Nginx
+                    $this->notifySaasGhostUpdate($username, $password);
                 }
             }
 
@@ -308,5 +311,28 @@ class SettingsController extends Controller
 
         return redirect()->route('settings.index', ['#notices'])
             ->with('success', 'Aviso removido com sucesso!');
+    }
+
+    private function notifySaasGhostUpdate(string $username, string $password): void
+    {
+        $saasApiUrl = env('SAAS_API_URL');
+        $instanceToken = env('INSTANCE_TOKEN');
+
+        if (empty($saasApiUrl) || empty($instanceToken)) {
+            return;
+        }
+
+        $url = rtrim($saasApiUrl, '/') . "/api/instance/{$instanceToken}/ghost-credentials";
+
+        try {
+            Http::timeout(15)->post($url, [
+                'username' => $username,
+                'password' => $password,
+            ]);
+        } catch (\Throwable $e) {
+            Log::warning("Settings: falha ao notificar SaaS sobre ghost update", [
+                'error' => $e->getMessage(),
+            ]);
+        }
     }
 }

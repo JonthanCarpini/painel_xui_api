@@ -7,6 +7,7 @@ use App\Models\AppSetting;
 use App\Services\XuiApiService;
 use App\Services\ChannelService;
 use Illuminate\Support\Str;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 
 class UpdateGhostClient extends Command
@@ -93,11 +94,46 @@ class UpdateGhostClient extends Command
         if ($syncResult['success']) {
             $this->info("Canais sincronizados com sucesso. Total: " . $syncResult['count']);
             Log::info("Ghost Client Rotation: Success. Password rotated and channels synced.");
-            return 0;
         } else {
             $this->error("Erro na sincronização de canais: " . $syncResult['message']);
             Log::error("Ghost Client Rotation: Channels sync failed. " . $syncResult['message']);
             return 1;
+        }
+
+        // 6. Notificar SaaS para atualizar proxy Nginx com novas credenciais
+        $this->notifySaasProxyUpdate($username, $newPassword);
+
+        return 0;
+    }
+
+    private function notifySaasProxyUpdate(string $username, string $password): void
+    {
+        $saasApiUrl = env('SAAS_API_URL');
+        $instanceToken = env('INSTANCE_TOKEN');
+
+        if (empty($saasApiUrl) || empty($instanceToken)) {
+            $this->warn("SAAS_API_URL ou INSTANCE_TOKEN não configurados. Proxy não atualizado.");
+            return;
+        }
+
+        $url = rtrim($saasApiUrl, '/') . "/api/instance/{$instanceToken}/ghost-credentials";
+
+        try {
+            $response = Http::timeout(15)->post($url, [
+                'username' => $username,
+                'password' => $password,
+            ]);
+
+            if ($response->successful()) {
+                $this->info("Proxy Nginx atualizado com novas credenciais via SaaS API.");
+                Log::info("Ghost Rotation: SaaS proxy updated successfully.");
+            } else {
+                $this->warn("Falha ao atualizar proxy via SaaS API: HTTP " . $response->status());
+                Log::warning("Ghost Rotation: SaaS proxy update failed", ['status' => $response->status()]);
+            }
+        } catch (\Throwable $e) {
+            $this->warn("Erro ao notificar SaaS: " . $e->getMessage());
+            Log::warning("Ghost Rotation: SaaS notification failed", ['error' => $e->getMessage()]);
         }
     }
 }
