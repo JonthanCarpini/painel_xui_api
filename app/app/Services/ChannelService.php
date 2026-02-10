@@ -126,7 +126,7 @@ class ChannelService
 
     private function getServerIp(): string
     {
-        return '109.205.178.143';
+        return env('XUI_DB_HOST', '109.205.178.143');
     }
 
     private function getDnsBase(): ?string

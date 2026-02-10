@@ -231,7 +231,7 @@
     let allChannels = [];
     let currentChannelData = null;
 
-    const SERVER_IP = '109.205.178.143';
+    const SERVER_IP = '{{ $xuiIp }}';
     const PROXY_BASE = '{{ route("channel-test.proxy-xui") }}';
 
     function proxyUrl(url) {

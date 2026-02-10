@@ -27,6 +27,7 @@ class ChannelTestController extends Controller
 
         return view('channel-test.index', [
             'categoriesByType' => $categoriesByType,
+            'xuiIp' => $this->getXuiIp(),
         ]);
     }
 
@@ -203,7 +204,7 @@ class ChannelTestController extends Controller
             abort(400);
         }
 
-        $serverIp = '109.205.178.143';
+        $serverIp = $this->getXuiIp();
         $targetUrl = 'http://' . $serverIp . '/' . ltrim($path, '/');
 
         try {
@@ -300,7 +301,7 @@ class ChannelTestController extends Controller
             return $url;
         }
 
-        $serverIp = '109.205.178.143';
+        $serverIp = $this->getXuiIp();
         if (str_contains($url, $serverIp)) {
             // 1. Tentar DNS com HTTPS
             $dnsBase = $this->getDnsBase();
@@ -314,6 +315,11 @@ class ChannelTestController extends Controller
         }
 
         return $url;
+    }
+
+    private function getXuiIp(): string
+    {
+        return env('XUI_DB_HOST', '109.205.178.143');
     }
 
     private function getDnsBase(): ?string
