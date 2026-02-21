@@ -95,8 +95,11 @@ class PackageService
             'trial_duration_in'     => $p['trial_duration_in'] ?? 'days',
             'max_connections'       => (int) ($p['max_connections'] ?? 1),
             'bouquets'              => is_string($p['bouquets'] ?? null)
-                                        ? (json_decode($p['bouquets'], true) ?? [])
-                                        : ($p['bouquets'] ?? []),
+                                        ? $p['bouquets']
+                                        : json_encode($p['bouquets'] ?? []),
+            'output_formats'        => is_string($p['output_formats'] ?? null)
+                                        ? $p['output_formats']
+                                        : json_encode($p['output_formats'] ?? [1, 2]),
             'force_server_id'       => (int) ($p['force_server_id'] ?? 0),
         ];
     }

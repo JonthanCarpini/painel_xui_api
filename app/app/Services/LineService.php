@@ -38,8 +38,9 @@ class LineService
             }
         }
 
-        $expDate     = $this->calculateExpiration(time(), $duration, $unit);
-        $bouquetIds  = $this->resolveBouquetIds($data, $package);
+        $expDate      = $this->calculateExpiration(time(), $duration, $unit);
+        $bouquetIds   = $this->resolveBouquetIdsFromPackage($package);
+        $outputFormats = $this->resolveOutputFormats($package);
 
         $creditsBefore = null;
         if ($cost > 0 && !$isAdmin) {
@@ -57,7 +58,7 @@ class LineService
             'password'        => $data['password'],
             'member_id'       => (int)$data['member_id'],
             'exp_date'        => $expDate,
-            'max_connections' => $data['max_connections'] ?? $package->max_connections ?? 1,
+            'max_connections' => (int)($package->max_connections ?? 1),
             'is_trial'        => $isTrial ? 1 : 0,
             'contact'         => $data['phone'] ?? '',
             'admin_notes'     => !empty($data['notes']) ? $data['notes'] : 'Criado via Painel Office',
@@ -66,10 +67,8 @@ class LineService
         if (!empty($bouquetIds)) {
             $payload['bouquets_selected'] = $bouquetIds;
         }
-        if (!empty($data['access_output'])) {
-            $payload['access_output'] = $data['access_output'];
-        } elseif (!empty($data['allowed_outputs'])) {
-            $payload['access_output'] = $data['allowed_outputs'];
+        if (!empty($outputFormats)) {
+            $payload['access_output'] = $outputFormats;
         }
 
         $result = $this->api->createLine($payload);
@@ -259,12 +258,8 @@ class LineService
         ];
     }
 
-    private function resolveBouquetIds(array $data, object $package): array
+    private function resolveBouquetIdsFromPackage(object $package): array
     {
-        if (!empty($data['bouquet_ids']) && is_array($data['bouquet_ids'])) {
-            return array_values(array_map('intval', $data['bouquet_ids']));
-        }
-
         $raw = $package->bouquets ?? null;
         if ($raw) {
             $decoded = is_string($raw) ? json_decode($raw, true) : $raw;
@@ -272,8 +267,19 @@ class LineService
                 return array_values(array_map('intval', $decoded));
             }
         }
-
         return [];
+    }
+
+    private function resolveOutputFormats(object $package): array
+    {
+        $raw = $package->output_formats ?? null;
+        if ($raw) {
+            $decoded = is_string($raw) ? json_decode($raw, true) : $raw;
+            if (is_array($decoded)) {
+                return array_values(array_map('intval', $decoded));
+            }
+        }
+        return [1, 2];
     }
 
     private function resolveServerDns(?int $memberId): string

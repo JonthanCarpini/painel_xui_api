@@ -537,44 +537,34 @@ function submitRenewTrust() {
                                     data-duration="{{ $package->trial_duration ?? 24 }}"
                                     data-duration-in="{{ $package->trial_duration_in ?? 'hours' }}"
                                     data-connections="{{ $package->max_connections ?? 1 }}"
-                                    data-bouquets="{{ is_string($package->bouquets) ? $package->bouquets : json_encode($package->bouquets ?? []) }}">
+                                    data-bouquets="{{ $package->bouquets ?? '[]' }}"
+                                    data-output-formats="{{ $package->output_formats ?? '[1,2]' }}">
                                 {{ $package->package_name }} - {{ $package->trial_duration ?? 24 }} {{ $package->trial_duration_in ?? 'horas' }}
                             </option>
                         @endif
                     @endforeach
                 </select>
-                <input type="hidden" id="trialDurationValue" name="duration_value">
-                <input type="hidden" id="trialDurationUnit" name="duration_unit">
-                <input type="hidden" id="trialMaxConnections" name="max_connections">
             </div>
 
-            <div class="mb-4">
-                <label class="block text-sm font-medium text-gray-700 dark:text-gray-400 mb-2">Formato de Sa&iacute;da</label>
-                <div class="flex flex-wrap gap-3 p-3 bg-gray-50 dark:bg-dark-200 rounded-lg border border-gray-200 dark:border-0">
-                    <label class="flex items-center gap-2 p-2 bg-white dark:bg-dark-300 border border-gray-200 dark:border-dark-100 rounded-lg cursor-pointer hover:bg-gray-50 dark:hover:bg-dark-100 transition-colors">
-                        <input type="checkbox" name="access_output[]" value="1" checked class="w-4 h-4 text-orange-500 bg-gray-100 dark:bg-dark-200 border-gray-300 dark:border-dark-100 rounded focus:ring-orange-500">
-                        <span class="text-gray-700 dark:text-white text-sm">HLS</span>
-                    </label>
-                    <label class="flex items-center gap-2 p-2 bg-white dark:bg-dark-300 border border-gray-200 dark:border-dark-100 rounded-lg cursor-pointer hover:bg-gray-50 dark:hover:bg-dark-100 transition-colors">
-                        <input type="checkbox" name="access_output[]" value="2" checked class="w-4 h-4 text-orange-500 bg-gray-100 dark:bg-dark-200 border-gray-300 dark:border-dark-100 rounded focus:ring-orange-500">
-                        <span class="text-gray-700 dark:text-white text-sm">MPEGTS</span>
-                    </label>
-                    <label class="flex items-center gap-2 p-2 bg-white dark:bg-dark-300 border border-gray-200 dark:border-dark-100 rounded-lg cursor-pointer hover:bg-gray-50 dark:hover:bg-dark-100 transition-colors">
-                        <input type="checkbox" name="access_output[]" value="3" class="w-4 h-4 text-orange-500 bg-gray-100 dark:bg-dark-200 border-gray-300 dark:border-dark-100 rounded focus:ring-orange-500">
-                        <span class="text-gray-700 dark:text-white text-sm">RTMP</span>
-                    </label>
+            <div class="grid grid-cols-3 gap-3 mb-4">
+                <div>
+                    <label class="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Dura&ccedil;&atilde;o</label>
+                    <input type="text" id="trialDurationDisplay" readonly class="w-full px-3 py-2 bg-gray-100 dark:bg-dark-100 border border-gray-200 dark:border-dark-100 rounded-lg text-gray-500 dark:text-gray-400 text-sm cursor-not-allowed" value="-">
+                </div>
+                <div>
+                    <label class="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Conex&otilde;es</label>
+                    <input type="text" id="trialConnectionsDisplay" readonly class="w-full px-3 py-2 bg-gray-100 dark:bg-dark-100 border border-gray-200 dark:border-dark-100 rounded-lg text-gray-500 dark:text-gray-400 text-sm cursor-not-allowed" value="-">
+                </div>
+                <div>
+                    <label class="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Sa&iacute;da</label>
+                    <input type="text" id="trialOutputDisplay" readonly class="w-full px-3 py-2 bg-gray-100 dark:bg-dark-100 border border-gray-200 dark:border-dark-100 rounded-lg text-gray-500 dark:text-gray-400 text-sm cursor-not-allowed" value="-">
                 </div>
             </div>
 
             <div class="mb-4">
-                <label class="block text-sm font-medium text-gray-700 dark:text-gray-400 mb-3">Buqu&ecirc;s *</label>
-                <div id="trialBouquets" class="grid grid-cols-1 sm:grid-cols-2 gap-3 w-full max-h-60 overflow-y-auto p-4 bg-gray-50 dark:bg-dark-200 rounded-lg border border-gray-200 dark:border-0 custom-scrollbar">
-                    @foreach($bouquets as $bouquet)
-                        <label class="flex items-center gap-3 p-3 bg-white dark:bg-dark-300 border border-gray-200 dark:border-dark-100 rounded-lg hover:bg-gray-50 dark:hover:bg-dark-100 cursor-pointer transition-colors shadow-sm dark:shadow-none w-full">
-                            <input type="checkbox" name="bouquet_ids[]" value="{{ $bouquet->id }}" class="w-5 h-5 text-orange-500 bg-gray-100 dark:bg-dark-200 border-gray-300 dark:border-dark-100 rounded focus:ring-orange-500 focus:ring-2">
-                            <span class="text-gray-700 dark:text-white text-sm break-all">{{ $bouquet->bouquet_name }}</span>
-                        </label>
-                    @endforeach
+                <label class="block text-sm font-medium text-gray-700 dark:text-gray-400 mb-2">Buqu&ecirc;s do Pacote</label>
+                <div id="trialBouquetsDisplay" class="p-3 bg-gray-100 dark:bg-dark-100 rounded-lg border border-gray-200 dark:border-0 text-sm text-gray-500 dark:text-gray-400 max-h-32 overflow-y-auto">
+                    Selecione um pacote
                 </div>
             </div>
 
@@ -1166,53 +1156,45 @@ function generateTrialPassword() {
     document.getElementById('trialPassword').value = random.toString();
 }
 
+const trialBouquetNames = @json(collect($bouquets)->pluck('bouquet_name', 'id'));
+const trialUnitMap = { 'hours':'hora(s)','hour':'hora(s)','days':'dia(s)','day':'dia(s)','months':'mês(es)','month':'mês(es)','years':'ano(s)','year':'ano(s)' };
+const trialOutputNames = { 1:'HLS', 2:'MPEGTS', 3:'RTMP' };
+
 function updateTrialPackage(select) {
-    const selectedOption = select.options[select.selectedIndex];
-    if (select.value) {
-        document.getElementById('trialDurationValue').value = selectedOption.getAttribute('data-duration');
-        document.getElementById('trialDurationUnit').value = selectedOption.getAttribute('data-duration-in');
-        document.getElementById('trialMaxConnections').value = selectedOption.getAttribute('data-connections');
-        
-        // Atualizar bouquets (checkboxes) baseado no pacote
-        const bouquetsAttr = selectedOption.getAttribute('data-bouquets');
-        if (bouquetsAttr) {
-            try {
-                let packageBouquets = JSON.parse(bouquetsAttr);
-                
-                // Se ainda for string após o primeiro parse, parse novamente (caso de json encoded string no atributo)
-                if (typeof packageBouquets === 'string') {
-                    try {
-                        packageBouquets = JSON.parse(packageBouquets);
-                    } catch (e) {
-                        console.error('Erro no segundo parse de bouquets:', e);
-                    }
-                }
-                
-                // Garantir que é array e normalizar para strings para comparação
-                if (Array.isArray(packageBouquets)) {
-                    const bouquetsToSelect = packageBouquets.map(String);
-                    const checkboxes = document.querySelectorAll('#trialBouquets input[type="checkbox"]');
-                    
-                    checkboxes.forEach(cb => {
-                        if (bouquetsToSelect.includes(cb.value.toString())) {
-                            cb.checked = true;
-                        } else {
-                            cb.checked = false;
-                        }
-                    });
-                }
-            } catch (e) {
-                console.error('Erro ao processar bouquets:', e);
-            }
-        }
-    } else {
-        document.getElementById('trialDurationValue').value = '';
-        document.getElementById('trialDurationUnit').value = '';
-        document.getElementById('trialMaxConnections').value = '';
-        
-        // Desmarcar todos
-        document.querySelectorAll('#trialBouquets input[type="checkbox"]').forEach(cb => cb.checked = false);
+    const opt = select.options[select.selectedIndex];
+    if (!select.value) {
+        document.getElementById('trialDurationDisplay').value = '-';
+        document.getElementById('trialConnectionsDisplay').value = '-';
+        document.getElementById('trialOutputDisplay').value = '-';
+        document.getElementById('trialBouquetsDisplay').innerHTML = 'Selecione um pacote';
+        return;
     }
+
+    const duration = opt.dataset.duration;
+    const durationIn = opt.dataset.durationIn;
+    const connections = opt.dataset.connections;
+
+    document.getElementById('trialDurationDisplay').value = `${duration} ${trialUnitMap[durationIn] || durationIn}`;
+    document.getElementById('trialConnectionsDisplay').value = `${connections} conexão${connections > 1 ? 'ões' : ''}`;
+
+    try {
+        const formats = JSON.parse(opt.dataset.outputFormats || '[1,2]');
+        document.getElementById('trialOutputDisplay').value = formats.map(id => trialOutputNames[id] || `#${id}`).join(', ');
+    } catch(e) { document.getElementById('trialOutputDisplay').value = 'HLS, MPEGTS'; }
+
+    try {
+        const bIds = JSON.parse(opt.dataset.bouquets || '[]');
+        const el = document.getElementById('trialBouquetsDisplay');
+        if (bIds.length > 0) {
+            const tags = bIds.map(id => {
+                const name = trialBouquetNames[id] || `Bouquet #${id}`;
+                return `<span class="inline-block px-2 py-1 bg-orange-100 dark:bg-orange-500/20 text-orange-700 dark:text-orange-400 rounded text-xs font-medium">${name}</span>`;
+            });
+            el.innerHTML = `<div class="flex flex-wrap gap-1">${tags.join('')}</div>`;
+        } else {
+            el.innerHTML = 'Nenhum buquê no pacote';
+        }
+    } catch(e) { document.getElementById('trialBouquetsDisplay').innerHTML = 'Erro'; }
 }
 
 function submitTrial(event) {
@@ -1224,18 +1206,6 @@ function submitTrial(event) {
     if (!pkgSelect.value) {
         alert('Selecione um pacote de teste.');
         return;
-    }
-    
-    // Verificar se há buquês selecionados
-    const checkedBouquets = document.querySelectorAll('#trialBouquets input[type="checkbox"]:checked');
-    if (checkedBouquets.length === 0) {
-        alert('Selecione pelo menos um buquê para o teste.');
-        return;
-    }
-
-    // Garantir que os campos ocultos estejam preenchidos
-    if (!document.getElementById('trialDurationValue').value) {
-        updateTrialPackage(pkgSelect);
     }
     
     const formData = new FormData(form);

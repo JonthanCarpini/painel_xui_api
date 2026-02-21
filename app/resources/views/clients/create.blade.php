@@ -53,7 +53,8 @@
                                         data-duration="{{ $package->official_duration ?? 30 }}"
                                         data-duration-in="{{ $package->official_duration_in ?? 'days' }}"
                                         data-connections="{{ $package->max_connections ?? 1 }}"
-                                        data-bouquets="{{ json_encode($package->bouquets ?? []) }}"
+                                        data-bouquets="{{ $package->bouquets ?? '[]' }}"
+                                        data-output-formats="{{ $package->output_formats ?? '[1,2]' }}"
                                         {{ old('package_id') == $package->id ? 'selected' : '' }}>
                                     {{ $package->package_name }} - {{ $package->official_duration ?? 30 }} {{ $package->official_duration_in ?? 'dias' }}
                                     @if($package->official_credits > 0)
@@ -65,19 +66,21 @@
                     </select>
                 </div>
 
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
                     <div>
-                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-400 mb-2">Dura&ccedil;&atilde;o *</label>
-                        <input type="text" id="durationDisplay" readonly class="w-full px-4 py-2 bg-gray-100 dark:bg-dark-100 border border-gray-300 dark:border-dark-100 rounded-lg text-gray-500 dark:text-gray-400 cursor-not-allowed" value="Selecione um pacote" placeholder="Autom&aacute;tico">
-                        <input type="hidden" id="durationValue" name="duration_value" value="">
-                        <input type="hidden" id="durationUnit" name="duration_unit" value="">
-                        <p class="text-xs text-gray-500 mt-1">Definido automaticamente pelo pacote</p>
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-400 mb-2">Dura&ccedil;&atilde;o</label>
+                        <input type="text" id="durationDisplay" readonly class="w-full px-4 py-2 bg-gray-100 dark:bg-dark-100 border border-gray-300 dark:border-dark-100 rounded-lg text-gray-500 dark:text-gray-400 cursor-not-allowed" value="Selecione um pacote">
+                        <p class="text-xs text-gray-500 mt-1">Definido pelo pacote</p>
                     </div>
                     <div>
-                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-400 mb-2">Conex&otilde;es Simult&acirc;neas *</label>
-                        <input type="text" id="connectionsDisplay" readonly class="w-full px-4 py-2 bg-gray-100 dark:bg-dark-100 border border-gray-300 dark:border-dark-100 rounded-lg text-gray-500 dark:text-gray-400 cursor-not-allowed" value="Selecione um pacote" placeholder="Autom&aacute;tico">
-                        <input type="hidden" id="maxConnections" name="max_connections" value="">
-                        <p class="text-xs text-gray-500 mt-1">Definido automaticamente pelo pacote</p>
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-400 mb-2">Conex&otilde;es</label>
+                        <input type="text" id="connectionsDisplay" readonly class="w-full px-4 py-2 bg-gray-100 dark:bg-dark-100 border border-gray-300 dark:border-dark-100 rounded-lg text-gray-500 dark:text-gray-400 cursor-not-allowed" value="Selecione um pacote">
+                        <p class="text-xs text-gray-500 mt-1">Definido pelo pacote</p>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-400 mb-2">Formato de Sa&iacute;da</label>
+                        <input type="text" id="outputDisplay" readonly class="w-full px-4 py-2 bg-gray-100 dark:bg-dark-100 border border-gray-300 dark:border-dark-100 rounded-lg text-gray-500 dark:text-gray-400 cursor-not-allowed" value="Selecione um pacote">
+                        <p class="text-xs text-gray-500 mt-1">Definido pelo pacote</p>
                     </div>
                 </div>
 
@@ -98,35 +101,11 @@
                 </div>
 
                 <div class="mb-6">
-                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-400 mb-2">Formato de Sa&iacute;da (Access Output)</label>
-                    <div class="flex flex-wrap gap-3 p-4 bg-gray-50 dark:bg-dark-200 rounded-lg border border-gray-200 dark:border-0">
-                        <label class="flex items-center gap-2 p-2 bg-white dark:bg-dark-300 border border-gray-200 dark:border-dark-100 rounded-lg cursor-pointer hover:bg-gray-50 dark:hover:bg-dark-100 transition-colors">
-                            <input type="checkbox" name="access_output[]" value="1" checked class="w-5 h-5 text-orange-500 bg-gray-100 dark:bg-dark-200 border-gray-300 dark:border-dark-100 rounded focus:ring-orange-500 focus:ring-2">
-                            <span class="text-gray-700 dark:text-white text-sm">HLS (M3U8)</span>
-                        </label>
-                        <label class="flex items-center gap-2 p-2 bg-white dark:bg-dark-300 border border-gray-200 dark:border-dark-100 rounded-lg cursor-pointer hover:bg-gray-50 dark:hover:bg-dark-100 transition-colors">
-                            <input type="checkbox" name="access_output[]" value="2" checked class="w-5 h-5 text-orange-500 bg-gray-100 dark:bg-dark-200 border-gray-300 dark:border-dark-100 rounded focus:ring-orange-500 focus:ring-2">
-                            <span class="text-gray-700 dark:text-white text-sm">MPEGTS (TS)</span>
-                        </label>
-                        <label class="flex items-center gap-2 p-2 bg-white dark:bg-dark-300 border border-gray-200 dark:border-dark-100 rounded-lg cursor-pointer hover:bg-gray-50 dark:hover:bg-dark-100 transition-colors">
-                            <input type="checkbox" name="access_output[]" value="3" class="w-5 h-5 text-orange-500 bg-gray-100 dark:bg-dark-200 border-gray-300 dark:border-dark-100 rounded focus:ring-orange-500 focus:ring-2">
-                            <span class="text-gray-700 dark:text-white text-sm">RTMP</span>
-                        </label>
+                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-400 mb-3">Canais (Buqu&ecirc;s) do Pacote</label>
+                    <div id="bouquetsDisplay" class="p-4 bg-gray-100 dark:bg-dark-100 rounded-lg border border-gray-200 dark:border-0 text-sm text-gray-500 dark:text-gray-400">
+                        Selecione um pacote para ver os buqu&ecirc;s inclu&iacute;dos
                     </div>
-                    <p class="text-xs text-gray-500 mt-1">Formatos de streaming permitidos para este cliente</p>
-                </div>
-
-                <div class="mb-6">
-                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-400 mb-3">Selecione os Canais (Buqu&ecirc;s) *</label>
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-3 max-h-64 overflow-y-auto p-4 bg-gray-50 dark:bg-dark-200 rounded-lg border border-gray-200 dark:border-0 custom-scrollbar">
-                        @foreach($bouquets as $bouquet)
-                            <label class="flex items-center gap-3 p-3 bg-white dark:bg-dark-300 border border-gray-200 dark:border-dark-100 rounded-lg hover:bg-gray-50 dark:hover:bg-dark-100 cursor-pointer transition-colors shadow-sm dark:shadow-none">
-                                <input type="checkbox" name="bouquet_ids[]" value="{{ $bouquet->id }}" {{ in_array($bouquet->id, old('bouquet_ids', [])) ? 'checked' : '' }} class="w-5 h-5 text-orange-500 bg-gray-100 dark:bg-dark-200 border-gray-300 dark:border-dark-100 rounded focus:ring-orange-500 focus:ring-2">
-                                <span class="text-gray-700 dark:text-white text-sm">{{ $bouquet->bouquet_name }}</span>
-                            </label>
-                        @endforeach
-                    </div>
-                    <p class="text-xs text-gray-500 mt-2">Selecione pelo menos um canal</p>
+                    <p class="text-xs text-gray-500 mt-2">Definido automaticamente pelo pacote selecionado</p>
                 </div>
 
                 <div class="flex gap-3">
@@ -192,19 +171,27 @@
 <script>
     const packageSelect = document.getElementById('packageSelect');
     const durationDisplay = document.getElementById('durationDisplay');
-    const durationValue = document.getElementById('durationValue');
-    const durationUnit = document.getElementById('durationUnit');
     const connectionsDisplay = document.getElementById('connectionsDisplay');
-    const maxConnections = document.getElementById('maxConnections');
+    const outputDisplay = document.getElementById('outputDisplay');
+    const bouquetsDisplay = document.getElementById('bouquetsDisplay');
 
-    // Gerar username aleatório
+    const bouquetNames = @json(collect($bouquets)->pluck('bouquet_name', 'id'));
+
+    const unitMap = {
+        'hours': 'hora(s)', 'hour': 'hora(s)',
+        'days': 'dia(s)', 'day': 'dia(s)',
+        'months': 'mês(es)', 'month': 'mês(es)',
+        'years': 'ano(s)', 'year': 'ano(s)'
+    };
+
+    const outputNames = { 1: 'HLS (M3U8)', 2: 'MPEGTS (TS)', 3: 'RTMP' };
+
     function generateUsername() {
         const prefix = 'user';
         const random = Math.floor(Math.random() * 10000).toString().padStart(4, '0');
         document.getElementById('usernameField').value = prefix + random;
     }
 
-    // Gerar senha aleatória
     function generatePassword() {
         const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789';
         let password = '';
@@ -214,11 +201,9 @@
         document.getElementById('passwordField').value = password;
     }
 
-    // Máscara de telefone
-    document.getElementById('phoneField').addEventListener('input', function(e) {
+    document.getElementById('phoneField')?.addEventListener('input', function(e) {
         let value = e.target.value.replace(/\D/g, '');
         if (value.length > 11) value = value.slice(0, 11);
-        
         if (value.length > 10) {
             value = value.replace(/^(\d{2})(\d{5})(\d{4}).*/, '($1) $2-$3');
         } else if (value.length > 6) {
@@ -228,65 +213,46 @@
         } else if (value.length > 0) {
             value = value.replace(/^(\d*)/, '($1');
         }
-        
         e.target.value = value;
     });
 
     packageSelect.addEventListener('change', function() {
-        const selectedOption = this.options[this.selectedIndex];
-        
-        if (this.value) {
-            const duration = selectedOption.getAttribute('data-duration');
-            const durationIn = selectedOption.getAttribute('data-duration-in');
-            const connections = selectedOption.getAttribute('data-connections');
-            const bouquets = selectedOption.getAttribute('data-bouquets');
-            
-            // Mapear unidades
-            const unitMap = {
-                'hours': 'hora(s)',
-                'hour': 'hora(s)',
-                'days': 'dia(s)',
-                'day': 'dia(s)',
-                'months': 'mês(es)',
-                'month': 'mês(es)',
-                'years': 'ano(s)',
-                'year': 'ano(s)'
-            };
-            
-            const unitDisplay = unitMap[durationIn] || durationIn;
-            
-            // Atualizar campos
-            durationDisplay.value = `${duration} ${unitDisplay}`;
-            durationValue.value = duration;
-            durationUnit.value = durationIn;
-            
-            connectionsDisplay.value = `${connections} Conexão${connections > 1 ? 'ões' : ''}`;
-            maxConnections.value = connections;
-
-            // Auto-selecionar bouquets do pacote
-            if (bouquets) {
-                try {
-                    const bouquetIds = JSON.parse(bouquets);
-                    document.querySelectorAll('input[name="bouquet_ids[]"]').forEach(checkbox => {
-                        checkbox.checked = bouquetIds.includes(parseInt(checkbox.value));
-                    });
-                } catch (e) {
-                    console.error('Erro ao parsear bouquets:', e);
-                }
-            }
-        } else {
+        const opt = this.options[this.selectedIndex];
+        if (!this.value) {
             durationDisplay.value = 'Selecione um pacote';
-            durationValue.value = '';
-            durationUnit.value = '';
             connectionsDisplay.value = 'Selecione um pacote';
-            maxConnections.value = '';
-            
-            // Desmarcar todos os bouquets
-            document.querySelectorAll('input[name="bouquet_ids[]"]').forEach(checkbox => {
-                checkbox.checked = false;
-            });
+            outputDisplay.value = 'Selecione um pacote';
+            bouquetsDisplay.innerHTML = 'Selecione um pacote para ver os buquês incluídos';
+            return;
         }
+
+        const duration = opt.dataset.duration;
+        const durationIn = opt.dataset.durationIn;
+        const connections = opt.dataset.connections;
+
+        durationDisplay.value = `${duration} ${unitMap[durationIn] || durationIn}`;
+        connectionsDisplay.value = `${connections} Conexão${connections > 1 ? 'ões' : ''}`;
+
+        try {
+            const formats = JSON.parse(opt.dataset.outputFormats || '[1,2]');
+            outputDisplay.value = formats.map(id => outputNames[id] || `#${id}`).join(', ');
+        } catch(e) { outputDisplay.value = 'HLS, MPEGTS'; }
+
+        try {
+            const bIds = JSON.parse(opt.dataset.bouquets || '[]');
+            if (bIds.length > 0) {
+                const tags = bIds.map(id => {
+                    const name = bouquetNames[id] || `Bouquet #${id}`;
+                    return `<span class="inline-block px-2 py-1 bg-orange-100 dark:bg-orange-500/20 text-orange-700 dark:text-orange-400 rounded text-xs font-medium">${name}</span>`;
+                });
+                bouquetsDisplay.innerHTML = `<div class="flex flex-wrap gap-2">${tags.join('')}</div>`;
+            } else {
+                bouquetsDisplay.innerHTML = 'Nenhum buquê definido no pacote';
+            }
+        } catch(e) { bouquetsDisplay.innerHTML = 'Erro ao carregar buquês'; }
     });
+
+    if (packageSelect.value) packageSelect.dispatchEvent(new Event('change'));
 </script>
 @endpush
 @endsection
