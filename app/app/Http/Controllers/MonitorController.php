@@ -44,6 +44,9 @@ class MonitorController extends Controller
         // Ordenar por date_start desc
         usort($connections, fn($a, $b) => ($b['date_start'] ?? 0) <=> ($a['date_start'] ?? 0));
 
+        // Converter para Collection de objetos para compatibilidade com a view
+        $connections = collect($connections)->map(fn($c) => (object) $c);
+
         return view('monitor.index', ['connections' => $connections]);
     }
 
