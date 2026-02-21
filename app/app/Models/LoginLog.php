@@ -6,8 +6,8 @@ use Illuminate\Database\Eloquent\Model;
 
 class LoginLog extends Model
 {
-    protected $connection = 'xui';
-    protected $table = 'login_logs';
+    // protected $connection = 'xui';
+    protected $table = 'reg_userlog';
     protected $primaryKey = 'id';
     public $timestamps = false;
 

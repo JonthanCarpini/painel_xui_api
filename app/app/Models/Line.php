@@ -6,8 +6,8 @@ use Illuminate\Database\Eloquent\Model;
 
 class Line extends Model
 {
-    protected $connection = 'xui';
-    protected $table = 'lines';
+    // protected $connection = 'xui';
+    protected $table = 'users';
     protected $primaryKey = 'id';
     public $timestamps = false;
 

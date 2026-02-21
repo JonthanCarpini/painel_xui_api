@@ -6,8 +6,8 @@ use Illuminate\Database\Eloquent\Model;
 
 class UserLog extends Model
 {
-    protected $connection = 'xui';
-    protected $table = 'users_logs';
+    // protected $connection = 'xui';
+    protected $table = 'user_logs';
     public $timestamps = false;
 
     protected $fillable = [

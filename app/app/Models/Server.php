@@ -6,8 +6,8 @@ use Illuminate\Database\Eloquent\Model;
 
 class Server extends Model
 {
-    protected $connection = 'xui';
-    protected $table = 'servers';
+    // protected $connection = 'xui';
+    protected $table = 'streaming_servers';
     protected $primaryKey = 'id';
     public $timestamps = false;
 

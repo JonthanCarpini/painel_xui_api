@@ -6,7 +6,7 @@ use Illuminate\Database\Eloquent\Model;
 
 class Stream extends Model
 {
-    protected $connection = 'xui';
+    // protected $connection = 'xui';
     protected $table = 'streams';
     protected $primaryKey = 'id';
     public $timestamps = false;

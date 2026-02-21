@@ -6,7 +6,7 @@ use Illuminate\Database\Eloquent\Model;
 
 class Bouquet extends Model
 {
-    protected $connection = 'xui';
+    // protected $connection = 'xui';
     protected $table = 'bouquets';
     protected $primaryKey = 'id';
     public $timestamps = false;

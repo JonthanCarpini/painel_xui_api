@@ -6,8 +6,8 @@ use Illuminate\Database\Eloquent\Model;
 
 class CreditLog extends Model
 {
-    protected $connection = 'xui';
-    protected $table = 'users_credits_logs';
+    // protected $connection = 'xui';
+    protected $table = 'credit_log';
     protected $primaryKey = 'id';
     public $timestamps = false;
 

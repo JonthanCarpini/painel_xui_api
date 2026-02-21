@@ -6,8 +6,8 @@ use Illuminate\Database\Eloquent\Model;
 
 class Package extends Model
 {
-    protected $connection = 'xui';
-    protected $table = 'users_packages';
+    // protected $connection = 'xui';
+    protected $table = 'packages';
     protected $primaryKey = 'id';
     public $timestamps = false;
 

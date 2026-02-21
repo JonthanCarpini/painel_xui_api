@@ -6,8 +6,8 @@ use Illuminate\Database\Eloquent\Model;
 
 class LineLive extends Model
 {
-    protected $connection = 'xui';
-    protected $table = 'lines_live';
+    // protected $connection = 'xui';
+    protected $table = 'user_active';
     protected $primaryKey = 'activity_id';
     public $timestamps = false;
 
