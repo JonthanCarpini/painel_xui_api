@@ -210,7 +210,7 @@ class ClientController extends Controller
         $validated = $request->validate([
             'username' => 'required|string|min:3|max:50',
             'password' => 'required|string|min:6',
-            'package_id' => 'required|integer|exists:xui.users_packages,id',
+            'package_id' => 'required|integer', 
             'bouquet_ids' => 'required|array|min:1',
             'max_connections' => 'required|integer|min:1|max:10',
             'email' => 'nullable|email',
@@ -219,6 +219,12 @@ class ClientController extends Controller
         ]);
 
         $user = Auth::user();
+
+        // Validar pacote via API
+        $package = $this->packages->find((int)$request->package_id);
+        if (!$package) {
+            return redirect()->back()->withInput()->with('error', 'Pacote inválido ou não encontrado na API.');
+        }
 
         try {
             $phone = $validated['phone'] ?? '';
@@ -503,29 +509,20 @@ class ClientController extends Controller
             if ($request->expectsJson()) {
                 return response()->json(['success' => false, 'message' => $e->getMessage()], 400);
             }
-
-            return back()->withErrors(['error' => 'Erro ao atualizar cliente: ' . $e->getMessage()])->withInput();
+            return back()->withErrors(['error' => $e->getMessage()]);
         }
     }
 
     public function renew(Request $request, int $id, LineService $lineService)
     {
-        try {
-            $validated = $request->validate([
-                'package_id' => 'required|integer|exists:xui.users_packages,id',
-                'duration_value' => 'required|integer|min:1',
-                'duration_unit' => 'required|string|in:hours,days,months,years',
-                'max_connections' => 'required|integer|min:1|max:10',
-            ]);
-        } catch (\Illuminate\Validation\ValidationException $e) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Dados inválidos',
-                'errors' => $e->errors()
-            ], 422);
-        }
+        $validated = $request->validate([
+            'package_id'      => 'required|integer',
+            'duration_value'  => 'required|integer|min:1',
+            'duration_unit'   => 'required|string|in:hours,days,months,years',
+            'max_connections' => 'required|integer|min:1|max:10',
+        ]);
 
-        $user   = Auth::user();
+        $user = Auth::user();
         $result = $this->api->getLine($id);
 
         if (($result['status'] ?? '') !== 'STATUS_SUCCESS') {
