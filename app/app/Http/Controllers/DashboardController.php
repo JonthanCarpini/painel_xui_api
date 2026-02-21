@@ -303,7 +303,11 @@ class DashboardController extends Controller
                     && (float)($l['amount'] ?? 0) > 0)
                 ->sortByDesc('date')
                 ->take(5)
-                ->map(fn($l) => (object) $l)
+                ->map(function($l) {
+                    $obj = (object) $l;
+                    $obj->date = (int)($l['date'] ?? 0);
+                    return $obj;
+                })
                 ->values();
 
             return [
