@@ -81,30 +81,36 @@ class CreditLogController extends Controller
     }
 
     /**
-     * Busca logs via API user_logs (tabela users_logs) — fonte principal.
+     * Busca logs via API credit_logs (tabela users_credits_logs) — fonte principal.
      *
-     * Campos retornados pela API user_logs:
-     *   id, owner (quem fez), username (owner_name), type (line/user/mag/enigma),
-     *   action (new/extend/edit/enable/disable/delete/adjust_credits/send_event/convert),
-     *   log_id (ID do destino), package_id, cost (créditos gastos),
-     *   credits_after (saldo após), date (unix timestamp int), deleted_info (JSON).
+     * Campos retornados pela API credit_logs:
+     *   id, target_id, admin_id, amount (movimentação real: negativo=saída, positivo=entrada),
+     *   date (FROM_UNIXTIME string ex: '2026-02-09 19:13:38'), reason (texto rico).
      *
-     * Enriquecido com get_lines, get_users e get_packages para resolver nomes.
+     * Padrões de reason encontrados:
+     *   "Criação de linha: username (Pacote: nome)" → Cliente
+     *   "Renovação de Linha: username (+duração)" → Cliente
+     *   "Criação de revenda: username" → Revenda
+     *   "Transferência para revenda: username" → Revenda
+     *   "Recarga de créditos" → Revenda
+     *   "Crédito inicial da revenda: username" → Revenda
+     *   "Estorno: falha ao criar linha username" → Cliente
+     *
+     * Saldo anterior/posterior: calculado acumulando amounts retroativamente
+     * a partir do saldo atual do usuário (obtido via get_user).
      */
     private function fetchLogs(Request $request, ?int $resellerId = null, bool $allResellers = false): LengthAwarePaginator
     {
         $logsResp = $allResellers
-            ? $this->api->getUserLogs()
-            : $this->api->getUserLogs($resellerId);
+            ? $this->api->getCreditLogs()
+            : $this->api->getCreditLogs($resellerId);
         $items = $logsResp['data'] ?? [];
 
-        // Filtrar apenas ações que envolvem créditos (cost != 0)
-        $items = array_values(array_filter($items, fn($l) => (float)($l['cost'] ?? 0) != 0));
+        // Mapa de saldos atuais para calcular retroativamente
+        $creditsMap = $this->buildCreditsMap($resellerId, $allResellers, $items);
 
-        // Mapas de referência para enriquecer dados
-        $linesMap   = $this->buildLinesMap();
-        $usersMap   = $this->buildUsersMap();
-        $packagesMap = $this->buildPackagesMap();
+        // Calcular saldo anterior/posterior para cada registro
+        $items = $this->calculateBalances($items, $creditsMap);
 
         // Filtros do request
         $dateStart   = $request->filled('date_start') ? strtotime($request->date_start . ' 00:00:00') : null;
@@ -115,39 +121,39 @@ class CreditLogController extends Controller
         $search      = $request->input('search');
 
         $filtered = collect($items)->filter(function ($log) use (
-            $dateStart, $dateEnd, $nature, $type, $destination, $search,
-            $linesMap, $usersMap
+            $dateStart, $dateEnd, $nature, $type, $destination, $search
         ) {
-            $logDate = (int)($log['date'] ?? 0);
-            if ($dateStart && $logDate < $dateStart) return false;
-            if ($dateEnd   && $logDate > $dateEnd)   return false;
+            $logDate = strtotime($log['date'] ?? '');
+            if ($dateStart && $logDate && $logDate < $dateStart) return false;
+            if ($dateEnd   && $logDate && $logDate > $dateEnd)   return false;
 
-            $cost = (float)($log['cost'] ?? 0);
-            if ($nature === 'out' && $cost <= 0) return false;
-            if ($nature === 'in'  && $cost >= 0) return false;
+            $amount = (float)($log['amount'] ?? 0);
+            if ($nature === 'out' && $amount >= 0) return false;
+            if ($nature === 'in'  && $amount <= 0) return false;
 
-            $logType = $log['type'] ?? '';
-            $isClient = in_array($logType, ['line', 'mag', 'enigma']);
+            $isClient = $this->isClientOperation($log);
             if ($type === 'client'   && !$isClient) return false;
             if ($type === 'reseller' && $isClient)  return false;
 
             if ($destination) {
-                $destName = $this->resolveDestinationName($log, $linesMap, $usersMap);
-                if (!str_contains(strtolower($destName), strtolower($destination))) return false;
+                $dest = $this->extractDestination($log);
+                if (!str_contains(strtolower($dest), strtolower($destination))) return false;
             }
 
             if ($search) {
                 $s = strtolower($search);
-                $desc = $this->buildDescription($log, $linesMap, $usersMap, $packagesMap);
-                $destName = $this->resolveDestinationName($log, $linesMap, $usersMap);
-                $haystack = strtolower($desc . ' ' . $destName . ' ' . ($log['username'] ?? ''));
+                $haystack = strtolower(
+                    ($log['reason'] ?? '') . ' ' .
+                    ($log['target_username'] ?? '') . ' ' .
+                    ($log['owner_username'] ?? '')
+                );
                 if (!str_contains($haystack, $s)) return false;
             }
 
             return true;
         });
 
-        $sorted = $filtered->sortByDesc(fn($l) => (int)($l['date'] ?? 0))->values();
+        $sorted = $filtered->sortByDesc(fn($l) => (int)($l['id'] ?? 0))->values();
 
         $perPage     = 20;
         $currentPage = LengthAwarePaginator::resolveCurrentPage();
@@ -158,38 +164,98 @@ class CreditLogController extends Controller
             ['path' => $request->url(), 'query' => $request->query()]
         );
 
-        $paginator->getCollection()->transform(
-            fn($log) => $this->transformLog($log, $linesMap, $usersMap, $packagesMap)
-        );
+        $paginator->getCollection()->transform(fn($log) => $this->transformLog($log));
 
         return $paginator;
     }
 
-    private function transformLog(array $log, $linesMap, $usersMap, $packagesMap): array
+    /**
+     * Constrói mapa target_id => saldo atual.
+     * Para reseller específico: busca via get_user.
+     * Para allResellers: busca via get_users e mapeia todos.
+     */
+    private function buildCreditsMap(?int $resellerId, bool $allResellers, array $items): array
     {
-        $cost         = (float)($log['cost'] ?? 0);
-        $creditsAfter = (float)($log['credits_after'] ?? 0);
-        $creditsBefore = $creditsAfter + $cost;
-        $logDate      = (int)($log['date'] ?? 0);
-        $logType      = $log['type'] ?? '';
-        $action       = $log['action'] ?? '';
-        $isClient     = in_array($logType, ['line', 'mag', 'enigma']);
+        $map = [];
 
-        $log['formatted_date'] = $logDate ? date('d/m/Y H:i:s', $logDate) : '-';
-        $log['credits_before'] = $creditsBefore;
-        $log['credits_after']  = $creditsAfter;
+        if ($allResellers) {
+            $usersResp = $this->api->getUsers();
+            foreach (($usersResp['data'] ?? []) as $u) {
+                $map[(int)$u['id']] = (float)($u['credits'] ?? 0);
+            }
+        } elseif ($resellerId !== null) {
+            $resp = $this->api->getUser($resellerId);
+            if (($resp['status'] ?? '') === 'STATUS_SUCCESS') {
+                $map[$resellerId] = (float)($resp['data']['credits'] ?? 0);
+            }
+        }
 
-        // Natureza: cost > 0 = saída de créditos, cost < 0 = entrada
-        if ($cost > 0) {
+        return $map;
+    }
+
+    /**
+     * Calcula saldo anterior e posterior para cada registro.
+     * Agrupa por target_id, ordena por id DESC e acumula retroativamente.
+     */
+    private function calculateBalances(array $items, array $creditsMap): array
+    {
+        if (empty($items)) return [];
+
+        $byTarget = [];
+        foreach ($items as $item) {
+            $tid = (int)($item['target_id'] ?? 0);
+            $byTarget[$tid][] = $item;
+        }
+
+        $result = [];
+        foreach ($byTarget as $tid => $logs) {
+            usort($logs, fn($a, $b) => (int)$b['id'] - (int)$a['id']);
+
+            $balance = $creditsMap[$tid] ?? null;
+
+            if ($balance === null) {
+                foreach ($logs as &$log) {
+                    $log['_credits_after']  = null;
+                    $log['_credits_before'] = null;
+                }
+                unset($log);
+            } else {
+                foreach ($logs as &$log) {
+                    $amount = (float)($log['amount'] ?? 0);
+                    $log['_credits_after']  = $balance;
+                    $log['_credits_before'] = $balance - $amount;
+                    $balance = $log['_credits_before'];
+                }
+                unset($log);
+            }
+
+            $result = array_merge($result, $logs);
+        }
+
+        return $result;
+    }
+
+    private function transformLog(array $log): array
+    {
+        $amount   = (float)($log['amount'] ?? 0);
+        $dateTs   = strtotime($log['date'] ?? '');
+        $isClient = $this->isClientOperation($log);
+
+        $log['formatted_date'] = $dateTs ? date('d/m/Y H:i:s', $dateTs) : ($log['date'] ?? '-');
+        $log['credits_before'] = $log['_credits_before'];
+        $log['credits_after']  = $log['_credits_after'];
+
+        // Natureza: amount < 0 = saída, amount > 0 = entrada
+        if ($amount < 0) {
             $log['nature']       = 'out';
             $log['nature_label'] = 'Saída';
             $log['nature_class'] = 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400';
-            $log['amount_formatted'] = number_format($cost, 2);
-        } elseif ($cost < 0) {
+            $log['amount_formatted'] = number_format(abs($amount), 2);
+        } elseif ($amount > 0) {
             $log['nature']       = 'in';
             $log['nature_label'] = 'Entrada';
             $log['nature_class'] = 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400';
-            $log['amount_formatted'] = number_format(abs($cost), 2);
+            $log['amount_formatted'] = number_format($amount, 2);
         } else {
             $log['nature']       = 'neutral';
             $log['nature_label'] = '-';
@@ -197,7 +263,7 @@ class CreditLogController extends Controller
             $log['amount_formatted'] = '0.00';
         }
 
-        // Tipo: Cliente ou Revenda
+        // Tipo: Cliente ou Revenda (baseado no reason)
         if ($isClient) {
             $log['type_label'] = 'Cliente';
             $log['type_icon']  = 'bi-person';
@@ -208,81 +274,74 @@ class CreditLogController extends Controller
             $log['type_class'] = 'text-purple-600 dark:text-purple-400';
         }
 
-        $log['destination']           = $this->resolveDestinationName($log, $linesMap, $usersMap);
-        $log['description_formatted'] = $this->buildDescription($log, $linesMap, $usersMap, $packagesMap);
+        $log['destination']           = $this->extractDestination($log);
+        $log['description_formatted'] = $this->formatDescription($log);
 
         return $log;
     }
 
-    private function resolveDestinationName(array $log, $linesMap, $usersMap): string
+    /**
+     * Determina se a operação é de cliente (linha) baseado no reason.
+     */
+    private function isClientOperation(array $log): bool
     {
-        $logId   = (int)($log['log_id'] ?? 0);
-        $logType = $log['type'] ?? '';
-
-        if (in_array($logType, ['line', 'mag', 'enigma'])) {
-            return $linesMap->get($logId)['username'] ?? $this->getDeletedName($log);
+        $reason = strtolower($log['reason'] ?? '');
+        $clientPatterns = ['linha', 'line', 'cliente', 'client', 'estorno'];
+        foreach ($clientPatterns as $p) {
+            if (str_contains($reason, $p)) return true;
         }
-        if ($logType === 'user') {
-            return $usersMap->get($logId)['username'] ?? $this->getDeletedName($log);
+        return false;
+    }
+
+    /**
+     * Extrai o username de destino do campo reason.
+     * Padrões: "Criação de linha: USERNAME (Pacote: ...)"
+     *          "Renovação de Linha: USERNAME (+...)"
+     *          "Transferência para revenda: USERNAME"
+     *          "Criação de revenda: USERNAME"
+     *          "Crédito inicial da revenda: USERNAME"
+     */
+    private function extractDestination(array $log): string
+    {
+        $reason = $log['reason'] ?? '';
+
+        // Padrão: "ação: USERNAME (detalhes)" ou "ação: USERNAME"
+        if (preg_match('/:\s*([^\s(]+)/', $reason, $m)) {
+            return $m[1];
         }
-        return 'N/A';
+
+        // Fallback: target_username ou owner_username
+        return $log['target_username'] ?? $log['owner_username'] ?? '-';
     }
 
-    private function getDeletedName(array $log): string
+    /**
+     * Formata a descrição a partir do reason.
+     * O reason já é descritivo, mas padronizamos para PT-BR.
+     */
+    private function formatDescription(array $log): string
     {
-        $info = json_decode($log['deleted_info'] ?? '', true);
-        if (is_array($info)) {
-            return $info['username'] ?? $info['mac'] ?? 'Removido';
+        $reason = $log['reason'] ?? '';
+        if (empty($reason)) return '-';
+
+        // Padronizar termos em inglês para PT-BR
+        $replacements = [
+            '/^Creation of line/i'    => 'Criação de linha',
+            '/^Created line/i'        => 'Criou linha',
+            '/^Line renewal/i'        => 'Renovação de linha',
+            '/^Extended line/i'       => 'Renovou linha',
+            '/^Renewal of line/i'     => 'Renovação de linha',
+            '/^Transfer to reseller/i' => 'Transferência para revenda',
+            '/^Credits transfer/i'    => 'Transferência de créditos',
+            '/^Credits received/i'    => 'Créditos recebidos',
+            '/^Reseller creation/i'   => 'Criação de revenda',
+            '/^Initial credit/i'      => 'Crédito inicial',
+            '/^Refund/i'              => 'Estorno',
+        ];
+
+        foreach ($replacements as $pattern => $replacement) {
+            $reason = preg_replace($pattern, $replacement, $reason);
         }
-        return 'Removido';
-    }
 
-    private function buildDescription(array $log, $linesMap, $usersMap, $packagesMap): string
-    {
-        $action    = $log['action'] ?? '';
-        $logType   = $log['type'] ?? '';
-        $logId     = (int)($log['log_id'] ?? 0);
-        $packageId = (int)($log['package_id'] ?? 0);
-        $cost      = (float)($log['cost'] ?? 0);
-
-        $deviceLabel = match ($logType) {
-            'line'    => 'Cliente',
-            'user'    => 'Revenda',
-            'mag'     => 'MAG',
-            'enigma'  => 'Enigma2',
-            default   => 'Item',
-        };
-
-        $destName = $this->resolveDestinationName($log, $linesMap, $usersMap);
-        $pkgName  = $packagesMap->get($packageId)['package_name'] ?? '';
-
-        return match ($action) {
-            'new'            => "Criou {$deviceLabel}: {$destName}" . ($pkgName ? " — Pacote: {$pkgName}" : ''),
-            'extend'         => "Renovou {$deviceLabel}: {$destName}" . ($pkgName ? " — Pacote: {$pkgName}" : ''),
-            'edit'           => "Editou {$deviceLabel}: {$destName}",
-            'enable'         => "Habilitou {$deviceLabel}: {$destName}",
-            'disable'        => "Desabilitou {$deviceLabel}: {$destName}",
-            'delete'         => "Excluiu {$deviceLabel}: {$destName}",
-            'adjust_credits' => "Ajuste de créditos: " . number_format(abs($cost), 2),
-            'convert'        => "Converteu dispositivo para {$deviceLabel}: {$destName}",
-            'send_event'     => "Enviou evento para {$deviceLabel}: {$destName}",
-            default          => $action ?: '-',
-        };
-    }
-
-    private function buildLinesMap(): \Illuminate\Support\Collection
-    {
-        return collect(($this->api->getLines())['data'] ?? [])->keyBy('id');
-    }
-
-    private function buildUsersMap(): \Illuminate\Support\Collection
-    {
-        return collect(($this->api->getUsers())['data'] ?? [])->keyBy('id');
-    }
-
-    private function buildPackagesMap(): \Illuminate\Support\Collection
-    {
-        $packages = $this->api->getPackages();
-        return collect(is_array($packages) ? $packages : [])->keyBy('id');
+        return $reason;
     }
 }
