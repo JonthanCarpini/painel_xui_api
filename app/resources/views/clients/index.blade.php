@@ -553,8 +553,8 @@ function submitRenewTrust() {
                 <div id="trialBouquets" class="grid grid-cols-1 sm:grid-cols-2 gap-3 w-full max-h-60 overflow-y-auto p-4 bg-gray-50 dark:bg-dark-200 rounded-lg border border-gray-200 dark:border-0 custom-scrollbar">
                     @foreach($bouquets as $bouquet)
                         <label class="flex items-center gap-3 p-3 bg-white dark:bg-dark-300 border border-gray-200 dark:border-dark-100 rounded-lg hover:bg-gray-50 dark:hover:bg-dark-100 cursor-pointer transition-colors shadow-sm dark:shadow-none w-full">
-                            <input type="checkbox" name="bouquet_ids[]" value="{{ $bouquet['id'] }}" class="w-5 h-5 text-orange-500 bg-gray-100 dark:bg-dark-200 border-gray-300 dark:border-dark-100 rounded focus:ring-orange-500 focus:ring-2">
-                            <span class="text-gray-700 dark:text-white text-sm break-all">{{ $bouquet['bouquet_name'] }}</span>
+                            <input type="checkbox" name="bouquet_ids[]" value="{{ $bouquet->id }}" class="w-5 h-5 text-orange-500 bg-gray-100 dark:bg-dark-200 border-gray-300 dark:border-dark-100 rounded focus:ring-orange-500 focus:ring-2">
+                            <span class="text-gray-700 dark:text-white text-sm break-all">{{ $bouquet->bouquet_name }}</span>
                         </label>
                     @endforeach
                 </div>
