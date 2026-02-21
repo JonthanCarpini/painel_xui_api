@@ -6,7 +6,7 @@ use Illuminate\Database\Eloquent\Model;
 
 class Ticket extends Model
 {
-    protected $connection = 'xui';
+    // protected $connection = 'xui'; // Removido para evitar conexão direta
     protected $table = 'tickets';
     public $timestamps = false; // Tabela não tem created_at/updated_at padrão Laravel
 

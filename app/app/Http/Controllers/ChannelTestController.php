@@ -229,65 +229,21 @@ class ChannelTestController extends Controller
         $user = Auth::user();
         
         try {
-            DB::beginTransaction();
-
-            // Buscar dados reais da stream via API
-            $streamData = "Dados não encontrados via API.";
-            if ($request->stream_id) {
-                $streamsResp = $this->api->getStreams();
-                $stream = collect($streamsResp['data'] ?? [])
-                    ->firstWhere('stream_id', (string) $request->stream_id);
-                if ($stream) {
-                    $streamData = "Nome XUI: {$stream['stream_display_name']}\nSource: {$stream['stream_source']}\nID: {$stream['stream_id']}";
-                }
-            }
-
-            // 1. Buscar ou criar categoria "Reportes de Canais"
-            $category = TicketCategory::firstOrCreate(
-                ['name' => 'Reportes de Canais'],
-                ['responsible' => 'Sistema', 'phone' => '']
-            );
-
-            // 2. Criar Ticket no XUI
+            // 1. Criar Ticket no XUI via API
             $ticketTitle = "Problema no canal: " . $request->channel_name;
             
-            $ticket = Ticket::create([
-                'member_id' => $user->id,
-                'title' => substr($ticketTitle, 0, 255),
-                'status' => 1, // Aberto
-                'admin_read' => 0,
-                'user_read' => 1,
-            ]);
-
-            // 3. Vincular Categoria (Local)
-            TicketExtra::create([
-                'ticket_id' => $ticket->id,
-                'category_id' => $category->id,
-            ]);
-
-            // 4. Adicionar Mensagem
-            $message = "O usuário relatou um problema no canal **{$request->channel_name}**.\n\n" .
-                       "**Descrição do Problema:**\n" .
-                       $request->problem_description . "\n\n" .
+            // Montar conteúdo do ticket com detalhes
+            $content = $request->problem_description . "\n\n" .
                        "**Dados Técnicos do Relatório:**\n" .
                        "ID Stream (XUI): " . ($request->stream_id ?? 'N/A') . "\n" .
-                       "URL Reprodução: " . ($request->stream_url ?? 'Não informada') . "\n\n" .
-                       "**Dados do Banco de Dados (Streams):**\n" .
-                       $streamData;
+                       "URL Reprodução: " . ($request->stream_url ?? 'Não informada');
 
-            TicketReply::create([
-                'ticket_id' => $ticket->id,
-                'admin_reply' => 0,
-                'message' => $message,
-                'date' => time(),
-            ]);
-
-            DB::commit();
+            // Enviar para API
+            $this->api->createTicket($ticketTitle, $content, $user->id);
 
             return response()->json(['success' => true, 'message' => 'Problema reportado com sucesso! Um ticket foi aberto.']);
 
         } catch (\Exception $e) {
-            DB::rollBack();
             return response()->json(['success' => false, 'message' => 'Erro ao reportar problema: ' . $e->getMessage()], 500);
         }
     }

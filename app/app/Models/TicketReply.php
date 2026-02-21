@@ -6,7 +6,7 @@ use Illuminate\Database\Eloquent\Model;
 
 class TicketReply extends Model
 {
-    protected $connection = 'xui';
+    // protected $connection = 'xui'; // Removido para evitar conexão direta
     protected $table = 'tickets_replies';
     public $timestamps = false;
 
