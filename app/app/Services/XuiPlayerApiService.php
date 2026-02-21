@@ -21,7 +21,12 @@ class XuiPlayerApiService
 
     public function __construct()
     {
-        $this->baseUrl  = rtrim(config('xui.base_url', env('XUI_BASE_URL', '')), '/');
+        // player_api.php fica na RAIZ do XUI, não dentro do path admin (/fXvFkkfq/)
+        $fullUrl = rtrim(config('xui.base_url', env('XUI_BASE_URL', '')), '/');
+        $parsed  = parse_url($fullUrl);
+        $this->baseUrl = ($parsed['scheme'] ?? 'http') . '://' . ($parsed['host'] ?? '')
+            . (isset($parsed['port']) ? ':' . $parsed['port'] : '');
+
         $this->username = AppSetting::get('ghost_reseller_username');
         $this->password = AppSetting::get('ghost_reseller_password');
     }

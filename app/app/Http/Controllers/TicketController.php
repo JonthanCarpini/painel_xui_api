@@ -34,7 +34,7 @@ class TicketController extends Controller
         } else {
             // Revendedor vê apenas seus tickets
             $filteredTickets = array_filter($allTickets, function ($t) use ($user) {
-                return (int)($t['member_id'] ?? 0) === $user->id;
+                return (int)($t['member_id'] ?? 0) === (int)$user->xui_id;
             });
         }
 
@@ -119,7 +119,7 @@ class TicketController extends Controller
         $user = Auth::user();
 
         // Criar Ticket via API
-        $response = $this->api->createTicket($request->title, $request->message, $user->id);
+        $response = $this->api->createTicket($request->title, $request->message, (int)$user->xui_id);
         
         if (($response['status'] ?? '') === 'STATUS_SUCCESS' && isset($response['data']['id'])) {
             $ticketId = $response['data']['id'];
@@ -161,7 +161,7 @@ class TicketController extends Controller
         // Assumindo que sim. Se não, a view vai quebrar.
         
         // Validar permissão
-        if (!$user->isAdmin() && (int)$ticket->member_id !== $user->id) {
+        if (!$user->isAdmin() && (int)$ticket->member_id !== (int)$user->xui_id) {
             abort(403);
         }
 

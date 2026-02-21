@@ -392,43 +392,72 @@ class XuiApiService
     }
 
     // -------------------------------------------------------------------------
-    // Tickets
+    // Tickets (via mysql_query — XUI não tem endpoints dedicados de tickets)
     // -------------------------------------------------------------------------
 
     public function getTickets(array $params = []): array
     {
-        // params: limit, offset, member_id (opcional)
-        return $this->get('get_tickets', $params);
+        $query = "SELECT t.*, u.username AS member_username FROM tickets t LEFT JOIN users u ON u.id = t.member_id ORDER BY t.id DESC";
+        if (!empty($params['limit'])) {
+            $query .= " LIMIT " . (int)$params['limit'];
+        }
+        $resp = $this->runQuery($query);
+        return [
+            'status' => $resp['status'] ?? 'STATUS_FAILURE',
+            'data'   => $resp['data'] ?? [],
+        ];
     }
 
     public function getTicket(int $ticketId): array
     {
-        // O endpoint pode variar, mas geralmente get_tickets com id funciona ou get_ticket
-        // Se não houver get_ticket, usamos get_tickets filtrando
-        return $this->get('get_ticket', ['ticket_id' => $ticketId]);
+        $resp = $this->runQuery("SELECT t.*, u.username AS member_username FROM tickets t LEFT JOIN users u ON u.id = t.member_id WHERE t.id = {$ticketId} LIMIT 1");
+        $ticket = $resp['data'][0] ?? null;
+        if (!$ticket) {
+            return ['status' => 'STATUS_FAILURE'];
+        }
+        $repliesResp = $this->runQuery("SELECT * FROM tickets_replies WHERE ticket_id = {$ticketId} ORDER BY date ASC");
+        $ticket['replies'] = $repliesResp['data'] ?? [];
+        return ['status' => 'STATUS_SUCCESS', 'data' => $ticket];
     }
 
     public function createTicket(string $subject, string $content, int $memberId): array
     {
-        return $this->post('create_ticket', [
-            'subject' => $subject,
-            'content' => $content,
-            'member_id' => $memberId
-        ]);
+        $safeTitle   = addslashes($subject);
+        $safeContent = addslashes($content);
+        $now = time();
+        $insertResp = $this->runQuery("INSERT INTO tickets (member_id, title, status, admin_read, user_read) VALUES ({$memberId}, '{$safeTitle}', 1, 0, 0)");
+        if (($insertResp['status'] ?? '') !== 'STATUS_SUCCESS') {
+            return ['status' => 'STATUS_FAILURE'];
+        }
+        $ticketId = $insertResp['insert_id'] ?? 0;
+        if ($ticketId) {
+            $this->runQuery("INSERT INTO tickets_replies (ticket_id, admin_reply, message, date) VALUES ({$ticketId}, 0, '{$safeContent}', {$now})");
+        }
+        return ['status' => 'STATUS_SUCCESS', 'data' => ['id' => $ticketId]];
     }
 
     public function replyTicket(int $ticketId, string $content, int $adminReply = 0): array
     {
-        return $this->post('reply_ticket', [
-            'ticket_id' => $ticketId,
-            'content' => $content,
-            'admin_reply' => $adminReply
-        ]);
+        $safeContent = addslashes($content);
+        $now = time();
+        $this->runQuery("INSERT INTO tickets_replies (ticket_id, admin_reply, message, date) VALUES ({$ticketId}, {$adminReply}, '{$safeContent}', {$now})");
+        if ($adminReply) {
+            $this->runQuery("UPDATE tickets SET admin_read = 1, user_read = 0 WHERE id = {$ticketId}");
+        } else {
+            $this->runQuery("UPDATE tickets SET admin_read = 0, user_read = 1 WHERE id = {$ticketId}");
+        }
+        return ['status' => 'STATUS_SUCCESS'];
     }
 
     public function closeTicket(int $ticketId): array
     {
-        return $this->post('close_ticket', ['ticket_id' => $ticketId]);
+        $resp = $this->runQuery("UPDATE tickets SET status = 0 WHERE id = {$ticketId}");
+        return ['status' => ($resp['status'] ?? '') === 'STATUS_SUCCESS' ? 'STATUS_SUCCESS' : 'STATUS_FAILURE'];
+    }
+
+    private function runQuery(string $query): array
+    {
+        return $this->get('mysql_query', ['query' => $query]);
     }
 
     // -------------------------------------------------------------------------
