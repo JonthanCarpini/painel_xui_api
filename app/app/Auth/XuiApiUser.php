@@ -4,6 +4,8 @@ namespace App\Auth;
 
 use Illuminate\Contracts\Auth\Authenticatable;
 
+use App\Models\PanelUser;
+
 /**
  * Representa o usuário autenticado via API XUI.
  * Envolve o array retornado pela API e implementa Authenticatable
@@ -12,10 +14,22 @@ use Illuminate\Contracts\Auth\Authenticatable;
 class XuiApiUser implements Authenticatable
 {
     private array $data;
+    private ?PanelUser $panelUser = null; // Cache local do PanelUser
 
     public function __construct(array $data)
     {
         $this->data = $data;
+    }
+
+    // ...
+
+    public function getPreference($key, $default = null)
+    {
+        if ($this->panelUser === null) {
+            $this->panelUser = PanelUser::where('xui_id', $this->getXuiIdAttribute())->first();
+        }
+
+        return $this->panelUser ? $this->panelUser->getPreference($key, $default) : $default;
     }
 
     // -------------------------------------------------------------------------
