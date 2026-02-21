@@ -310,10 +310,15 @@ class ClientController extends Controller
             $validated = $request->validate([
                 'username' => 'required|string|min:3|max:50',
                 'password' => 'required|string|min:6',
-                'package_id' => 'required|integer|exists:xui.users_packages,id',
+                'package_id' => 'required|integer', // Removido exists:xui...
                 'bouquet_ids' => 'required|array|min:1',
                 'duration_value' => 'required|integer|min:1',
                 'duration_unit' => 'required|string|in:hours,days,months,years',
+                'max_connections' => 'required|integer|min:1|max:10',
+                'email' => 'nullable|email',
+                'phone' => 'nullable|string',
+                'notes' => 'nullable|string',
+            ]);
                 'max_connections' => 'required|integer|min:1|max:10',
                 'email' => 'nullable|email',
                 'phone' => 'nullable|string',
