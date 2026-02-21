@@ -80,6 +80,13 @@ class DashboardController extends Controller
         });
     }
 
+    /**
+     * Gera dados para os gráficos do dashboard.
+     *
+     * IMPORTANTE: admin_id nos credit_logs é SEMPRE o ID do admin da API key (geralmente 1),
+     * NÃO o reseller que executou a ação. O reseller real é identificado pelo target_id
+     * (quem teve o saldo afetado).
+     */
     private function getChartStats(int $userId, bool $isAdmin, int $daysCount = 7): array
     {
         $cacheKey = "dashboard_charts_{$userId}_{$daysCount}";
@@ -90,10 +97,7 @@ class DashboardController extends Controller
             $creditLogs = $this->api->getCreditLogs($isAdmin ? null : $userId);
             $logItems   = $creditLogs['data'] ?? [];
 
-            $allowedIds = null;
-            if (!$isAdmin) {
-                $allowedIds = $this->getSubResellerIds($userId);
-            }
+            $treeIds = $isAdmin ? null : $this->getSubResellerIds($userId);
 
             $days = $clientsData = $trialsData = $resellersData = $rechargesData = [];
 
@@ -102,25 +106,43 @@ class DashboardController extends Controller
                 $start   = strtotime(date('Y-m-d', strtotime("-$i days")) . ' 00:00:00');
                 $end     = strtotime(date('Y-m-d', strtotime("-$i days")) . ' 23:59:59');
 
-                // Vendas e trials via credit_logs reason (amount é saldo final, não movimentação — bug XUI)
-                $clients = $trials = 0;
+                $clients = $trials = $recharges = 0;
+
                 foreach ($logItems as $log) {
                     $ld = strtotime($log['date'] ?? '');
                     if (!$ld || $ld < $start || $ld > $end) continue;
-                    $reason = strtolower($log['reason'] ?? '');
+
+                    $reason   = strtolower($log['reason'] ?? '');
                     if (empty($reason)) continue;
-                    $adminId = (int)($log['admin_id'] ?? 0);
-                    if ($allowedIds !== null && !in_array($adminId, $allowedIds)) continue;
-                    if ((str_contains($reason, 'cria') || str_contains($reason, 'creation')) && !str_contains($reason, 'teste') && !str_contains($reason, 'trial') && str_contains($reason, 'linh')) {
-                        $clients++;
-                    } elseif (str_contains($reason, 'teste') || str_contains($reason, 'trial')) {
+
+                    $targetId = (int)($log['target_id'] ?? 0);
+
+                    // Filtrar: target_id deve pertencer à árvore do reseller
+                    if ($treeIds !== null && !in_array($targetId, $treeIds)) continue;
+
+                    // Criação de linha (venda de cliente)
+                    if (str_contains($reason, 'linh') && (str_contains($reason, 'cria') || str_contains($reason, 'creation'))) {
+                        if (!str_contains($reason, 'teste') && !str_contains($reason, 'trial')) {
+                            $clients++;
+                        } else {
+                            $trials++;
+                        }
+                    }
+                    // Teste explícito
+                    elseif (str_contains($reason, 'teste') || str_contains($reason, 'trial')) {
                         $trials++;
                     }
+                    // Recargas/transferências feitas POR mim (target_id = eu, pois meu saldo diminuiu)
+                    elseif ($targetId === $userId && (str_contains($reason, 'transferên') || str_contains($reason, 'transfer'))) {
+                        $recharges++;
+                    }
                 }
-                $clientsData[] = $clients;
-                $trialsData[]  = $trials;
 
-                // Novos revendedores por dia (date_registered existe em get_users)
+                $clientsData[]   = $clients;
+                $trialsData[]    = $trials;
+                $rechargesData[] = $recharges;
+
+                // Novos revendedores por dia (date_registered em get_users)
                 $resellers = 0;
                 foreach ($allUsers as $u) {
                     if ((int)($u['member_group_id'] ?? 0) !== 2) continue;
@@ -130,21 +152,6 @@ class DashboardController extends Controller
                     $resellers++;
                 }
                 $resellersData[] = $resellers;
-
-                // Recargas feitas por mim para outros (identificar pelo reason, não pelo amount)
-                $recharges = 0;
-                foreach ($logItems as $log) {
-                    $ld = strtotime($log['date'] ?? '');
-                    if (!$ld || $ld < $start || $ld > $end) continue;
-                    $reason = strtolower($log['reason'] ?? '');
-                    if (empty($reason)) continue;
-                    if ((int)($log['admin_id'] ?? 0) !== $userId) continue;
-                    if ((int)($log['target_id'] ?? 0) === $userId) continue;
-                    if (str_contains($reason, 'recarga') || str_contains($reason, 'transfer')) {
-                        $recharges++;
-                    }
-                }
-                $rechargesData[] = $recharges;
             }
 
             return [
@@ -191,11 +198,9 @@ class DashboardController extends Controller
             usort($topResellersData, fn($a, $b) => $b['total_lines'] <=> $a['total_lines']);
             $topResellersData = array_slice($topResellersData, 0, 5);
 
-            $creditLogsResp = $this->api->getCreditLogs((int)$user->xui_id);
+            $creditLogsResp = $this->api->getCreditLogs();
             $lastRecharges = collect($creditLogsResp['data'] ?? [])
-                ->filter(function ($l) use ($user) {
-                    if ((int)($l['admin_id'] ?? 0) !== (int)$user->xui_id) return false;
-                    if ((int)($l['target_id'] ?? 0) === (int)$user->xui_id) return false;
+                ->filter(function ($l) {
                     $reason = strtolower($l['reason'] ?? '');
                     return !empty($reason) && (str_contains($reason, 'recarga') || str_contains($reason, 'transfer'));
                 })
@@ -326,22 +331,25 @@ class DashboardController extends Controller
                 $topResellers = array_slice($topResellers, 0, 5);
             }
 
-            // Últimas recargas feitas por mim para sub-revendedores
+            // Últimas recargas feitas por mim (target_id=userId = meu saldo diminuiu na transferência)
             $lastRecharges = collect($allLogs)
                 ->filter(function ($l) use ($userId) {
-                    if ((int)($l['admin_id'] ?? 0) !== $userId) return false;
-                    if ((int)($l['target_id'] ?? 0) === $userId) return false;
+                    $targetId = (int)($l['target_id'] ?? 0);
+                    if ($targetId !== $userId) return false;
                     $reason = strtolower($l['reason'] ?? '');
-                    return !empty($reason) && (str_contains($reason, 'recarga') || str_contains($reason, 'transfer'));
+                    return !empty($reason) && (str_contains($reason, 'transferên') || str_contains($reason, 'transfer'));
                 })
                 ->sortByDesc(fn($l) => strtotime($l['date'] ?? ''))
                 ->take(5)
                 ->map(function($l) use ($allUsers) {
                     $obj = (object) $l;
                     $obj->date = strtotime($l['date'] ?? '') ?: 0;
-                    $targetId = (int)($l['target_id'] ?? 0);
-                    $targetUser = collect($allUsers)->firstWhere('id', $targetId);
-                    $obj->target = (object)['username' => $targetUser['username'] ?? 'N/A'];
+                    // Extrair recebedor do reason (ex: "Transferência de X créditos para USERNAME")
+                    $receiverName = 'N/A';
+                    if (preg_match('/para\s+(\S+)/i', $l['reason'] ?? '', $m)) {
+                        $receiverName = $m[1];
+                    }
+                    $obj->target = (object)['username' => $receiverName];
                     return $obj;
                 })
                 ->values();
@@ -440,12 +448,8 @@ class DashboardController extends Controller
 
     /**
      * Conta vendas e trials a partir dos credit_logs.
-     * Vendas oficiais = débitos de crédito (amount < 0) com reason contendo "Criação de linha"
-     * Trials = linhas com is_trial=1 e custo 0 (sem log de crédito), estimados por exp_date
-     *
-     * Abordagem: credit_logs registram cada débito com timestamp.
-     * - Débito com reason "Criação de linha" = venda oficial
-     * - Débito com reason "Teste" ou amount=0 = trial (se existir log)
+     * admin_id nos credit_logs é SEMPRE o admin da API key (ID=1).
+     * O reseller real é identificado pelo target_id.
      */
     private function countSalesFromLogs(
         array $allLogs,
@@ -459,14 +463,14 @@ class DashboardController extends Controller
 
         foreach ($allLogs as $log) {
             $date     = strtotime($log['date'] ?? '');
-            $adminId  = (int)($log['admin_id'] ?? 0);
+            $targetId = (int)($log['target_id'] ?? 0);
             $reason   = strtolower($log['reason'] ?? '');
 
             if (!$date) continue;
             if (empty($reason)) continue;
-            if (!in_array($adminId, $myTreeIds)) continue;
+            if (!in_array($targetId, $myTreeIds)) continue;
 
-            $isSale  = (str_contains($reason, 'cria') || str_contains($reason, 'creation')) && !str_contains($reason, 'teste') && !str_contains($reason, 'trial') && str_contains($reason, 'linh');
+            $isSale  = str_contains($reason, 'linh') && (str_contains($reason, 'cria') || str_contains($reason, 'creation')) && !str_contains($reason, 'teste') && !str_contains($reason, 'trial');
             $isTrial = str_contains($reason, 'teste') || str_contains($reason, 'trial');
 
             if ($isSale) {
