@@ -38,25 +38,25 @@
                 @foreach($movies as $movie)
                 <div class="bg-white dark:bg-dark-300 rounded-xl border border-gray-200 dark:border-dark-200 overflow-hidden shadow-sm hover:shadow-md transition-all group">
                     <div class="aspect-[2/3] bg-gray-100 dark:bg-dark-200 relative overflow-hidden">
-                        <img src="{{ $movie->stream_icon }}" 
-                             alt="{{ $movie->stream_display_name }}" 
+                        <img src="{{ $movie['stream_icon'] ?? '' }}" 
+                             alt="{{ $movie['name'] ?? $movie['stream_display_name'] ?? '' }}" 
                              class="w-full h-full object-cover transition-transform group-hover:scale-105" 
                              loading="lazy" 
-                             onerror="handleImageError(this, 'movie', {{ $movie->tmdb_id ?? 'null' }}, '{{ $movie->stream_display_name }}')">
+                             onerror="handleImageError(this, 'movie', {{ $movie['tmdb_id'] ?? 'null' }}, '{{ addslashes($movie['name'] ?? $movie['stream_display_name'] ?? '') }}')">
                         
                         <div class="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex flex-col justify-end p-4">
-                            <span class="text-white text-xs font-medium">{{ $movie->added_at ? $movie->added_at->format('H:i') : '' }}</span>
+                            <span class="text-white text-xs font-medium">{{ isset($movie['added_at']) && $movie['added_at'] ? $movie['added_at']->format('H:i') : '' }}</span>
                         </div>
                     </div>
                     <div class="p-3">
-                        <h3 class="text-sm font-bold text-gray-900 dark:text-white line-clamp-2 mb-1" title="{{ $movie->stream_display_name }}">
-                            {{ $movie->stream_display_name }}
+                        <h3 class="text-sm font-bold text-gray-900 dark:text-white line-clamp-2 mb-1" title="{{ $movie['name'] ?? $movie['stream_display_name'] ?? '' }}">
+                            {{ $movie['name'] ?? $movie['stream_display_name'] ?? '' }}
                         </h3>
                         <div class="flex items-center justify-between text-xs text-gray-500 dark:text-gray-400">
-                            <span>{{ $movie->year ?? '' }}</span>
-                            @if($movie->rating > 0)
+                            <span>{{ $movie['year'] ?? '' }}</span>
+                            @if(($movie['rating'] ?? 0) > 0)
                             <span class="flex items-center gap-1 text-yellow-500">
-                                <i class="bi bi-star-fill"></i> {{ number_format($movie->rating, 1) }}
+                                <i class="bi bi-star-fill"></i> {{ number_format($movie['rating'], 1) }}
                             </span>
                             @endif
                         </div>
@@ -83,25 +83,25 @@
                 @foreach($series as $serie)
                 <div class="bg-white dark:bg-dark-300 rounded-xl border border-gray-200 dark:border-dark-200 overflow-hidden shadow-sm hover:shadow-md transition-all group">
                     <div class="aspect-[2/3] bg-gray-100 dark:bg-dark-200 relative overflow-hidden">
-                        <img src="{{ $serie->cover }}" 
-                             alt="{{ $serie->title }}" 
+                        <img src="{{ $serie['cover'] ?? $serie['stream_icon'] ?? '' }}" 
+                             alt="{{ $serie['name'] ?? $serie['title'] ?? '' }}" 
                              class="w-full h-full object-cover transition-transform group-hover:scale-105" 
                              loading="lazy" 
-                             onerror="handleImageError(this, 'tv', {{ $serie->tmdb_id ?? 'null' }}, '{{ $serie->title }}')">
+                             onerror="handleImageError(this, 'tv', {{ $serie['tmdb_id'] ?? 'null' }}, '{{ addslashes($serie['name'] ?? $serie['title'] ?? '') }}')">
                         
                         <div class="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex flex-col justify-end p-4">
-                            <span class="text-white text-xs font-medium">{{ $serie->updated_at ? $serie->updated_at->format('H:i') : '' }}</span>
+                            <span class="text-white text-xs font-medium">{{ isset($serie['updated_at']) && $serie['updated_at'] ? $serie['updated_at']->format('H:i') : '' }}</span>
                         </div>
                     </div>
                     <div class="p-3">
-                        <h3 class="text-sm font-bold text-gray-900 dark:text-white line-clamp-2 mb-1" title="{{ $serie->title }}">
-                            {{ $serie->title }}
+                        <h3 class="text-sm font-bold text-gray-900 dark:text-white line-clamp-2 mb-1" title="{{ $serie['name'] ?? $serie['title'] ?? '' }}">
+                            {{ $serie['name'] ?? $serie['title'] ?? '' }}
                         </h3>
                         <div class="flex items-center justify-between text-xs text-gray-500 dark:text-gray-400">
-                            <span>{{ $serie->release_date ?? '' }}</span>
-                            @if($serie->rating > 0)
+                            <span>{{ $serie['release_date'] ?? '' }}</span>
+                            @if(($serie['rating'] ?? 0) > 0)
                             <span class="flex items-center gap-1 text-yellow-500">
-                                <i class="bi bi-star-fill"></i> {{ number_format($serie->rating, 1) }}
+                                <i class="bi bi-star-fill"></i> {{ number_format($serie['rating'], 1) }}
                             </span>
                             @endif
                         </div>

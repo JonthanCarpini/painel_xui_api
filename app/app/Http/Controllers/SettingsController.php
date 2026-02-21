@@ -7,21 +7,26 @@ use App\Models\ClientApplication;
 use App\Models\DnsServer;
 use App\Models\Notice;
 use App\Models\TestChannel;
-use App\Models\Package;
 use App\Services\ChannelService;
+use App\Services\PackageService;
+use App\Services\XuiApiService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 
 class SettingsController extends Controller
 {
     protected $channelService;
+    protected $api;
 
-    public function __construct(ChannelService $channelService)
+    protected $packages;
+
+    public function __construct(ChannelService $channelService, XuiApiService $api, PackageService $packages)
     {
         $this->channelService = $channelService;
+        $this->api = $api;
+        $this->packages = $packages;
     }
 
     public function index()
@@ -33,8 +38,13 @@ class SettingsController extends Controller
             abort(403, 'Acesso negado. Apenas administradores podem acessar as configurações.');
         }
 
-        // Buscar configurações da tabela settings do XUI
-        $settings = DB::connection('xui')->table('settings')->where('id', 1)->first();
+        // Buscar configurações via API XUI
+        $settingsResp = $this->api->getSettings();
+        $settingsData = $settingsResp['data'] ?? [];
+        $settings = (object) $settingsData;
+
+        // tmdb_api_key vive no banco local
+        $tmdbApiKey = AppSetting::get('tmdb_api_key', $settingsData['tmdb_api_key'] ?? null);
 
         // Buscar dados locais
         $apps = ClientApplication::all();
@@ -44,7 +54,7 @@ class SettingsController extends Controller
         $trustPackageId = AppSetting::get('trust_renew_package_id');
         
         // Buscar pacotes oficiais para seleção
-        $packages = Package::where('is_official', 1)->get();
+        $packages = $this->packages->where('is_official', true);
         
         // Dados da Revenda Fantasma (Teste de Canais)
         $ghostReseller = [
@@ -56,14 +66,15 @@ class SettingsController extends Controller
         ];
 
         return view('settings.index', [
-            'settings' => $settings,
-            'apps' => $apps,
-            'dnsServers' => $dnsServers,
-            'notices' => $notices,
+            'settings'              => $settings,
+            'tmdbApiKey'            => $tmdbApiKey,
+            'apps'                  => $apps,
+            'dnsServers'            => $dnsServers,
+            'notices'               => $notices,
             'clientMessageTemplate' => $clientMessageTemplate,
-            'ghostReseller' => $ghostReseller,
-            'packages' => $packages,
-            'trustPackageId' => $trustPackageId
+            'ghostReseller'         => $ghostReseller,
+            'packages'              => $packages,
+            'trustPackageId'        => $trustPackageId,
         ]);
     }
 
@@ -130,15 +141,18 @@ class SettingsController extends Controller
                 }
             }
 
-            // 2. Processar Configurações do XUI
+            // 2. Salvar tmdb_api_key no banco local
+            if ($request->has('tmdb_api_key')) {
+                AppSetting::set('tmdb_api_key', $request->input('tmdb_api_key') ?? '');
+            }
+
+            // 3. Processar Configurações do XUI (exceto tmdb_api_key que agora é local)
             $xuiSettings = collect($validated)
-                ->except(['ghost_reseller_username', 'ghost_reseller_password', 'ghost_rotation_time', 'trust_renew_package_id'])
+                ->except(['ghost_reseller_username', 'ghost_reseller_password', 'ghost_rotation_time', 'trust_renew_package_id', 'tmdb_api_key'])
                 ->toArray();
 
             if (!empty($xuiSettings)) {
-                DB::connection('xui')->table('settings')
-                    ->where('id', 1)
-                    ->update($xuiSettings);
+                $this->api->updateSettings($xuiSettings);
             }
 
             return redirect()->route('settings.index')

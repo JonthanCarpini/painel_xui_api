@@ -2,7 +2,7 @@
 
 namespace App\Services;
 
-use Illuminate\Support\Facades\DB;
+use App\Models\AppSetting;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 
@@ -12,10 +12,9 @@ class TmdbService
     protected string $baseUrl = 'https://api.themoviedb.org/3';
     protected string $language = 'pt-BR';
 
-    public function __construct()
+    public function __construct(protected XuiPlayerApiService $playerApi)
     {
-        $settings = DB::connection('xui')->table('settings')->where('id', 1)->first();
-        $this->apiKey = $settings->tmdb_api_key ?? null;
+        $this->apiKey = AppSetting::get('tmdb_api_key');
     }
 
     public function hasApiKey(): bool
@@ -93,20 +92,13 @@ class TmdbService
         }
     }
 
-    public function checkExistsInXui(int $tmdbId, string $type): ?object
+    public function checkExistsInXui(int $tmdbId, string $type): ?array
     {
         if ($type === 'movie') {
-            return DB::connection('xui')->table('streams')
-                ->where('tmdb_id', $tmdbId)
-                ->where('type', 2)
-                ->select('id', 'stream_display_name', 'stream_icon', 'category_id', 'added', 'year', 'rating')
-                ->first();
+            return $this->playerApi->findMovieByTmdbId($tmdbId);
         }
 
-        return DB::connection('xui')->table('streams_series')
-            ->where('tmdb_id', $tmdbId)
-            ->select('id', 'title', 'cover', 'category_id', 'last_modified', 'year', 'rating', 'genre')
-            ->first();
+        return $this->playerApi->findSeriesByTmdbId($tmdbId);
     }
 
     public function getSeriesSeasons(int $tmdbId): ?array
@@ -151,41 +143,22 @@ class TmdbService
 
     public function checkSeriesSeasonsInXui(int $tmdbId): array
     {
-        $series = DB::connection('xui')->table('streams_series')
-            ->where('tmdb_id', $tmdbId)
-            ->select('id')
-            ->first();
+        $series = $this->playerApi->findSeriesByTmdbId($tmdbId);
 
         if (!$series) {
             return [];
         }
 
-        $episodes = DB::connection('xui')->table('streams_episodes')
-            ->where('series_id', $series->id)
-            ->selectRaw('DISTINCT season_num')
-            ->pluck('season_num')
-            ->toArray();
+        $seriesId = (int)($series['series_id'] ?? $series['id'] ?? 0);
+        if (!$seriesId) {
+            return [];
+        }
 
-        return array_map('intval', $episodes);
+        return $this->playerApi->getAvailableSeasons($seriesId);
     }
 
     public function getCategoryName(?string $categoryIdJson): string
     {
-        if (empty($categoryIdJson)) {
-            return 'Sem categoria';
-        }
-
-        $categoryIds = json_decode($categoryIdJson, true);
-        if (!is_array($categoryIds) || empty($categoryIds)) {
-            // Pode ser um ID direto
-            $categoryIds = [(int) $categoryIdJson];
-        }
-
-        $categories = DB::connection('xui')->table('streams_categories')
-            ->whereIn('id', $categoryIds)
-            ->pluck('category_name')
-            ->toArray();
-
-        return !empty($categories) ? implode(', ', $categories) : 'Sem categoria';
+        return $this->playerApi->resolveCategoryName($categoryIdJson);
     }
 }

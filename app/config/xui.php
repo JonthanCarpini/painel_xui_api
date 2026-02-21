@@ -1,9 +1,9 @@
 <?php
 
 return [
-    'base_url' => env('XUI_BASE_URL', 'http://192.168.100.210/XIkpMBHH/'),
+    'base_url' => env('XUI_BASE_URL', 'http://192.168.100.210/fXvFkkfq/'),
     
-    'api_key' => env('XUI_API_KEY', '6EA0E44987AD73B0804CB0D46D2A9159'),
+    'api_key' => env('XUI_API_KEY', '5EE3138A43E3190ED00F031B1107EA30'),
     
     'timeout' => env('XUI_TIMEOUT', 30),
     

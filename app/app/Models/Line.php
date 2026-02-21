@@ -70,11 +70,6 @@ class Line extends Model
         return $this->belongsTo(XuiUser::class, 'member_id');
     }
 
-    public function package()
-    {
-        return $this->belongsTo(Package::class, 'package_id');
-    }
-
     public function liveConnections()
     {
         return $this->hasMany(LineLive::class, 'user_id');

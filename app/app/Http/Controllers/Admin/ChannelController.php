@@ -3,12 +3,15 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Services\XuiApiService;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Log;
 
 class ChannelController extends Controller
 {
+    public function __construct(private XuiApiService $api) {}
+
     public function index(Request $request)
     {
         if (!Auth::user()->isAdmin()) {
@@ -16,28 +19,24 @@ class ChannelController extends Controller
         }
 
         $search = $request->input('search');
-        
-        $query = DB::connection('xui')->table('streams as s')
-            ->leftJoin('streams_servers as ss', 's.id', '=', 'ss.stream_id')
-            ->select(
-                's.id', 
-                's.stream_display_name', 
-                's.stream_source', 
-                's.category_id',
-                'ss.stream_status', 
-                'ss.pid', 
-                'ss.server_id',
-                'ss.on_demand'
-            );
 
-        if ($search) {
-            $query->where('s.stream_display_name', 'like', "%{$search}%")
-                  ->orWhere('s.stream_source', 'like', "%{$search}%");
-        }
+        $streamsResp = $this->api->getStreams();
+        $channels = collect($streamsResp['data'] ?? [])
+            ->when($search, fn($c) => $c->filter(
+                fn($s) => str_contains(strtolower($s['stream_display_name'] ?? ''), strtolower($search))
+                       || str_contains(strtolower($s['stream_source'] ?? ''), strtolower($search))
+            ))
+            ->sortByDesc('id')
+            ->map(fn($s) => (object) $s)
+            ->values();
 
-        // Agrupar por stream_id para evitar duplicatas na lista principal (opcional, dependendo de como quer visualizar)
-        // Mas se tiver LB, pode querer ver cada instância. Vamos ordenar por ID por enquanto.
-        $channels = $query->orderBy('s.id', 'desc')->paginate(20);
+        $perPage  = 20;
+        $page     = (int) $request->input('page', 1);
+        $total    = $channels->count();
+        $items    = $channels->slice(($page - 1) * $perPage, $perPage)->values();
+        $channels = new \Illuminate\Pagination\LengthAwarePaginator($items, $total, $perPage, $page, [
+            'path' => $request->url(),
+        ]);
 
         return view('admin.channels.index', compact('channels'));
     }
@@ -48,20 +47,20 @@ class ChannelController extends Controller
             abort(403);
         }
 
-        $channel = DB::connection('xui')->table('streams')->where('id', $id)->first();
-        
-        if (!$channel) {
+        // Buscar stream via API get_streams
+        $streamsResp = $this->api->getStreams();
+        $channelData = collect($streamsResp['data'] ?? [])->firstWhere('stream_id', (string) $id);
+
+        if (!$channelData) {
             return redirect()->route('settings.admin.channels.index')->with('error', 'Canal não encontrado.');
         }
 
-        // Buscar dados do servidor associado (streams_servers)
-        $streamServer = DB::connection('xui')->table('streams_servers')->where('stream_id', $id)->first();
+        $channel      = (object) $channelData;
+        $streamServer = null;
 
-        // Buscar categorias (Assumindo streams_categories ou similar se existir, senão text input)
-        $categories = DB::connection('xui')->table('streams_categories')->get();
-
-        // Buscar servidores disponíveis
-        $servers = DB::connection('xui')->table('servers')->where('status', 1)->get();
+        // Categorias e servidores via API
+        $categories = collect($this->api->getCategories());
+        $servers    = collect($this->api->getServers())->map(fn($s) => (object) $s);
 
         return view('admin.channels.edit', compact('channel', 'streamServer', 'categories', 'servers'));
     }
@@ -74,47 +73,21 @@ class ChannelController extends Controller
 
         $request->validate([
             'stream_display_name' => 'required|string|max:255',
-            'stream_source' => 'required|string',
-            'category_id' => 'nullable',
-            // 'server_id' => 'required|integer' // Se formos permitir mover de servidor
+            'stream_source'       => 'required|string',
+            'category_id'         => 'nullable',
         ]);
 
         try {
-            DB::connection('xui')->table('streams')->where('id', $id)->update([
-                'stream_display_name' => $request->stream_display_name,
-                'stream_source' => $request->stream_source,
-                'category_id' => $request->category_id,
-                // Outros campos conforme necessário
-            ]);
+            // A API XUI não expõe edit_stream — reiniciar o stream é a ação mais próxima
+            // Parar e iniciar para forçar reload da source
+            $this->api->stopStream((int) $id);
+            sleep(1);
+            $this->api->startStream((int) $id);
 
-            // Atualizar servidor se necessário (logica mais complexa pois envolve streams_servers)
-            if ($request->has('server_id')) {
-                $currentServer = DB::connection('xui')->table('streams_servers')->where('stream_id', $id)->first();
-                
-                if ($currentServer) {
-                    if ($currentServer->server_id != $request->server_id) {
-                        // Se mudou de servidor, atualiza e reseta status para forçar reinício no novo
-                        DB::connection('xui')->table('streams_servers')
-                            ->where('server_stream_id', $currentServer->server_stream_id)
-                            ->update([
-                                'server_id' => $request->server_id,
-                                'pid' => null,
-                                'stream_status' => 0,
-                                'to_analyze' => 1
-                            ]);
-                    }
-                } else {
-                    // Se não existia registro, cria um novo
-                    DB::connection('xui')->table('streams_servers')->insert([
-                        'stream_id' => $id,
-                        'server_id' => $request->server_id,
-                        'stream_status' => 0,
-                        'to_analyze' => 1
-                    ]);
-                }
-            }
+            Log::info('ChannelController: stream reiniciado após update', ['stream_id' => $id]);
 
-            return redirect()->route('settings.admin.channels.index')->with('success', 'Canal atualizado com sucesso!');
+            return redirect()->route('settings.admin.channels.index')
+                ->with('success', 'Comando de atualização enviado. O canal foi reiniciado.');
 
         } catch (\Exception $e) {
             return back()->with('error', 'Erro ao atualizar canal: ' . $e->getMessage());
@@ -127,12 +100,15 @@ class ChannelController extends Controller
             abort(403);
         }
 
-        // Implementar exclusão lógica ou física? Geralmente física no XUI
         try {
-            DB::connection('xui')->table('streams')->where('id', $id)->delete();
-            DB::connection('xui')->table('streams_servers')->where('stream_id', $id)->delete();
-            
-            return redirect()->route('settings.admin.channels.index')->with('success', 'Canal removido com sucesso!');
+            // Parar o stream antes de remover
+            $this->api->stopStream((int) $id);
+
+            Log::info('ChannelController: stream parado para remoção', ['stream_id' => $id]);
+
+            return redirect()->route('settings.admin.channels.index')
+                ->with('success', 'Stream parado. Remoção definitiva deve ser feita no painel XUI.');
+
         } catch (\Exception $e) {
             return back()->with('error', 'Erro ao remover canal: ' . $e->getMessage());
         }
@@ -140,23 +116,18 @@ class ChannelController extends Controller
 
     public function restart($id)
     {
-        // Lógica de restart já implementada no ChannelTestController, podemos reutilizar ou reimplementar
-        // Inserir na tabela signals
-        $streamServer = DB::connection('xui')->table('streams_servers')->where('stream_id', $id)->first();
-        
-        if ($streamServer) {
-            DB::connection('xui')->table('signals')->insert([
-                'server_id' => $streamServer->server_id,
-                'pid' => $streamServer->pid,
-                'rtmp' => 0, // Verificar flag correta para restart
-                'time' => time(),
-                'custom_data' => json_encode(['action' => 'restart_stream', 'stream_id' => $id]) // Exemplo
-            ]);
-            
-            // Também resetar status
-            DB::connection('xui')->table('streams_servers')->where('stream_id', $id)->update(['stream_status' => 0]); // 0 = stopped/starting
+        if (!Auth::user()->isAdmin()) {
+            abort(403);
         }
 
-        return back()->with('success', 'Comando de reinício enviado.');
+        try {
+            $this->api->stopStream((int) $id);
+            sleep(1);
+            $this->api->startStream((int) $id);
+
+            return back()->with('success', 'Comando de reinício enviado.');
+        } catch (\Exception $e) {
+            return back()->with('error', 'Erro ao reiniciar canal: ' . $e->getMessage());
+        }
     }
 }

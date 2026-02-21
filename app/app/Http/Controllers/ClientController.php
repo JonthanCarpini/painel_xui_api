@@ -3,234 +3,201 @@
 namespace App\Http\Controllers;
 
 use App\Models\AppSetting;
-use App\Models\Bouquet;
 use App\Models\ClientDetail;
-use App\Models\Line;
-use App\Models\Package;
-use App\Models\XuiUser;
 use App\Models\WhatsappSetting;
 use App\Services\EvolutionService;
 use App\Services\LineService;
+use App\Services\PackageService;
+use App\Services\XuiApiService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 
 class ClientController extends Controller
 {
+    public function __construct(
+        private XuiApiService $api,
+        private PackageService $packages,
+    ) {}
+
     public function index(Request $request)
     {
-        $user = Auth::user();
-
-        // Parâmetros de busca e paginação
-        $search = $request->input('search', '');
-        $phone = $request->input('phone', '');
-        $status = $request->input('status', '');
-        $type = $request->input('type', '');
+        $user       = Auth::user();
+        $search     = $request->input('search', '');
+        $phone      = $request->input('phone', '');
+        $status     = $request->input('status', '');
+        $type       = $request->input('type', '');
         $resellerId = $request->input('reseller_id', '');
-        $sortBy = $request->input('sort_by', 'created_at');
-        $sortOrder = $request->input('sort_order', 'desc');
-        $perPage = $request->input('per_page', 20);
+        $sortBy     = $request->input('sort_by', 'created_at');
+        $sortOrder  = $request->input('sort_order', 'desc');
+        $perPage    = (int)$request->input('per_page', 20);
+        $quickFilter = $request->input('quick_filter');
 
-        // Validar perPage
         if (!in_array($perPage, [20, 50, 100, 500, 1000])) {
             $perPage = 20;
         }
 
-        // Query base com eager loading
-        $query = Line::select([
-            'id', 'username', 'password', 'exp_date', 'enabled', 'admin_enabled',
-            'is_trial', 'max_connections', 'member_id', 'package_id', 'created_at',
-            'contact', 'admin_notes', 'bouquet'
-        ])
-        ->with([
-            'member:id,username',
-            'package:id,package_name,is_official'
-        ]);
+        // Buscar todas as linhas via API
+        $apiResponse = $this->api->getLines();
+        $allLines    = $apiResponse['data'] ?? [];
 
-        // Filtro por permissão e Revenda
-        if ($user->isAdmin()) {
-            // Admin pode filtrar por revenda específica
+        // Determinar IDs de revendedores permitidos
+        $allowedMemberIds = null;
+        if (!$user->isAdmin()) {
+            $allowedMemberIds = $this->getSubResellerIds($user->xui_id);
+        }
+
+        // Filtros em memória (a API não suporta filtros server-side)
+        $now = time();
+        $filtered = array_filter($allLines, function ($line) use (
+            $user, $allowedMemberIds, $resellerId, $search, $phone, $status, $type, $quickFilter, $now
+        ) {
+            // Permissão
+            if ($allowedMemberIds !== null && !in_array((int)($line['member_id'] ?? 0), $allowedMemberIds)) {
+                return false;
+            }
+
+            // Filtro por revenda
             if ($resellerId) {
                 if ($resellerId === 'mine') {
-                    $query->where('member_id', $user->id);
+                    if ((int)($line['member_id'] ?? 0) !== (int)$user->xui_id) return false;
                 } else {
-                    $query->where('member_id', $resellerId);
+                    if ((int)($line['member_id'] ?? 0) !== (int)$resellerId) return false;
                 }
             }
-        } else {
-            // Revendedor vê apenas sua árvore
-            $myTreeIds = $user->getAllSubResellerIds();
-            
-            if ($resellerId && in_array($resellerId, $myTreeIds)) {
-                $query->where('member_id', $resellerId);
-            } else {
-                $query->whereIn('member_id', $myTreeIds);
+
+            // Busca por username/senha
+            if ($search) {
+                $u = strtolower($line['username'] ?? '');
+                $p = strtolower($line['password'] ?? '');
+                $s = strtolower($search);
+                if (strpos($u, $s) === false && strpos($p, $s) === false) return false;
             }
-        }
 
-        // Busca por username ou senha
-        if ($search) {
-            $query->where(function($q) use ($search) {
-                $q->where('username', 'like', "%{$search}%")
-                  ->orWhere('password', 'like', "%{$search}%");
-            });
-        }
+            // Filtro por tipo
+            if ($type === 'client' && (int)($line['is_trial'] ?? 0) !== 0) return false;
+            if ($type === 'trial'  && (int)($line['is_trial'] ?? 0) !== 1) return false;
 
-        // Busca por telefone (local ou admin_notes)
-        // Como o telefone principal agora está em outra tabela (mysql) e Line está em (xui),
-        // busca mista é complexa. Por enquanto mantemos busca em admin_notes do XUI 
-        // ou fazemos subquery se a busca for estritamente pelo telefone local.
+            // Filtro por status
+            $exp     = (int)($line['exp_date'] ?? 0);
+            $enabled = (int)($line['enabled'] ?? 1);
+            $adminEn = (int)($line['admin_enabled'] ?? 1);
+            if ($status === 'active'  && !($enabled && $adminEn && $exp > $now)) return false;
+            if ($status === 'expired' && $exp > $now) return false;
+            if ($status === 'blocked' && ($enabled && $adminEn)) return false;
+
+            // Filtros rápidos (apenas oficiais)
+            if ($quickFilter) {
+                if ((int)($line['is_trial'] ?? 0) !== 0) return false;
+                if ($quickFilter === 'today'  && !($exp >= $now && $exp <= strtotime('tomorrow') - 1)) return false;
+                if ($quickFilter === '7days'  && !($exp >= $now && $exp <= strtotime('+7 days'))) return false;
+                if ($quickFilter === '30days' && !($exp >= $now && $exp <= strtotime('+30 days'))) return false;
+            }
+
+            return true;
+        });
+
+        // Busca por telefone (via ClientDetail local)
         if ($phone) {
-            // Estratégia híbrida: Busca IDs na tabela local que batem com o telefone
             $localIds = ClientDetail::where('phone', 'like', "%{$phone}%")->pluck('xui_client_id')->toArray();
-            
-            $query->where(function($q) use ($phone, $localIds) {
-                $q->where('admin_notes', 'like', "%{$phone}%"); // Legado
-                
-                if (!empty($localIds)) {
-                    $q->orWhereIn('id', $localIds);
-                }
+            $filtered = array_filter($filtered, function ($line) use ($phone, $localIds) {
+                $inNotes = strpos($line['admin_notes'] ?? '', $phone) !== false;
+                return $inNotes || in_array((int)($line['id'] ?? 0), $localIds);
             });
         }
 
-        // Filtro por Tipo
-        if ($type === 'client') {
-            $query->where('is_trial', 0);
-        } elseif ($type === 'trial') {
-            $query->where('is_trial', 1);
-        }
-
-        // Filtro por Status
-        if ($status === 'active') {
-            $query->where('enabled', 1)
-                  ->where('admin_enabled', 1)
-                  ->where('exp_date', '>', time());
-        } elseif ($status === 'expired') {
-            $query->where('exp_date', '<=', time());
-        } elseif ($status === 'blocked') {
-            $query->where(function($q) {
-                $q->where('enabled', 0)
-                  ->orWhere('admin_enabled', 0);
-            });
-        }
-
-        // Filtros Rápidos (se passados via query string especial)
-        $quickFilter = $request->input('quick_filter');
-        if ($quickFilter) {
-            $query->where('is_trial', 0); // Apenas oficiais para filtros rápidos
-            $now = time();
-            
-            if ($quickFilter === 'today') {
-                $endOfDay = strtotime('tomorrow') - 1;
-                $query->whereBetween('exp_date', [$now, $endOfDay]);
-            } elseif ($quickFilter === '7days') {
-                $end7Days = strtotime('+7 days');
-                $query->whereBetween('exp_date', [$now, $end7Days]);
-            } elseif ($quickFilter === '30days') {
-                $end30Days = strtotime('+30 days');
-                $query->whereBetween('exp_date', [$now, $end30Days]);
-            }
-        }
+        $filtered = array_values($filtered);
 
         // Ordenação
-        $query->orderBy($sortBy, $sortOrder);
+        usort($filtered, function ($a, $b) use ($sortBy, $sortOrder) {
+            $va = $a[$sortBy] ?? 0;
+            $vb = $b[$sortBy] ?? 0;
+            return $sortOrder === 'asc' ? ($va <=> $vb) : ($vb <=> $va);
+        });
 
-        // Paginação
-        $clients = $query->paginate($perPage)->appends($request->except('page'));
+        // Paginação manual
+        $total      = count($filtered);
+        $page       = (int)$request->input('page', 1);
+        $offset     = ($page - 1) * $perPage;
+        $pageItems  = array_slice($filtered, $offset, $perPage);
 
-        // Carregar Dados Locais (Telefone) para a página atual
-        $clientIds = $clients->pluck('id');
+        // Enriquecer com dados locais e pacotes
+        $packages   = $this->packages->all()->keyBy('id');
+        $clientIds  = array_column($pageItems, 'id');
         $localDetails = ClientDetail::whereIn('xui_client_id', $clientIds)->get()->keyBy('xui_client_id');
 
-        // Injetar dados locais nos objetos de cliente
-        foreach ($clients as $client) {
-            $detail = $localDetails->get($client->id);
-            $client->local_phone = $detail ? $detail->phone : null;
-            $client->local_notes = $detail ? $detail->notes : null;
+        foreach ($pageItems as &$line) {
+            $lid = (int)($line['id'] ?? 0);
+            $detail = $localDetails->get($lid);
+            $line['local_phone'] = $detail ? $detail->phone : null;
+            $line['local_notes'] = $detail ? $detail->notes : null;
+            $pkg = $packages->get((int)($line['package_id'] ?? 0));
+            $line['package_name'] = $pkg ? $pkg->package_name : null;
         }
+        unset($line);
 
-        // Lista de Revendedores para Filtro
-        $resellers = [];
-        if ($user->isAdmin()) {
-            $resellers = XuiUser::where('member_group_id', 2)->orderBy('username')->get();
-        } else {
-            // Se for revendedor, buscar seus sub-revendedores diretos
-            // Assumindo que a relação parent/owner existe na tabela users
-            $resellers = XuiUser::where('owner_id', $user->id)->orderBy('username')->get();
-        }
+        // Paginador LengthAwarePaginator
+        $clients = new \Illuminate\Pagination\LengthAwarePaginator(
+            $pageItems, $total, $perPage, $page,
+            ['path' => $request->url(), 'query' => $request->except('page')]
+        );
 
-        // Calcular estatísticas rápidas (Apenas Clientes Oficiais)
-        $statsQuery = Line::where('is_trial', 0);
-        if (!$user->isAdmin()) {
-            $myTreeIds = $user->getAllSubResellerIds();
-            $statsQuery->whereIn('member_id', $myTreeIds);
-        }
-
-        // Clonar query para cada contador para evitar contaminação
-        $now = time();
-        $endOfDay = strtotime('tomorrow') - 1;
-        $end7Days = strtotime('+7 days');
-        $end30Days = strtotime('+30 days');
-
-        $quickStats = cache()->remember('quick_stats_' . $user->id, 60, function () use ($statsQuery, $now, $endOfDay, $end7Days, $end30Days) {
+        // Quick stats
+        $quickStats = cache()->remember('quick_stats_api_' . $user->xui_id, 60, function () use ($allLines, $allowedMemberIds, $now) {
+            $official = array_filter($allLines, function ($l) use ($allowedMemberIds) {
+                if ((int)($l['is_trial'] ?? 0) !== 0) return false;
+                return $allowedMemberIds === null || in_array((int)($l['member_id'] ?? 0), $allowedMemberIds);
+            });
+            $endDay   = strtotime('tomorrow') - 1;
+            $end7     = strtotime('+7 days');
+            $end30    = strtotime('+30 days');
             return [
-                'today' => (clone $statsQuery)->whereBetween('exp_date', [$now, $endOfDay])->count(),
-                '7days' => (clone $statsQuery)->whereBetween('exp_date', [$now, $end7Days])->count(),
-                '30days' => (clone $statsQuery)->whereBetween('exp_date', [$now, $end30Days])->count(),
+                'today'  => count(array_filter($official, fn($l) => ($l['exp_date'] ?? 0) >= $now && ($l['exp_date'] ?? 0) <= $endDay)),
+                '7days'  => count(array_filter($official, fn($l) => ($l['exp_date'] ?? 0) >= $now && ($l['exp_date'] ?? 0) <= $end7)),
+                '30days' => count(array_filter($official, fn($l) => ($l['exp_date'] ?? 0) >= $now && ($l['exp_date'] ?? 0) <= $end30)),
             ];
         });
 
-        // Contagem total global (sem filtros)
-        $totalGlobalQuery = Line::query();
-        if (!$user->isAdmin()) {
-            $myTreeIds = $user->getAllSubResellerIds();
-            $totalGlobalQuery->whereIn('member_id', $myTreeIds);
-        }
-        $totalGlobal = $totalGlobalQuery->count();
+        $totalGlobal = count(array_filter($allLines, function ($l) use ($allowedMemberIds) {
+            return $allowedMemberIds === null || in_array((int)($l['member_id'] ?? 0), $allowedMemberIds);
+        }));
 
-        // Se for requisição AJAX, retornar JSON com stats atualizados
+        // Revendedores para filtro (via API)
+        $usersResp = $this->api->getUsers();
+        $allUsers  = $usersResp['data'] ?? [];
+        $resellers = array_filter($allUsers, function ($u) use ($user) {
+            if ((int)($u['member_group_id'] ?? 0) !== 2) return false;
+            if ($user->isAdmin()) return true;
+            return (int)($u['owner_id'] ?? 0) === (int)$user->xui_id;
+        });
+
         if ($request->ajax()) {
             return response()->json([
-                'html' => view('clients.partials.table', compact('clients'))->render(),
+                'html'       => view('clients.partials.table', compact('clients'))->render(),
                 'pagination' => view('clients.partials.pagination', compact('clients'))->render(),
-                'stats' => $quickStats,
-                'total' => $clients->total()
+                'stats'      => $quickStats,
+                'total'      => $total,
             ]);
         }
 
-        // Cache de pacotes e bouquets
-        $packages = cache()->remember('packages_all_v2', 3600, function () {
-            return Package::select('id', 'package_name', 'is_official', 'is_trial', 'official_duration', 
-                                   'official_duration_in', 'official_credits', 'max_connections', 
-                                   'trial_duration', 'trial_duration_in', 'bouquets')
-                          ->get();
-        });
-        
-        $blacklist = config('xui.bouquet_blacklist', []);
-        $bouquets = Bouquet::whereNotIn('id', $blacklist)
-                      ->orderBy('bouquet_order')
-                      ->get()
-                      ->toArray();
+        $allPackages = $this->packages->all();
+
+        $bouquets = $this->packages->bouquets()->toArray();
 
         return view('clients.index', [
-            'clients' => $clients,
-            'packages' => $packages,
-            'bouquets' => $bouquets,
-            'quickStats' => $quickStats,
+            'clients'     => $clients,
+            'packages'    => $allPackages,
+            'bouquets'    => $bouquets,
+            'quickStats'  => $quickStats,
             'totalGlobal' => $totalGlobal,
-            'resellers' => $resellers, // Para o filtro
+            'resellers'   => array_values($resellers),
         ]);
     }
 
     public function create()
     {
-        $packages = Package::where('is_official', 1)->get();
-        
-        $blacklist = config('xui.bouquet_blacklist', []);
-        $bouquets = Bouquet::whereNotIn('id', $blacklist)
-            ->orderBy('bouquet_order')
-            ->get();
+        $packages = $this->packages->where('is_official', true);
+        $bouquets = $this->packages->bouquets();
 
         return view('clients.create', [
             'packages' => $packages,
@@ -268,25 +235,25 @@ class ClientController extends Controller
             }
 
             $data = [
-                'username' => $validated['username'],
-                'password' => $validated['password'],
-                'package_id' => $validated['package_id'],
-                'bouquet_ids' => $validated['bouquet_ids'],
+                'username'        => $validated['username'],
+                'password'        => $validated['password'],
+                'package_id'      => $validated['package_id'],
+                'bouquet_ids'     => $validated['bouquet_ids'],
                 'max_connections' => $validated['max_connections'],
-                'email' => $validated['email'] ?? null,
-                'phone' => $phone,
-                'notes' => $finalNotes,
-                'member_id' => $user->id,
-                'is_trial' => false,
+                'email'           => $validated['email'] ?? null,
+                'phone'           => $phone,
+                'notes'           => $finalNotes,
+                'member_id'       => $user->xui_id,
+                'is_trial'        => false,
             ];
 
             $line = $lineService->createLine($data);
-            
+
             // Salvar Detalhes Locais (Painel Plus DB)
             ClientDetail::create([
-                'xui_client_id' => $line->id,
-                'phone' => $phone,
-                'notes' => $notes
+                'xui_client_id' => $line['id'],
+                'phone'         => $phone,
+                'notes'         => $notes,
             ]);
             
             // Gerar Mensagem do Cliente
@@ -307,18 +274,14 @@ class ClientController extends Controller
 
     public function createTrial()
     {
-        // Verificar bloqueio de testes
-        $disableTrial = \Illuminate\Support\Facades\DB::connection('xui')->table('settings')->where('id', 1)->value('disable_trial');
+        // Verificar bloqueio de testes via configuração local do Painel
+        $disableTrial = AppSetting::get('disable_trial', 0);
         if ($disableTrial == 1 && !Auth::user()->isAdmin()) {
             return redirect()->route('dashboard')->with('error', 'A criação de testes está temporariamente desabilitada.');
         }
 
-        $blacklist = config('xui.bouquet_blacklist', []);
-        $bouquets = Bouquet::whereNotIn('id', $blacklist)
-            ->orderBy('bouquet_order')
-            ->get();
-
-        $packages = Package::all();
+        $bouquets = $this->packages->bouquets();
+        $packages = $this->packages->all();
 
         return view('clients.create-trial', [
             'bouquets' => $bouquets,
@@ -328,8 +291,8 @@ class ClientController extends Controller
 
     public function storeTrial(Request $request, LineService $lineService)
     {
-        // Verificar bloqueio de testes
-        $disableTrial = \Illuminate\Support\Facades\DB::connection('xui')->table('settings')->where('id', 1)->value('disable_trial');
+        // Verificar bloqueio de testes via configuração local do Painel
+        $disableTrial = AppSetting::get('disable_trial', 0);
         if ($disableTrial == 1 && !Auth::user()->isAdmin()) {
             if ($request->expectsJson()) {
                 return response()->json(['success' => false, 'message' => 'A criação de testes está temporariamente desabilitada.'], 403);
@@ -377,44 +340,44 @@ class ClientController extends Controller
             }
 
             $data = [
-                'username' => $validated['username'],
-                'password' => $validated['password'],
-                'package_id' => $validated['package_id'],
-                'bouquet_ids' => $validated['bouquet_ids'],
-                'duration_value' => $validated['duration_value'],
-                'duration_unit' => $validated['duration_unit'],
+                'username'        => $validated['username'],
+                'password'        => $validated['password'],
+                'package_id'      => $validated['package_id'],
+                'bouquet_ids'     => $validated['bouquet_ids'],
+                'duration_value'  => $validated['duration_value'],
+                'duration_unit'   => $validated['duration_unit'],
                 'max_connections' => $validated['max_connections'],
-                'email' => $validated['email'] ?? null,
-                'phone' => $phone,
-                'notes' => $finalNotes,
-                'member_id' => $user->id,
-                'is_trial' => true,
+                'email'           => $validated['email'] ?? null,
+                'phone'           => $phone,
+                'notes'           => $finalNotes,
+                'member_id'       => $user->xui_id,
+                'is_trial'        => true,
             ];
 
             $line = $lineService->createLine($data);
-            
+
             // Salvar Detalhes Locais também para testes
             ClientDetail::create([
-                'xui_client_id' => $line->id,
-                'phone' => $phone,
-                'notes' => $notes
+                'xui_client_id' => $line['id'],
+                'phone'         => $phone,
+                'notes'         => $notes,
             ]);
-            
+
             // Gerar Mensagem do Cliente
             $clientMessage = $lineService->generateClientMessage($line);
 
             if ($request->expectsJson()) {
                 return response()->json([
-                    'success' => true, 
+                    'success' => true,
                     'message' => 'Teste criado com sucesso!',
                     'client' => [
-                        'id' => $line->id,
-                        'username' => $line->username,
-                        'password' => $line->password,
-                        'exp_date' => $line->exp_date,
-                        'max_connections' => $line->max_connections,
+                        'id'              => $line['id'],
+                        'username'        => $line['username'],
+                        'password'        => $line['password'],
+                        'exp_date'        => $line['exp_date'],
+                        'max_connections' => $line['max_connections'] ?? $validated['max_connections'],
                     ],
-                    'client_message' => $clientMessage
+                    'client_message' => $clientMessage,
                 ]);
             }
 
@@ -423,12 +386,12 @@ class ClientController extends Controller
 
             return redirect()->route('clients.create-trial')
                 ->with('trial_success', [
-                    'username' => $line->username,
-                    'password' => $line->password,
-                    'exp_date' => date('d/m/Y H:i', $line->exp_date),
-                    'max_connections' => $line->max_connections,
-                    'm3u_url' => $urls['m3u_url'],
-                    'hls_url' => $urls['hls_url'],
+                    'username'        => $line['username'],
+                    'password'        => $line['password'],
+                    'exp_date'        => date('d/m/Y H:i', (int)$line['exp_date']),
+                    'max_connections' => $line['max_connections'] ?? $validated['max_connections'],
+                    'm3u_url'         => $urls['m3u_url'],
+                    'hls_url'         => $urls['hls_url'],
                 ])
                 ->with('client_message', $clientMessage);
 
@@ -444,37 +407,34 @@ class ClientController extends Controller
 
     public function edit(int $id)
     {
-        $user = Auth::user();
-        $line = Line::with('package')->find($id);
+        $user   = Auth::user();
+        $result = $this->api->getLine($id);
 
-        if (!$line) {
+        if (($result['status'] ?? '') !== 'STATUS_SUCCESS') {
             return back()->withErrors(['error' => 'Cliente não encontrado']);
         }
 
-        if (!$user->isAdmin() && $line->member_id != $user->id) {
+        $line = $result['data'];
+
+        if (!$user->isAdmin() && (int)($line['member_id'] ?? 0) !== (int)$user->xui_id) {
             return back()->withErrors(['error' => 'Sem permissão para editar este cliente']);
         }
 
-        $packages = Package::where('is_official', 1)->get();
-        $blacklist = config('xui.bouquet_blacklist', []);
-        $bouquets = Bouquet::whereNotIn('id', $blacklist)
-            ->orderBy('bouquet_order')
-            ->get();
+        $packages = $this->packages->where('is_official', true);
+        $bouquets = $this->packages->bouquets();
 
-        $selectedBouquets = json_decode($line->bouquet, true) ?? [];
-        
-        // Carregar detalhes locais
-        $localDetail = ClientDetail::where('xui_client_id', $line->id)->first();
-        if ($localDetail) {
-            $line->local_phone = $localDetail->phone;
-            $line->local_notes = $localDetail->notes;
-        }
+        $rawBouquet = $line['bouquet'] ?? '[]';
+        $selectedBouquets = is_array($rawBouquet) ? $rawBouquet : (json_decode($rawBouquet, true) ?? []);
+
+        $localDetail = ClientDetail::where('xui_client_id', $id)->first();
+        $line['local_phone'] = $localDetail ? $localDetail->phone : null;
+        $line['local_notes'] = $localDetail ? $localDetail->notes : null;
 
         return view('clients.edit', [
-            'client' => $line,
-            'packages' => $packages,
-            'bouquets' => $bouquets,
-            'selectedBouquets' => $selectedBouquets
+            'client'           => $line,
+            'packages'         => $packages,
+            'bouquets'         => $bouquets,
+            'selectedBouquets' => $selectedBouquets,
         ]);
     }
 
@@ -491,14 +451,16 @@ class ClientController extends Controller
             'enabled' => 'nullable|boolean',
         ]);
 
-        $user = Auth::user();
-        $line = Line::find($id);
+        $user   = Auth::user();
+        $result = $this->api->getLine($id);
 
-        if (!$line) {
+        if (($result['status'] ?? '') !== 'STATUS_SUCCESS') {
             return back()->withErrors(['error' => 'Cliente não encontrado']);
         }
 
-        if (!$user->isAdmin() && $line->member_id != $user->id) {
+        $line = $result['data'];
+
+        if (!$user->isAdmin() && (int)($line['member_id'] ?? 0) !== (int)$user->xui_id) {
             return back()->withErrors(['error' => 'Sem permissão para editar este cliente']);
         }
 
@@ -506,40 +468,43 @@ class ClientController extends Controller
             $phone = $validated['phone'] ?? '';
             $notes = $validated['notes'] ?? '';
 
-            // Atualizar no XUI
-            $line->update([
-                'username' => $validated['username'],
-                'password' => $validated['password'],
-                'package_id' => $validated['package_id'] ?? $line->package_id,
-                'bouquet' => json_encode($validated['bouquet_ids']),
-                'contact' => $phone, // Atualizar contact legado
-                'notes' => $notes, // Atualizar notes legado
-                'enabled' => $validated['enabled'] ?? $line->enabled,
-            ]);
+            $editPayload = [
+                'username'          => $validated['username'],
+                'password'          => $validated['password'],
+                'member_id'         => (int)($line['member_id'] ?? 0),
+                'package_id'        => $validated['package_id'] ?? ($line['package_id'] ?? null),
+                'bouquets_selected' => array_map('intval', $validated['bouquet_ids']),
+                'contact'           => $phone,
+                'admin_notes'       => $notes,
+            ];
 
-            // Atualizar/Criar Localmente
+            if (isset($validated['enabled'])) {
+                $editPayload['enabled'] = (int)$validated['enabled'];
+            }
+
+            $editResult = $this->api->editLine($id, $editPayload);
+
+            if (($editResult['status'] ?? '') !== 'STATUS_SUCCESS') {
+                throw new \Exception($editResult['message'] ?? 'Erro ao atualizar na API XUI');
+            }
+
             ClientDetail::updateOrCreate(
-                ['xui_client_id' => $line->id],
-                [
-                    'phone' => $phone,
-                    'notes' => $notes
-                ]
+                ['xui_client_id' => $id],
+                ['phone' => $phone, 'notes' => $notes]
             );
 
             if ($request->expectsJson()) {
                 return response()->json(['success' => true, 'message' => 'Cliente atualizado com sucesso!']);
             }
 
-            return redirect()->route('clients.index')
-                ->with('success', 'Cliente atualizado com sucesso!');
+            return redirect()->route('clients.index')->with('success', 'Cliente atualizado com sucesso!');
 
         } catch (\Exception $e) {
             if ($request->expectsJson()) {
                 return response()->json(['success' => false, 'message' => $e->getMessage()], 400);
             }
-            
-            return back()->withErrors(['error' => 'Erro ao atualizar cliente: ' . $e->getMessage()])
-                ->withInput();
+
+            return back()->withErrors(['error' => 'Erro ao atualizar cliente: ' . $e->getMessage()])->withInput();
         }
     }
 
@@ -560,40 +525,42 @@ class ClientController extends Controller
             ], 422);
         }
 
-        $user = Auth::user();
-        $line = Line::find($id);
+        $user   = Auth::user();
+        $result = $this->api->getLine($id);
 
-        if (!$line) {
+        if (($result['status'] ?? '') !== 'STATUS_SUCCESS') {
             return response()->json(['success' => false, 'message' => 'Cliente não encontrado'], 404);
         }
 
-        if (!$user->isAdmin() && $line->member_id != $user->id) {
+        $lineData = $result['data'];
+
+        if (!$user->isAdmin() && (int)($lineData['member_id'] ?? 0) !== (int)$user->xui_id) {
             return response()->json(['success' => false, 'message' => 'Sem permissão'], 403);
         }
 
         try {
             $data = [
-                'package_id' => $validated['package_id'],
-                'duration_value' => $validated['duration_value'],
-                'duration_unit' => $validated['duration_unit'],
+                'package_id'      => $validated['package_id'],
+                'duration_value'  => $validated['duration_value'],
+                'duration_unit'   => $validated['duration_unit'],
                 'max_connections' => $validated['max_connections'],
             ];
 
             $line = $lineService->renewLine($id, $data);
 
-            $localDetail = ClientDetail::where('xui_client_id', $line->id)->first();
-            $clientPhone = $localDetail->phone ?? $line->contact ?? null;
+            $localDetail = ClientDetail::where('xui_client_id', $id)->first();
+            $clientPhone = $localDetail->phone ?? ($line['contact'] ?? null);
 
             return response()->json([
-                'success' => true, 
+                'success' => true,
                 'message' => 'Cliente renovado com sucesso!',
-                'client' => [
-                    'username' => $line->username,
-                    'password' => $line->password,
-                    'exp_date' => date('d/m/Y H:i', $line->exp_date),
-                    'max_connections' => $line->max_connections,
-                    'phone' => $clientPhone,
-                ]
+                'client'  => [
+                    'username'        => $line['username'],
+                    'password'        => $line['password'],
+                    'exp_date'        => date('d/m/Y H:i', (int)$line['exp_date']),
+                    'max_connections' => $line['max_connections'] ?? $validated['max_connections'],
+                    'phone'           => $clientPhone,
+                ],
             ]);
 
         } catch (\Exception $e) {
@@ -604,50 +571,50 @@ class ClientController extends Controller
     // Renovar em Confiança
     public function renewTrust(int $id, LineService $lineService)
     {
-        $user = Auth::user();
-        $line = Line::find($id);
+        $user   = Auth::user();
+        $result = $this->api->getLine($id);
 
-        if (!$line) {
+        if (($result['status'] ?? '') !== 'STATUS_SUCCESS') {
             return response()->json(['success' => false, 'message' => 'Cliente não encontrado'], 404);
         }
 
-        if (!$user->isAdmin() && $line->member_id != $user->id) {
+        $lineData = $result['data'];
+
+        if (!$user->isAdmin() && (int)($lineData['member_id'] ?? 0) !== (int)$user->xui_id) {
             return response()->json(['success' => false, 'message' => 'Sem permissão'], 403);
         }
 
-        // Buscar Pacote de Confiança
         $trustPackageId = AppSetting::get('trust_renew_package_id');
         if (!$trustPackageId) {
             return response()->json(['success' => false, 'message' => 'Pacote de confiança não configurado pelo Administrador.'], 400);
         }
 
-        $package = Package::find($trustPackageId);
+        $package = $this->packages->find((int)$trustPackageId);
         if (!$package) {
             return response()->json(['success' => false, 'message' => 'Pacote de confiança configurado não existe mais.'], 400);
         }
 
         try {
             $data = [
-                'package_id' => $package->id,
-                'duration_value' => $package->official_duration,
-                'duration_unit' => $package->official_duration_in,
+                'package_id'      => $package->id,
+                'duration_value'  => $package->official_duration,
+                'duration_unit'   => $package->official_duration_in,
                 'max_connections' => $package->max_connections ?? 1,
             ];
 
-            // Executar renovação padrão usando o pacote de confiança
             $line = $lineService->renewLine($id, $data);
 
-            $localDetail = ClientDetail::where('xui_client_id', $line->id)->first();
-            $clientPhone = $localDetail->phone ?? $line->contact ?? null;
+            $localDetail = ClientDetail::where('xui_client_id', $id)->first();
+            $clientPhone = $localDetail->phone ?? ($line['contact'] ?? null);
 
             return response()->json([
-                'success' => true, 
+                'success' => true,
                 'message' => 'Renovação em confiança realizada com sucesso!',
-                'client' => [
-                    'username' => $line->username,
-                    'exp_date' => date('d/m/Y H:i', $line->exp_date),
-                    'phone' => $clientPhone,
-                ]
+                'client'  => [
+                    'username' => $line['username'],
+                    'exp_date' => date('d/m/Y H:i', (int)$line['exp_date']),
+                    'phone'    => $clientPhone,
+                ],
             ]);
 
         } catch (\Exception $e) {
@@ -659,36 +626,27 @@ class ClientController extends Controller
     public function sync(Request $request)
     {
         $user = Auth::user();
-        
-        try {
-            $query = Line::select('id', 'contact', 'admin_notes');
 
-            // Se não for admin, limitar aos clientes da própria árvore
+        try {
+            $apiResponse = $this->api->getLines();
+            $allLines    = $apiResponse['data'] ?? [];
+
             if (!$user->isAdmin()) {
-                $myTreeIds = $user->getAllSubResellerIds();
-                $query->whereIn('member_id', $myTreeIds);
+                $allowed  = $this->getSubResellerIds($user->xui_id);
+                $allLines = array_filter($allLines, fn($l) => in_array((int)($l['member_id'] ?? 0), $allowed));
             }
 
-            $lines = $query->get();
             $count = 0;
+            foreach ($allLines as $line) {
+                $lineId = (int)($line['id'] ?? 0);
+                if (!$lineId) continue;
 
-            foreach ($lines as $line) {
-                // Tentar extrair telefone do contact ou admin_notes se não existir localmente
-                $exists = ClientDetail::where('xui_client_id', $line->id)->exists();
-                
+                $exists = ClientDetail::where('xui_client_id', $lineId)->exists();
                 if (!$exists) {
-                    $phone = $line->contact;
-                    // Tentar extrair de admin_notes se contact estiver vazio
-                    if (empty($phone) && !empty($line->admin_notes)) {
-                         // Lógica simples: pegar primeira string que parece telefone
-                         // Mas por segurança vamos deixar vazio se não explícito em contact
-                         $phone = ''; // Deixar vazio para preenchimento manual posterior
-                    }
-
                     ClientDetail::create([
-                        'xui_client_id' => $line->id,
-                        'phone' => $phone,
-                        'notes' => ''
+                        'xui_client_id' => $lineId,
+                        'phone'         => $line['contact'] ?? '',
+                        'notes'         => '',
                     ]);
                     $count++;
                 }
@@ -696,7 +654,7 @@ class ClientController extends Controller
 
             return response()->json([
                 'success' => true,
-                'message' => "Sincronização concluída. {$count} clientes importados para base local."
+                'message' => "Sincronização concluída. {$count} clientes importados para base local.",
             ]);
 
         } catch (\Exception $e) {
@@ -706,16 +664,17 @@ class ClientController extends Controller
 
     public function generateM3u(int $id, LineService $lineService)
     {
-        $line = Line::find($id);
+        $result = $this->api->getLine($id);
 
-        if (!$line) {
+        if (($result['status'] ?? '') !== 'STATUS_SUCCESS') {
             return back()->withErrors(['error' => 'Cliente não encontrado']);
         }
 
+        $line = $result['data'];
         $urls = $lineService->generateM3uUrls($line);
 
         return view('clients.m3u', [
-            'client' => $line,
+            'client'  => $line,
             'm3u_url' => $urls['m3u_url'],
             'hls_url' => $urls['hls_url'],
         ]);
@@ -723,13 +682,13 @@ class ClientController extends Controller
 
     public function getM3uData(int $id, LineService $lineService)
     {
-        $line = Line::find($id);
+        $result = $this->api->getLine($id);
 
-        if (!$line) {
+        if (($result['status'] ?? '') !== 'STATUS_SUCCESS') {
             return response()->json(['error' => 'Cliente não encontrado'], 404);
         }
 
-        $urls = $lineService->generateM3uUrls($line);
+        $urls = $lineService->generateM3uUrls($result['data']);
 
         return response()->json([
             'm3u_url' => $urls['m3u_url'],
@@ -739,17 +698,15 @@ class ClientController extends Controller
 
     public function getMessage(int $id, LineService $lineService)
     {
-        $line = Line::find($id);
+        $result = $this->api->getLine($id);
 
-        if (!$line) {
+        if (($result['status'] ?? '') !== 'STATUS_SUCCESS') {
             return response()->json(['error' => 'Cliente não encontrado'], 404);
         }
 
-        $message = $lineService->generateClientMessage($line);
+        $message = $lineService->generateClientMessage($result['data']);
 
-        return response()->json([
-            'message' => $message
-        ]);
+        return response()->json(['message' => $message]);
     }
 
     public function sendWhatsapp(Request $request)
@@ -799,73 +756,6 @@ class ClientController extends Controller
         return view('clients.export');
     }
 
-    private function getFilteredClients(Request $request)
-    {
-        $user = Auth::user();
-        
-        $search = $request->input('search', '');
-        $phone = $request->input('phone', '');
-        $status = $request->input('status', '');
-
-        $query = Line::select([
-            'id', 'username', 'password', 'exp_date', 'enabled', 'admin_enabled',
-            'is_trial', 'max_connections', 'member_id', 'package_id', 'created_at',
-            'contact', 'admin_notes', 'bouquet'
-        ])
-        ->with([
-            'member:id,username',
-            'package:id,package_name,is_official'
-        ]);
-
-        if (!$user->isAdmin()) {
-            $myTreeIds = $user->getAllSubResellerIds();
-            $query->whereIn('member_id', $myTreeIds);
-        }
-
-        if ($search) {
-            $query->where(function($q) use ($search) {
-                $q->where('username', 'like', "%{$search}%")
-                  ->orWhere('password', 'like', "%{$search}%");
-            });
-        }
-
-        if ($phone) {
-            // Busca simplificada para exportação
-            // Tenta buscar no ClientDetail local também
-            $localIds = ClientDetail::where('phone', 'like', "%{$phone}%")->pluck('xui_client_id')->toArray();
-            
-            $query->where(function($q) use ($phone, $localIds) {
-                $q->where('admin_notes', 'like', "%{$phone}%");
-                if (!empty($localIds)) {
-                    $q->orWhereIn('id', $localIds);
-                }
-            });
-        }
-
-        if ($status === 'active') {
-            $query->where('enabled', 1)
-                  ->where('admin_enabled', 1)
-                  ->where('exp_date', '>', time());
-        } elseif ($status === 'expired') {
-            $query->where('exp_date', '<=', time());
-        } elseif ($status === 'trial') {
-            $query->where('is_trial', 1);
-        }
-
-        $clients = $query->orderBy('created_at', 'desc')->get();
-
-        // Carregar detalhes locais (Telefone)
-        $clientIds = $clients->pluck('id');
-        $localDetails = ClientDetail::whereIn('xui_client_id', $clientIds)->get()->keyBy('xui_client_id');
-
-        foreach ($clients as $client) {
-            $detail = $localDetails->get($client->id);
-            $client->local_phone = $detail ? $detail->phone : null;
-        }
-
-        return $clients;
-    }
-
     public function exportCSV(Request $request)
     {
         $clients = $this->getFilteredClients($request);
@@ -879,10 +769,8 @@ class ClientController extends Controller
         ];
 
         $callback = function() use ($clients, $mode) {
-            $file = fopen('php://output', 'w');
-            fprintf($file, chr(0xEF).chr(0xBB).chr(0xBF)); // UTF-8 BOM
-            
-            // Usando ponto e vírgula (;) como separador para compatibilidade com Excel PT-BR
+            $file      = fopen('php://output', 'w');
+            fprintf($file, chr(0xEF).chr(0xBB).chr(0xBF));
             $delimiter = ';';
 
             if ($mode === 'simple') {
@@ -890,34 +778,34 @@ class ClientController extends Controller
             } else {
                 fputcsv($file, ['#', 'Username', 'Senha', 'Telefone', 'Revenda', 'Tipo', 'Validade', 'Conexões', 'Status'], $delimiter);
             }
-            
+
             $index = 1;
-            foreach ($clients as $client) {
-                // Prioriza telefone local, depois admin_notes (legado), depois contact
-                $phone = $client->local_phone ?? $client->admin_notes ?? $client->contact ?? '';
+            $now   = time();
+            foreach ($clients as $c) {
+                $phone = $c['local_phone'] ?? $c['admin_notes'] ?? $c['contact'] ?? '';
 
                 if ($mode === 'simple') {
-                    fputcsv($file, [
-                        $client->username,
-                        $phone,
-                    ], $delimiter);
+                    fputcsv($file, [$c['username'] ?? '', $phone], $delimiter);
                 } else {
-                    $isActive = $client->enabled && $client->admin_enabled && $client->exp_date > time();
-                    
+                    $exp      = (int)($c['exp_date'] ?? 0);
+                    $enabled  = (int)($c['enabled'] ?? 1);
+                    $adminEn  = (int)($c['admin_enabled'] ?? 1);
+                    $isActive = $enabled && $adminEn && $exp > $now;
+
                     fputcsv($file, [
                         $index++,
-                        $client->username,
-                        $client->password,
+                        $c['username'] ?? '',
+                        $c['password'] ?? '',
                         $phone,
-                        $client->member->username ?? 'N/A',
-                        $client->is_trial ? 'Teste' : 'Cliente',
-                        date('d/m/Y H:i', $client->exp_date),
-                        $client->max_connections,
-                        $isActive ? 'Ativo' : 'Inativo'
+                        $c['member_username'] ?? 'N/A',
+                        (int)($c['is_trial'] ?? 0) ? 'Teste' : 'Cliente',
+                        $exp ? date('d/m/Y H:i', $exp) : '',
+                        $c['max_connections'] ?? 1,
+                        $isActive ? 'Ativo' : 'Inativo',
                     ], $delimiter);
                 }
             }
-            
+
             fclose($file);
         };
 
@@ -926,26 +814,24 @@ class ClientController extends Controller
 
     public function exportTXT(Request $request)
     {
-        $clients = $this->getFilteredClients($request);
-        
+        $clients  = $this->getFilteredClients($request);
         $filename = 'clientes_' . date('Y-m-d_H-i-s') . '.txt';
-        
-        $headers = [
-            'Content-Type' => 'text/plain; charset=UTF-8',
+        $headers  = [
+            'Content-Type'        => 'text/plain; charset=UTF-8',
             'Content-Disposition' => "attachment; filename=\"{$filename}\"",
         ];
 
-        $content = "# Lista de Clientes - " . date('d/m/Y H:i:s') . "\n";
-        $content .= "# Total: " . $clients->count() . " clientes\n\n";
-        
-        foreach ($clients as $client) {
-            $phone = $client->local_phone ?? $client->admin_notes ?? $client->contact ?? 'Não informado';
-            
-            $content .= "Username: {$client->username}\n";
-            $content .= "Senha: {$client->password}\n";
+        $content  = "# Lista de Clientes - " . date('d/m/Y H:i:s') . "\n";
+        $content .= "# Total: " . count($clients) . " clientes\n\n";
+
+        foreach ($clients as $c) {
+            $phone    = $c['local_phone'] ?? $c['admin_notes'] ?? $c['contact'] ?? 'Não informado';
+            $exp      = (int)($c['exp_date'] ?? 0);
+            $content .= "Username: {$c['username']}\n";
+            $content .= "Senha: {$c['password']}\n";
             $content .= "Telefone: {$phone}\n";
-            $content .= "Validade: " . date('d/m/Y H:i', $client->exp_date) . "\n";
-            $content .= "Conexões: {$client->max_connections}\n";
+            $content .= "Validade: " . ($exp ? date('d/m/Y H:i', $exp) : 'N/A') . "\n";
+            $content .= "Conexões: {$c['max_connections']}\n";
             $content .= "---\n\n";
         }
 
@@ -954,56 +840,54 @@ class ClientController extends Controller
 
     public function exportJSON(Request $request)
     {
-        $clients = $this->getFilteredClients($request);
-        
+        $clients  = $this->getFilteredClients($request);
         $filename = 'clientes_' . date('Y-m-d_H-i-s') . '.json';
-        
-        $data = $clients->map(function($client) {
-            $phone = $client->local_phone ?? $client->admin_notes ?? $client->contact ?? null;
-            
+        $now      = time();
+
+        $data = array_map(function ($c) use ($now) {
+            $exp     = (int)($c['exp_date'] ?? 0);
+            $enabled = (int)($c['enabled'] ?? 1) && (int)($c['admin_enabled'] ?? 1);
             return [
-                'username' => $client->username,
-                'password' => $client->password,
-                'phone' => $phone,
-                'reseller' => $client->member->username ?? null,
-                'type' => $client->is_trial ? 'trial' : 'client',
-                'expiration' => date('Y-m-d H:i:s', $client->exp_date),
-                'expiration_timestamp' => $client->exp_date,
-                'max_connections' => $client->max_connections,
-                'enabled' => $client->enabled && $client->admin_enabled,
-                'is_active' => $client->enabled && $client->admin_enabled && $client->exp_date > time(),
-                'created_at' => date('Y-m-d H:i:s', $client->created_at),
+                'username'             => $c['username'] ?? '',
+                'password'             => $c['password'] ?? '',
+                'phone'                => $c['local_phone'] ?? $c['admin_notes'] ?? $c['contact'] ?? null,
+                'reseller'             => $c['member_username'] ?? null,
+                'type'                 => (int)($c['is_trial'] ?? 0) ? 'trial' : 'client',
+                'expiration'           => $exp ? date('Y-m-d H:i:s', $exp) : null,
+                'expiration_timestamp' => $exp,
+                'max_connections'      => $c['max_connections'] ?? 1,
+                'enabled'              => $enabled,
+                'is_active'            => $enabled && $exp > $now,
+                'created_at'           => isset($c['created_at']) ? date('Y-m-d H:i:s', (int)$c['created_at']) : null,
             ];
-        });
+        }, $clients);
 
         $headers = [
-            'Content-Type' => 'application/json; charset=UTF-8',
+            'Content-Type'        => 'application/json; charset=UTF-8',
             'Content-Disposition' => "attachment; filename=\"{$filename}\"",
         ];
 
         return response()->json([
             'exported_at' => date('Y-m-d H:i:s'),
-            'total' => $clients->count(),
-            'clients' => $data
+            'total'       => count($clients),
+            'clients'     => $data,
         ], 200, $headers);
     }
 
     public function exportM3U(Request $request, LineService $lineService)
     {
-        $clients = $this->getFilteredClients($request);
-        
+        $clients  = $this->getFilteredClients($request);
         $filename = 'clientes_m3u_' . date('Y-m-d_H-i-s') . '.txt';
-        
-        $headers = [
-            'Content-Type' => 'text/plain; charset=UTF-8',
+        $headers  = [
+            'Content-Type'        => 'text/plain; charset=UTF-8',
             'Content-Disposition' => "attachment; filename=\"{$filename}\"",
         ];
 
-        $content = "# Lista de Links M3U8 - " . date('d/m/Y H:i:s') . "\n";
-        $content .= "# Total: " . $clients->count() . " clientes\n\n";
-        
-        foreach ($clients as $client) {
-            $urls = $lineService->generateM3uUrls($client);
+        $content  = "# Lista de Links M3U8 - " . date('d/m/Y H:i:s') . "\n";
+        $content .= "# Total: " . count($clients) . " clientes\n\n";
+
+        foreach ($clients as $c) {
+            $urls     = $lineService->generateM3uUrls($c);
             $content .= "{$urls['m3u_url']}\n";
         }
 
@@ -1012,77 +896,170 @@ class ClientController extends Controller
 
     public function getEditData(int $id)
     {
-        $user = Auth::user();
-        $line = Line::find($id);
+        $user   = Auth::user();
+        $result = $this->api->getLine($id);
 
-        if (!$line) {
+        if (($result['status'] ?? '') !== 'STATUS_SUCCESS') {
             return response()->json(['error' => 'Cliente não encontrado'], 404);
         }
 
-        if (!$user->isAdmin() && $line->member_id != $user->id) {
+        $line = $result['data'];
+
+        if (!$user->isAdmin() && (int)($line['member_id'] ?? 0) !== (int)$user->xui_id) {
             return response()->json(['error' => 'Sem permissão'], 403);
         }
 
-        $blacklist = config('xui.bouquet_blacklist', []);
-        $bouquets = Bouquet::whereNotIn('id', $blacklist)
-            ->orderBy('bouquet_order')
-            ->get();
+        $bouquets = $this->packages->bouquets();
+        $package  = $this->packages->find((int)($line['package_id'] ?? 0));
 
-        $package = Package::find($line->package_id);
-
-        // Buscar bouquets da LINHA (Cliente)
+        $rawBouquet = $line['bouquet'] ?? null;
         $selectedBouquets = [];
-        if ($line->bouquet) {
-            // Verifica se já é array (devido a cast) ou decodifica
-            $selectedBouquets = is_array($line->bouquet) ? $line->bouquet : (json_decode($line->bouquet, true) ?? []);
+        if ($rawBouquet) {
+            $selectedBouquets = is_array($rawBouquet) ? $rawBouquet : (json_decode($rawBouquet, true) ?? []);
         } elseif ($package && $package->bouquets) {
-            // Fallback para bouquets do pacote se a linha não tiver (raro em edição, mas possível)
-            // O model Package tem cast 'array' para bouquets, então acessamos diretamente ou decodificamos se necessário
-            $pkgBouquets = $package->attributes['bouquets'] ?? $package->bouquets; // Tenta pegar atributo bruto se cast falhar ou vice-versa
-            if (is_string($pkgBouquets)) {
-                $selectedBouquets = json_decode($pkgBouquets, true) ?? [];
-            } elseif (is_array($pkgBouquets)) {
-                $selectedBouquets = $pkgBouquets;
-            }
+            $pkgBouquets = $package->bouquets;
+            $selectedBouquets = is_string($pkgBouquets) ? (json_decode($pkgBouquets, true) ?? []) : (array)$pkgBouquets;
         }
 
-        // Buscar dados locais
-        $localDetail = ClientDetail::where('xui_client_id', $line->id)->first();
-        $phone = $localDetail ? $localDetail->phone : ($line->contact ?? '');
-        $notes = $localDetail ? $localDetail->notes : ($line->notes ?? '');
+        $localDetail = ClientDetail::where('xui_client_id', $id)->first();
+        $phone = $localDetail ? $localDetail->phone : ($line['contact'] ?? '');
+        $notes = $localDetail ? $localDetail->notes : ($line['admin_notes'] ?? '');
 
         return response()->json([
-            'username' => $line->username,
-            'password' => $line->password,
-            'email' => '', // Email não é mais usado prioritariamente
-            'phone' => $phone,
-            'notes' => $notes,
-            'package_name' => $package ? $package->package_name : 'Sem pacote',
-            'max_connections' => $line->max_connections,
-            'all_bouquets' => $bouquets,
+            'username'          => $line['username'] ?? '',
+            'password'          => $line['password'] ?? '',
+            'email'             => '',
+            'phone'             => $phone,
+            'notes'             => $notes,
+            'package_name'      => $package ? $package->package_name : 'Sem pacote',
+            'max_connections'   => $line['max_connections'] ?? 1,
+            'all_bouquets'      => $bouquets,
             'selected_bouquets' => $selectedBouquets,
         ]);
     }
 
     public function destroy(int $id)
     {
-        $user = Auth::user();
-        $line = Line::find($id);
+        $user   = Auth::user();
+        $result = $this->api->getLine($id);
 
-        if (!$line) {
+        if (($result['status'] ?? '') !== 'STATUS_SUCCESS') {
             return back()->withErrors(['error' => 'Cliente não encontrado']);
         }
 
-        if (!$user->isAdmin() && $line->member_id != $user->id) {
+        $line = $result['data'];
+
+        if (!$user->isAdmin() && (int)($line['member_id'] ?? 0) !== (int)$user->xui_id) {
             return back()->withErrors(['error' => 'Sem permissão para excluir este cliente']);
         }
 
-        $line->delete();
-        
-        // Excluir local também (opcional, pode manter histórico)
+        $deleteResult = $this->api->deleteLine($id);
+
+        if (($deleteResult['status'] ?? '') !== 'STATUS_SUCCESS') {
+            return back()->withErrors(['error' => 'Erro ao excluir cliente na API XUI: ' . ($deleteResult['message'] ?? 'erro')]);
+        }
+
         ClientDetail::where('xui_client_id', $id)->delete();
 
-        return redirect()->route('clients.index')
-            ->with('success', 'Cliente excluído com sucesso!');
+        return redirect()->route('clients.index')->with('success', 'Cliente excluído com sucesso!');
+    }
+
+    // -------------------------------------------------------------------------
+    // Helpers privados
+    // -------------------------------------------------------------------------
+
+    /**
+     * Retorna IDs do revendedor + todos os sub-revendedores recursivamente via API.
+     */
+    private function getSubResellerIds(int $userId): array
+    {
+        $usersResp = $this->api->getUsers();
+        $allUsers  = $usersResp['data'] ?? [];
+
+        $ids = [$userId];
+        $changed = true;
+
+        while ($changed) {
+            $changed = false;
+            foreach ($allUsers as $u) {
+                $uid = (int)($u['id'] ?? 0);
+                $oid = (int)($u['owner_id'] ?? 0);
+                if ($oid && in_array($oid, $ids) && !in_array($uid, $ids)) {
+                    $ids[]   = $uid;
+                    $changed = true;
+                }
+            }
+        }
+
+        return array_unique($ids);
+    }
+
+    /**
+     * Retorna linhas filtradas para exportação (via API).
+     */
+    private function getFilteredClients(Request $request): array
+    {
+        $user    = Auth::user();
+        $search  = $request->input('search', '');
+        $phone   = $request->input('phone', '');
+        $status  = $request->input('status', '');
+
+        $apiResponse = $this->api->getLines();
+        $allLines    = $apiResponse['data'] ?? [];
+
+        $allowedMemberIds = null;
+        if (!$user->isAdmin()) {
+            $allowedMemberIds = $this->getSubResellerIds($user->xui_id);
+        }
+
+        $now = time();
+        $filtered = array_filter($allLines, function ($line) use ($allowedMemberIds, $search, $status, $now) {
+            if ($allowedMemberIds !== null && !in_array((int)($line['member_id'] ?? 0), $allowedMemberIds)) {
+                return false;
+            }
+            if ($search) {
+                $u = strtolower($line['username'] ?? '');
+                $p = strtolower($line['password'] ?? '');
+                $s = strtolower($search);
+                if (strpos($u, $s) === false && strpos($p, $s) === false) return false;
+            }
+            $exp     = (int)($line['exp_date'] ?? 0);
+            $enabled = (int)($line['enabled'] ?? 1);
+            $adminEn = (int)($line['admin_enabled'] ?? 1);
+            if ($status === 'active'  && !($enabled && $adminEn && $exp > $now)) return false;
+            if ($status === 'expired' && $exp > $now) return false;
+            if ($status === 'trial'   && (int)($line['is_trial'] ?? 0) !== 1) return false;
+            return true;
+        });
+
+        if ($phone) {
+            $localIds = ClientDetail::where('phone', 'like', "%{$phone}%")->pluck('xui_client_id')->toArray();
+            $filtered = array_filter($filtered, function ($line) use ($phone, $localIds) {
+                return strpos($line['admin_notes'] ?? '', $phone) !== false
+                    || in_array((int)($line['id'] ?? 0), $localIds);
+            });
+        }
+
+        $filtered = array_values($filtered);
+
+        // Enriquecer com dados locais
+        $packages   = $this->packages->all()->keyBy('id');
+        $clientIds  = array_column($filtered, 'id');
+        $localDetails = ClientDetail::whereIn('xui_client_id', $clientIds)->get()->keyBy('xui_client_id');
+
+        // Enriquecer com dados de revendedores
+        $usersResp = $this->api->getUsers();
+        $usersMap  = collect($usersResp['data'] ?? [])->keyBy('id');
+
+        foreach ($filtered as &$line) {
+            $lid = (int)($line['id'] ?? 0);
+            $detail = $localDetails->get($lid);
+            $line['local_phone']   = $detail ? $detail->phone : null;
+            $line['package_name']  = $packages->get((int)($line['package_id'] ?? 0))?->package_name;
+            $line['member_username'] = $usersMap->get((int)($line['member_id'] ?? 0))['username'] ?? 'N/A';
+        }
+        unset($line);
+
+        return $filtered;
     }
 }

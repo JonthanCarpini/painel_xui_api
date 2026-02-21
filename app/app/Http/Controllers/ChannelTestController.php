@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Services\XuiApiService;
 use Illuminate\Http\Request;
 use App\Models\DnsServer;
 use App\Models\TestChannel;
@@ -11,9 +12,11 @@ use App\Models\TicketExtra;
 use App\Models\TicketReply;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 
 class ChannelTestController extends Controller
 {
+    public function __construct(private XuiApiService $api) {}
     public function index()
     {
         $categoriesByType = TestChannel::select('group_title', 'type')
@@ -74,62 +77,42 @@ class ChannelTestController extends Controller
         }
 
         try {
-            // 1. Dados Básicos (Tabela streams)
-            $stream = DB::connection('xui')->table('streams')
-                ->where('id', $channel->stream_id)
-                ->select('stream_display_name', 'stream_source')
-                ->first();
+            $streamId = (int) $channel->stream_id;
 
-            if (!$stream) {
-                return response()->json(['error' => 'Stream não encontrada no banco XUI'], 404);
+            // 1. Dados Básicos via API get_streams — filtrar pelo stream_id
+            $streamsResp = $this->api->getStreams();
+            $streamData  = collect($streamsResp['data'] ?? [])
+                ->firstWhere('stream_id', (string) $streamId);
+
+            if (!$streamData) {
+                return response()->json(['error' => 'Stream não encontrada via API XUI'], 404);
             }
 
-            // 2. Status Técnico (Tabela streams_servers)
-            // Busca o servidor onde o canal está rodando (preferência para onde tem PID)
-            $streamServer = DB::connection('xui')->table('streams_servers')
-                ->where('stream_id', $channel->stream_id)
-                ->orderBy('pid', 'desc') // Tenta pegar um com PID primeiro
-                ->first();
+            // 2. Status via stream_errors — se não há erros recentes, está Online
+            $errorsResp  = $this->api->getStreamErrors($streamId);
+            $recentError = collect($errorsResp['data'] ?? [])->first();
+            $status      = 'Online';
+            $uptime      = 'Indisponível';
+            $serverId    = $streamData['server_id'] ?? null;
 
-            $status = 'Offline';
-            $uptime = 'Indisponível';
-            $bitrate = 0;
-            $serverId = null;
-
-            if ($streamServer) {
-                $serverId = $streamServer->server_id;
-                
-                // Lógica de Status baseada no PID e stream_status
-                if ($streamServer->pid > 0) {
-                    $status = 'Online';
-                    
-                    // Calcular Uptime
-                    if ($streamServer->stream_started) {
-                        $now = time();
-                        $started = $streamServer->stream_started;
-                        $duration = $now - $started;
-                        
-                        // Formatar uptime
-                        $dtF = new \DateTime('@0');
-                        $dtT = new \DateTime("@$duration");
-                        $uptime = $dtF->diff($dtT)->format('%a dias, %h horas, %i min');
-                    }
-                }
+            if ($recentError) {
+                $status = 'Com Erros';
             }
 
-            // 3. Audiência (Tabela lines_live)
-            $onlineClients = DB::connection('xui')->table('lines_live')
-                ->where('stream_id', $channel->stream_id)
+            // 3. Audiência via live_connections — contar conexões no stream_id
+            $connectionsResp = $this->api->getLiveConnections();
+            $onlineClients   = collect($connectionsResp['data'] ?? [])
+                ->where('stream_id', (string) $streamId)
                 ->count();
 
             return response()->json([
-                'status' => $status,
-                'uptime' => $uptime,
-                'on_demand' => 0, // Streams geralmente são Live
-                'clients' => $onlineClients,
-                'server_id' => $serverId,
-                'stream_name' => $stream->stream_display_name,
-                'source' => $stream->stream_source // Útil para debug/report
+                'status'      => $status,
+                'uptime'      => $uptime,
+                'on_demand'   => 0,
+                'clients'     => $onlineClients,
+                'server_id'   => $serverId,
+                'stream_name' => $streamData['stream_display_name'] ?? $streamData['name'] ?? '',
+                'source'      => $streamData['stream_source'] ?? '',
             ]);
 
         } catch (\Exception $e) {
@@ -150,44 +133,16 @@ class ChannelTestController extends Controller
         }
 
         try {
-            return DB::connection('xui')->transaction(function () use ($channel) {
-                $streamId = $channel->stream_id;
-                
-                // Buscar onde o canal está rodando
-                $streamServer = DB::connection('xui')->table('streams_servers')
-                    ->where('stream_id', $streamId)
-                    ->orderBy('pid', 'desc') // Pega o ativo se houver
-                    ->first();
+            $streamId = (int) $channel->stream_id;
 
-                if (!$streamServer) {
-                    return response()->json(['error' => 'Servidor do canal não encontrado.'], 404);
-                }
+            // Parar o stream via API
+            $this->api->stopStream($streamId);
 
-                $serverId = $streamServer->server_id;
+            // Aguardar brevemente e iniciar novamente
+            sleep(1);
+            $startResult = $this->api->startStream($streamId);
 
-                // 1. Se o canal estiver rodando (tiver PID), mandar sinal de parada
-                if ($streamServer->pid > 0) {
-                    DB::connection('xui')->table('signals')->insert([
-                        'pid'       => $streamServer->pid,
-                        'server_id' => $serverId,
-                        'time'      => time(),
-                        'rtmp'      => 0
-                    ]);
-                }
-
-                // 2. Resetar o status para "0" e marcar para análise imediata
-                DB::connection('xui')->table('streams_servers')
-                    ->where('stream_id', $streamId)
-                    ->where('server_id', $serverId)
-                    ->update([
-                        'pid'           => null,
-                        'stream_status' => 0, // 0 = Parado / Tentando Iniciar
-                        'to_analyze'    => 1, // Sinaliza para o Watchdog analisar o canal
-                        'stream_started' => null
-                    ]);
-
-                return response()->json(['result' => true, 'message' => 'Comando de reinicialização enviado com sucesso.']);
-            });
+            return response()->json(['result' => true, 'message' => 'Comando de reinicialização enviado com sucesso.']);
 
         } catch (\Exception $e) {
             return response()->json(['error' => 'Erro ao reiniciar: ' . $e->getMessage()], 500);
@@ -276,12 +231,14 @@ class ChannelTestController extends Controller
         try {
             DB::beginTransaction();
 
-            // Buscar dados reais da stream se possível
-            $streamData = "Dados não encontrados no banco.";
+            // Buscar dados reais da stream via API
+            $streamData = "Dados não encontrados via API.";
             if ($request->stream_id) {
-                $stream = DB::connection('xui')->table('streams')->where('id', $request->stream_id)->first();
+                $streamsResp = $this->api->getStreams();
+                $stream = collect($streamsResp['data'] ?? [])
+                    ->firstWhere('stream_id', (string) $request->stream_id);
                 if ($stream) {
-                    $streamData = "Nome XUI: {$stream->stream_display_name}\nSource: {$stream->stream_source}\nID: {$stream->id}";
+                    $streamData = "Nome XUI: {$stream['stream_display_name']}\nSource: {$stream['stream_source']}\nID: {$stream['stream_id']}";
                 }
             }
 

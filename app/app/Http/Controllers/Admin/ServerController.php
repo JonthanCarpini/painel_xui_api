@@ -3,19 +3,22 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Services\XuiApiService;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Auth;
 
 class ServerController extends Controller
 {
+    public function __construct(private XuiApiService $api) {}
+
     public function index()
     {
         if (!Auth::user()->isAdmin()) {
             abort(403);
         }
 
-        $servers = DB::connection('xui')->table('servers')->get();
+        $serversRaw = $this->api->getServers();
+        $servers = collect($serversRaw)->map(fn($s) => (object) $s);
 
         return view('admin.servers.index', compact('servers'));
     }
@@ -26,15 +29,20 @@ class ServerController extends Controller
             abort(403);
         }
 
-        $server = DB::connection('xui')->table('servers')->where('id', $id)->first();
-        
+        $serversRaw = $this->api->getServers();
+        $server = collect($serversRaw)
+            ->map(fn($s) => (object) $s)
+            ->firstWhere('id', (string) $id);
+
         if (!$server) {
             return redirect()->route('settings.admin.servers.index')->with('error', 'Servidor não encontrado.');
         }
 
-        // Métricas e Streams associados
-        $streamsCount = DB::connection('xui')->table('streams_servers')->where('server_id', $id)->count();
-        $onlineStreams = DB::connection('xui')->table('streams_servers')->where('server_id', $id)->where('stream_status', 0)->count(); // 0 pode ser ON dependendo da versão, vou verificar
+        // Contar streams deste servidor via API get_streams
+        $streamsResp  = $this->api->getStreams();
+        $allStreams    = collect($streamsResp['data'] ?? []);
+        $streamsCount = $allStreams->where('server_id', (string) $id)->count();
+        $onlineStreams = $allStreams->where('server_id', (string) $id)->where('stream_status', '1')->count();
 
         return view('admin.servers.show', compact('server', 'streamsCount', 'onlineStreams'));
     }
@@ -46,85 +54,55 @@ class ServerController extends Controller
         }
 
         $action = $request->input('action');
-        
+
         try {
             switch ($action) {
                 case 'restart_streams':
-                    // Buscar todos os streams ativos ou configurados neste servidor
-                    $streams = DB::connection('xui')->table('streams_servers')
-                        ->where('server_id', $id)
-                        ->get();
+                    // Buscar streams deste servidor e reiniciar via API stop + start
+                    $streamsResp = $this->api->getStreams();
+                    $streams = collect($streamsResp['data'] ?? [])
+                        ->where('server_id', (string) $id);
 
-                    $signals = [];
-                    $now = time();
                     foreach ($streams as $stream) {
-                        // Resetar status
-                        DB::connection('xui')->table('streams_servers')
-                            ->where('server_stream_id', $stream->server_stream_id)
-                            ->update(['stream_status' => 0, 'to_analyze' => 1]);
-
-                        // Enviar sinal de restart (se tiver PID)
-                        if ($stream->pid) {
-                            $signals[] = [
-                                'server_id' => $id,
-                                'pid' => $stream->pid,
-                                'rtmp' => 0,
-                                'time' => $now,
-                                'custom_data' => json_encode(['action' => 'restart_stream', 'stream_id' => $stream->stream_id])
-                            ];
-                        }
+                        $this->api->stopStream((int) $stream['stream_id']);
                     }
-                    
-                    if (!empty($signals)) {
-                        DB::connection('xui')->table('signals')->insert($signals);
+                    sleep(1);
+                    foreach ($streams as $stream) {
+                        $this->api->startStream((int) $stream['stream_id']);
                     }
                     break;
 
                 case 'stop_all_streams':
-                    // Parar todos os streams (Set status 0 e talvez matar PIDs via signal)
-                    $streams = DB::connection('xui')->table('streams_servers')
-                        ->where('server_id', $id)
-                        ->where('stream_status', '!=', 0)
-                        ->get();
+                    $streamsResp = $this->api->getStreams();
+                    $streams = collect($streamsResp['data'] ?? [])
+                        ->where('server_id', (string) $id);
 
-                    $signals = [];
-                    $now = time();
                     foreach ($streams as $stream) {
-                        DB::connection('xui')->table('streams_servers')
-                            ->where('server_stream_id', $stream->server_stream_id)
-                            ->update(['stream_status' => 0]); // Apenas marcar como parado
-
-                        if ($stream->pid) {
-                            $signals[] = [
-                                'server_id' => $id,
-                                'pid' => $stream->pid,
-                                'rtmp' => 0,
-                                'time' => $now,
-                                'custom_data' => json_encode(['action' => 'stop_stream', 'stream_id' => $stream->stream_id])
-                            ];
-                        }
-                    }
-                    if (!empty($signals)) {
-                        DB::connection('xui')->table('signals')->insert($signals);
+                        $this->api->stopStream((int) $stream['stream_id']);
                     }
                     break;
 
                 case 'start_all_streams':
-                    // Tenta iniciar streams que deveriam estar rodando
-                    // Forçar 'to_analyze' = 1 faz o watchdog verificar e iniciar
-                    DB::connection('xui')->table('streams_servers')
-                        ->where('server_id', $id)
-                        ->update(['to_analyze' => 1]);
+                    $streamsResp = $this->api->getStreams();
+                    $streams = collect($streamsResp['data'] ?? [])
+                        ->where('server_id', (string) $id);
+
+                    foreach ($streams as $stream) {
+                        $this->api->startStream((int) $stream['stream_id']);
+                    }
                     break;
 
                 case 'kill_connections':
-                    // Remover conexões da tabela lines_live forçando desconexão lógica
-                    // O XUI deve derrubar conexões órfãs ou o player vai reconectar e ser validado novamente
-                    DB::connection('xui')->table('lines_live')
-                        ->where('server_id', $id)
-                        ->delete();
+                    // Matar todas as conexões ativas deste servidor via kill_connection
+                    $connectionsResp = $this->api->getLiveConnections();
+                    $connections = collect($connectionsResp['data'] ?? [])
+                        ->where('server_id', (string) $id);
+
+                    foreach ($connections as $conn) {
+                        $this->api->killConnection((int) $conn['activity_id']);
+                    }
                     break;
-                
+
                 case 'restart_services':
                     return back()->with('error', 'Reinício de serviços via painel não suportado sem acesso SSH configurado.');
             }

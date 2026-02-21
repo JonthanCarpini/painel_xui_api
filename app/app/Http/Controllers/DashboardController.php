@@ -2,141 +2,138 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\Bouquet;
-use App\Models\CreditLog;
-use App\Models\Line;
-use App\Models\LineLive;
-use App\Models\Package;
-use App\Models\Server;
-use App\Models\Stream;
-use App\Models\XuiUser;
+use App\Services\PackageService;
+use App\Services\XuiApiService;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Cache;
-use Illuminate\Support\Facades\DB;
 
 class DashboardController extends Controller
 {
+    public function __construct(
+        private XuiApiService $api,
+        private PackageService $packages,
+    ) {}
+
     public function index()
     {
-        $user = Auth::user();
+        $user           = Auth::user();
         $currentBalance = $user->credits;
 
         if ($user->isAdmin()) {
             $stats = $this->getAdminStats();
         } else {
-            $stats = $this->getResellerStats($user->id);
+            $stats = $this->getResellerStats((int)$user->xui_id);
         }
 
-        // Dados para Modal de Teste Rápido
-        $packages = Cache::remember('packages_all', 3600, function () {
-            return Package::all();
-        });
-        
-        $blacklist = config('xui.bouquet_blacklist', []);
-        $bouquets = Cache::remember('bouquets_list', 3600, function () use ($blacklist) {
-            return Bouquet::whereNotIn('id', $blacklist)
-                ->orderBy('bouquet_order')
-                ->get();
-        });
+        $packages = $this->packages->all();
+        $bouquets = $this->packages->bouquets();
 
-        // Dados para Gráficos (7 e 30 dias)
-        $charts7 = $this->getChartStats($user->id, $user->isAdmin(), 7);
-        $charts30 = $this->getChartStats($user->id, $user->isAdmin(), 30);
+        $charts7  = $this->getChartStats((int)$user->xui_id, $user->isAdmin(), 7);
+        $charts30 = $this->getChartStats((int)$user->xui_id, $user->isAdmin(), 30);
 
-        // Clientes vencendo nos próximos 7 dias
-        $expiringClients = $this->getExpiringClients($user->id, $user->isAdmin());
+        $expiringClients = $this->getExpiringClients((int)$user->xui_id, $user->isAdmin());
 
         return view('dashboard.index', [
-            'balance' => $currentBalance,
-            'stats' => $stats,
-            'user' => $user,
-            'packages' => $packages,
-            'bouquets' => $bouquets,
-            'charts' => [
-                'days_7' => $charts7,
-                'days_30' => $charts30
-            ],
-            'expiringClients' => $expiringClients
+            'balance'         => $currentBalance,
+            'stats'           => $stats,
+            'user'            => $user,
+            'packages'        => $packages,
+            'bouquets'        => $bouquets,
+            'charts'          => ['days_7' => $charts7, 'days_30' => $charts30],
+            'expiringClients' => $expiringClients,
         ]);
     }
 
-    private function getExpiringClients(int $userId, bool $isAdmin)
+    private function getExpiringClients(int $userId, bool $isAdmin): array
     {
-        // Cache curto de 5 minutos
         return Cache::remember("dashboard_expiring_{$userId}", 300, function () use ($userId, $isAdmin) {
-            $query = Line::with(['package', 'member'])
-                ->where('exp_date', '>', time()) // Não vencidos ainda
-                ->where('exp_date', '<=', strtotime('+7 days')) // Vencem em até 7 dias
-                ->where('is_trial', 0) // Excluir testes
-                ->orderBy('exp_date', 'asc');
+            $apiResponse = $this->api->getLines();
+            $allLines    = $apiResponse['data'] ?? [];
 
+            $allowedIds = null;
             if (!$isAdmin) {
-                // Para revendedores, mostrar apenas seus clientes diretos e de sub-revendas
-                $user = XuiUser::find($userId);
-                $myTreeIds = $user->getAllSubResellerIds();
-                $query->whereIn('member_id', $myTreeIds);
+                $allowedIds = $this->getSubResellerIds($userId);
             }
 
-            return $query->limit(50)->get(); // Limitamos a 50 na query, front vai exibir scroll
+            $now    = time();
+            $in7d   = strtotime('+7 days');
+            $result = [];
+
+            foreach ($allLines as $line) {
+                if ((int)($line['is_trial'] ?? 0) !== 0) continue;
+                $exp = (int)($line['exp_date'] ?? 0);
+                if ($exp <= $now || $exp > $in7d) continue;
+                if ($allowedIds !== null && !in_array((int)($line['member_id'] ?? 0), $allowedIds)) continue;
+                $result[] = $line;
+            }
+
+            usort($result, fn($a, $b) => ($a['exp_date'] ?? 0) <=> ($b['exp_date'] ?? 0));
+            return array_slice($result, 0, 50);
         });
     }
 
     private function getChartStats(int $userId, bool $isAdmin, int $daysCount = 7): array
     {
         $cacheKey = "dashboard_charts_{$userId}_{$daysCount}";
-        
+
         return Cache::remember($cacheKey, 300, function () use ($userId, $isAdmin, $daysCount) {
-            $days = [];
-            $clientsData = [];
-            $trialsData = [];
-            $resellersData = [];
-            $rechargesData = [];
+            $linesResp  = $this->api->getLines();
+            $usersResp  = $this->api->getUsers();
+            $allLines   = $linesResp['data'] ?? [];
+            $allUsers   = $usersResp['data'] ?? [];
+            $creditLogs = $this->api->getCreditLogs($isAdmin ? null : $userId);
+            $logItems   = $creditLogs['data'] ?? [];
 
-            // Loop pelos dias
+            $allowedIds = null;
+            if (!$isAdmin) {
+                $allowedIds = $this->getSubResellerIds($userId);
+            }
+
+            $days = $clientsData = $trialsData = $resellersData = $rechargesData = [];
+
             for ($i = $daysCount - 1; $i >= 0; $i--) {
-                $date = date('Y-m-d', strtotime("-$i days"));
-                $days[] = date('d/m', strtotime("-$i days"));
-                $start = strtotime("$date 00:00:00");
-                $end = strtotime("$date 23:59:59");
+                $days[]  = date('d/m', strtotime("-$i days"));
+                $start   = strtotime(date('Y-m-d', strtotime("-$i days")) . ' 00:00:00');
+                $end     = strtotime(date('Y-m-d', strtotime("-$i days")) . ' 23:59:59');
 
-                // --- Clients & Trials ---
-                $lineQuery = DB::connection('xui')->table('lines')
-                    ->whereBetween('created_at', [$start, $end]);
-                
-                if (!$isAdmin) {
-                    $user = XuiUser::find($userId);
-                    $myTreeIds = $user->getAllSubResellerIds();
-                    $lineQuery->whereIn('member_id', $myTreeIds);
+                $clients = $trials = 0;
+                foreach ($allLines as $l) {
+                    $ca = (int)($l['created_at'] ?? 0);
+                    if ($ca < $start || $ca > $end) continue;
+                    if ($allowedIds !== null && !in_array((int)($l['member_id'] ?? 0), $allowedIds)) continue;
+                    (int)($l['is_trial'] ?? 0) ? $trials++ : $clients++;
                 }
+                $clientsData[]  = $clients;
+                $trialsData[]   = $trials;
 
-                $clientsData[] = (clone $lineQuery)->where('is_trial', 0)->count();
-                $trialsData[] = (clone $lineQuery)->where('is_trial', 1)->count();
-
-                // --- Resellers & Recharges ---
-                $resellerQuery = DB::connection('xui')->table('users')
-                    ->where('member_group_id', 2)
-                    ->whereBetween('date_registered', [$start, $end]);
-                
-                if (!$isAdmin) {
-                    $resellerQuery->where('owner_id', $userId);
+                $resellers = 0;
+                foreach ($allUsers as $u) {
+                    if ((int)($u['member_group_id'] ?? 0) !== 2) continue;
+                    $dr = (int)($u['date_registered'] ?? 0);
+                    if ($dr < $start || $dr > $end) continue;
+                    if (!$isAdmin && (int)($u['owner_id'] ?? 0) !== $userId) continue;
+                    $resellers++;
                 }
-                $resellersData[] = $resellerQuery->count();
+                $resellersData[] = $resellers;
 
-                $rechargeQuery = DB::connection('xui')->table('users_credits_logs')
-                    ->where('admin_id', $userId)
-                    ->where('amount', '>', 0)
-                    ->where('target_id', '!=', $userId)
-                    ->whereBetween('date', [$start, $end]);
-                
-                $rechargesData[] = $rechargeQuery->count();
+                $recharges = 0;
+                foreach ($logItems as $log) {
+                    $ld = (int)($log['date'] ?? 0);
+                    if ($ld < $start || $ld > $end) continue;
+                    if ((float)($log['amount'] ?? 0) <= 0) continue;
+                    if ((int)($log['admin_id'] ?? 0) !== $userId) continue;
+                    if ((int)($log['target_id'] ?? 0) === $userId) continue;
+                    $recharges++;
+                }
+                $rechargesData[] = $recharges;
             }
 
             return [
-                'labels' => $days,
-                'clients' => $clientsData,
-                'trials' => $trialsData,
+                'labels'    => $days,
+                'clients'   => $clientsData,
+                'trials'    => $trialsData,
                 'resellers' => $resellersData,
-                'recharges' => $rechargesData
+                'recharges' => $rechargesData,
             ];
         });
     }
@@ -144,88 +141,79 @@ class DashboardController extends Controller
     private function getAdminStats(): array
     {
         return Cache::remember('admin_dashboard_stats', 60, function () {
-            $now = time();
-            $user = Auth::user();
+            $now       = time();
+            $user      = Auth::user();
+            $linesResp = $this->api->getLines();
+            $usersResp = $this->api->getUsers();
+            $allLines  = $linesResp['data'] ?? [];
+            $allUsers  = $usersResp['data'] ?? [];
 
-            // Top Revendas com LEFT JOIN para incluir revendedores sem linhas
-            $topResellers = DB::connection('xui')
-                ->table('users')
-                ->leftJoin('lines', function($join) {
-                    $join->on('users.id', '=', 'lines.member_id')
-                         ->where('lines.is_trial', 0);
-                })
-                ->where('users.member_group_id', 2)
-                ->select('users.id', 'users.username', 'users.credits', DB::raw('COUNT(lines.id) as total_lines'))
-                ->groupBy('users.id', 'users.username', 'users.credits')
-                ->orderByDesc('total_lines')
-                ->limit(5)
-                ->get();
+            $totalClients   = count(array_filter($allLines, fn($l) => (int)($l['is_trial'] ?? 0) === 0));
+            $activeClients  = count(array_filter($allLines, fn($l) => (int)($l['is_trial'] ?? 0) === 0 && (int)($l['enabled'] ?? 1) && (int)($l['exp_date'] ?? 0) > $now));
+            $expiredClients = count(array_filter($allLines, fn($l) => (int)($l['exp_date'] ?? 0) < $now));
+            $totalResellers = count(array_filter($allUsers, fn($u) => (int)($u['member_group_id'] ?? 0) === 2));
 
+            // Top 5 revendedores por clientes oficiais
+            $linesByMember = [];
+            foreach ($allLines as $l) {
+                if ((int)($l['is_trial'] ?? 0) !== 0) continue;
+                $mid = (int)($l['member_id'] ?? 0);
+                $linesByMember[$mid] = ($linesByMember[$mid] ?? 0) + 1;
+            }
             $topResellersData = [];
-            foreach ($topResellers as $top) {
+            foreach ($allUsers as $u) {
+                if ((int)($u['member_group_id'] ?? 0) !== 2) continue;
+                $uid = (int)($u['id'] ?? 0);
                 $topResellersData[] = [
-                    'username' => $top->username,
-                    'total_lines' => $top->total_lines,
-                    'credits' => $top->credits ?? 0,
+                    'username'    => $u['username'] ?? '',
+                    'total_lines' => $linesByMember[$uid] ?? 0,
+                    'credits'     => (float)($u['credits'] ?? 0),
                 ];
             }
+            usort($topResellersData, fn($a, $b) => $b['total_lines'] <=> $a['total_lines']);
+            $topResellersData = array_slice($topResellersData, 0, 5);
 
-            // Últimas Recargas (Logs onde admin é o atual, target é diferente, valor negativo para admin ou positivo para target?)
-            // Na tabela users_credits_logs: target_id é quem sofreu a alteração. admin_id é quem fez.
-            // Se admin recarregou revenda, log deve ser: target=revenda, admin=admin, amount > 0
-            $lastRecharges = CreditLog::with('target:id,username')
-                ->where('admin_id', $user->id)
-                ->where('target_id', '!=', $user->id) // Não auto-alterações
-                ->where('amount', '>', 0) // Crédito adicionado
-                ->orderBy('date', 'desc')
-                ->limit(5)
-                ->get();
+            // Últimas recargas via API credit_logs
+            $creditLogsResp = $this->api->getCreditLogs((int)$user->xui_id);
+            $lastRecharges = collect($creditLogsResp['data'] ?? [])
+                ->filter(fn($l) => (int)($l['admin_id'] ?? 0) === (int)$user->xui_id
+                    && (int)($l['target_id'] ?? 0) !== (int)$user->xui_id
+                    && (float)($l['amount'] ?? 0) > 0)
+                ->sortByDesc('date')
+                ->take(5)
+                ->map(fn($l) => (object) $l)
+                ->values();
 
-            // Total de Canais (Live + Created Live: tipos 1 e 3)
-            $liveChannels = Stream::whereIn('type', [1, 3])->count();
-            
-            // Canais Online (stream_status = 0 e PID > 0 significa Online)
-            $onlineChannels = DB::connection('xui')
-                ->table('streams_servers')
-                ->join('streams', 'streams.id', '=', 'streams_servers.stream_id')
-                ->whereIn('streams.type', [1, 3])
-                ->where('streams_servers.stream_status', 0)
-                ->whereNotNull('streams_servers.pid')
-                ->where('streams_servers.pid', '>', 0)
-                ->distinct('streams_servers.stream_id')
-                ->count('streams_servers.stream_id');
-            
-            // Canais Offline
-            $offlineChannels = $liveChannels - $onlineChannels;
-            
-            // Total de Filmes (tipo 2)
-            $movies = Stream::where('type', 2)->count();
-            
-            // Total de Séries (tabela streams_series, não episódios)
-            $series = DB::connection('xui')
-                ->table('streams_series')
-                ->count();
-            
-            $totalStreams = Stream::count();
+            // Stats de streams via API
+            $streamsResp  = $this->api->getStreams();
+            $allStreams    = $streamsResp['data'] ?? [];
+            $liveChannels = count(array_filter($allStreams, fn($s) => in_array((int)($s['type'] ?? 0), [1, 3])));
+            $movies       = count(array_filter($allStreams, fn($s) => (int)($s['type'] ?? 0) === 2));
+            $totalStreams  = count($allStreams);
+
+            // Conexões ativas via API
+            $liveResp   = $this->api->getLiveConnections();
+            $onlineNow  = count($liveResp['data'] ?? []);
+
+            // Stats do servidor principal
+            $mainServer = $this->getMainServerStats();
 
             return [
-                'total_clients' => Line::official()->count(),
-                'active_clients' => Line::where('enabled', 1)
-                    ->where('exp_date', '>', $now)
-                    ->count(),
-                'expired_clients' => Line::where('exp_date', '<', $now)->count(),
-                'online_now' => LineLive::whereNull('date_end')->count(),
-                'total_resellers' => XuiUser::where('member_group_id', 2)->count(),
-                'load_balancers' => Server::loadBalancers()->get(),
-                'total_streams' => $totalStreams,
-                'live_channels' => $liveChannels,
-                'movies' => $movies,
-                'series' => $series,
-                'online_streams' => $onlineChannels,
-                'offline_streams' => $offlineChannels,
-                'top_resellers' => $topResellersData,
-                'last_recharges' => $lastRecharges,
-                'main_server' => $this->getMainServerStats(),
+                'total_clients'   => $totalClients,
+                'active_clients'  => $activeClients,
+                'expired_clients' => $expiredClients,
+                'online_now'      => $onlineNow,
+                'total_resellers' => $totalResellers,
+                'load_balancers'  => [],
+                'total_streams'   => $totalStreams,
+                'live_channels'   => $liveChannels,
+                'movies'          => $movies,
+                'series'          => 0,
+                'online_streams'  => 0,
+                'offline_streams' => 0,
+                'top_resellers'   => $topResellersData,
+                'last_recharges'  => $lastRecharges,
+                'main_server'     => $mainServer,
             ];
         });
     }
@@ -233,126 +221,96 @@ class DashboardController extends Controller
     private function getResellerStats(int $userId): array
     {
         return Cache::remember("reseller_dashboard_stats_{$userId}", 60, function () use ($userId) {
-            $now = time();
-            $startOfDay = strtotime('today');
-            $endOfDay = strtotime('tomorrow') - 1;
+            $now          = time();
+            $startOfDay   = strtotime('today');
+            $endOfDay     = strtotime('tomorrow') - 1;
             $startOfMonth = strtotime('first day of this month 00:00:00');
-            $endOfMonth = strtotime('last day of this month 23:59:59');
+            $endOfMonth   = strtotime('last day of this month 23:59:59');
 
-            $user = XuiUser::find($userId);
-            $myTreeIds = $user->getAllSubResellerIds();
+            $linesResp = $this->api->getLines();
+            $usersResp = $this->api->getUsers();
+            $allLines  = $linesResp['data'] ?? [];
+            $allUsers  = $usersResp['data'] ?? [];
 
-            // Consultas de Linhas (Clientes)
-            $linesQuery = DB::connection('xui')->table('lines')->whereIn('member_id', $myTreeIds);
-            
-            // Stats Básicos
-            $totalClients = (clone $linesQuery)->where('is_trial', 0)->count();
-            $activeClients = (clone $linesQuery)
-                ->where('is_trial', 0)
-                ->where('enabled', 1)
-                ->where('admin_enabled', 1)
-                ->where('exp_date', '>', $now)
-                ->count();
-            
-            $expiredClients = (clone $linesQuery)
-                ->where('is_trial', 0)
-                ->where('exp_date', '<', $now)
-                ->count();
-                
-            $expiringToday = (clone $linesQuery)
-                ->where('is_trial', 0)
-                ->whereBetween('exp_date', [$startOfDay, $endOfDay])
-                ->count();
+            $myTreeIds = $this->getSubResellerIds($userId);
 
-            // Estatísticas de Vendas (Criação de Linhas Oficiais)
-            $salesToday = (clone $linesQuery)
-                ->where('is_trial', 0)
-                ->whereBetween('created_at', [$startOfDay, $endOfDay])
-                ->count();
-                
-            $salesMonth = (clone $linesQuery)
-                ->where('is_trial', 0)
-                ->whereBetween('created_at', [$startOfMonth, $endOfMonth])
-                ->count();
+            // Filtrar linhas da árvore
+            $myLines = array_filter($allLines, fn($l) => in_array((int)($l['member_id'] ?? 0), $myTreeIds));
 
-            // Estatísticas de Testes
-            $trialsToday = (clone $linesQuery)
-                ->where('is_trial', 1)
-                ->whereBetween('created_at', [$startOfDay, $endOfDay])
-                ->count();
-                
-            $trialsMonth = (clone $linesQuery)
-                ->where('is_trial', 1)
-                ->whereBetween('created_at', [$startOfMonth, $endOfMonth])
-                ->count();
+            $totalClients   = count(array_filter($myLines, fn($l) => (int)($l['is_trial'] ?? 0) === 0));
+            $activeClients  = count(array_filter($myLines, fn($l) => (int)($l['is_trial'] ?? 0) === 0 && (int)($l['enabled'] ?? 1) && (int)($l['admin_enabled'] ?? 1) && (int)($l['exp_date'] ?? 0) > $now));
+            $expiredClients = count(array_filter($myLines, fn($l) => (int)($l['is_trial'] ?? 0) === 0 && (int)($l['exp_date'] ?? 0) < $now));
+            $expiringToday  = count(array_filter($myLines, fn($l) => (int)($l['is_trial'] ?? 0) === 0 && (int)($l['exp_date'] ?? 0) >= $startOfDay && (int)($l['exp_date'] ?? 0) <= $endOfDay));
+            $salesToday     = count(array_filter($myLines, fn($l) => (int)($l['is_trial'] ?? 0) === 0 && (int)($l['created_at'] ?? 0) >= $startOfDay && (int)($l['created_at'] ?? 0) <= $endOfDay));
+            $salesMonth     = count(array_filter($myLines, fn($l) => (int)($l['is_trial'] ?? 0) === 0 && (int)($l['created_at'] ?? 0) >= $startOfMonth && (int)($l['created_at'] ?? 0) <= $endOfMonth));
+            $trialsToday    = count(array_filter($myLines, fn($l) => (int)($l['is_trial'] ?? 0) === 1 && (int)($l['created_at'] ?? 0) >= $startOfDay && (int)($l['created_at'] ?? 0) <= $endOfDay));
+            $trialsMonth    = count(array_filter($myLines, fn($l) => (int)($l['is_trial'] ?? 0) === 1 && (int)($l['created_at'] ?? 0) >= $startOfMonth && (int)($l['created_at'] ?? 0) <= $endOfMonth));
 
-            // Online Now
-            $onlineNow = LineLive::whereIn('user_id', function($query) use ($myTreeIds) {
-                $query->select('id')
-                    ->from('lines')
-                    ->whereIn('member_id', $myTreeIds);
-            })->whereNull('date_end')->count();
-            
-            // Revendas Stats
-            $myResellersIds = XuiUser::where('owner_id', $userId)->pluck('id')->toArray();
-            $totalResellers = count($myResellersIds);
-            
-            // Revendas Inativas (> 30 dias sem login)
-            $inactiveResellers = 0;
-            $resellersNoCredit = 0;
-            $topResellers = [];
-            
-            if ($totalResellers > 0) {
-                $inactiveResellers = XuiUser::whereIn('id', $myResellersIds)
-                    ->where('last_login', '<', strtotime('-30 days'))
-                    ->count();
-                    
-                $resellersNoCredit = XuiUser::whereIn('id', $myResellersIds)
-                    ->where('credits', '<=', 0)
-                    ->count();
-                    
-                // Top 5 Revendas Diretas por número de clientes
-                $topResellers = XuiUser::whereIn('id', $myResellersIds)
-                    ->select(['id', 'username', 'credits'])
-                    ->get()
-                    ->map(function($reseller) {
-                        // Contar clientes deste revendedor (apenas diretos dele)
-                        $reseller->total_lines = DB::connection('xui')->table('lines')
-                            ->where('member_id', $reseller->id)
-                            ->where('is_trial', 0)
-                            ->count();
-                        return $reseller;
-                    })
-                    ->sortByDesc('total_lines')
-                    ->take(5)
-                    ->values()
-                    ->toArray();
+            // Conexões ativas dos meus clientes
+            $liveResp  = $this->api->getLiveConnections();
+            $liveConns = $liveResp['data'] ?? [];
+            $myLineIds = array_column(array_values($myLines), 'id');
+            $onlineNow = count(array_filter($liveConns, fn($c) => in_array((int)($c['user_id'] ?? 0), $myLineIds)));
+
+            // Sub-revendedores diretos
+            $myDirectResellers = array_filter($allUsers, fn($u) => (int)($u['owner_id'] ?? 0) === $userId && (int)($u['member_group_id'] ?? 0) === 2);
+            $myResellersIds    = array_column(array_values($myDirectResellers), 'id');
+            $totalResellers    = count($myResellersIds);
+
+            $inactiveResellers  = 0;
+            $resellersNoCredit  = 0;
+            $topResellers       = [];
+            $linesByMember      = [];
+
+            foreach ($myLines as $l) {
+                if ((int)($l['is_trial'] ?? 0) !== 0) continue;
+                $mid = (int)($l['member_id'] ?? 0);
+                $linesByMember[$mid] = ($linesByMember[$mid] ?? 0) + 1;
             }
 
-            // Últimas Recargas
-            $lastRecharges = CreditLog::with('target:id,username')
-                ->where('admin_id', $userId)
-                ->where('target_id', '!=', $userId)
-                ->where('amount', '>', 0)
-                ->orderBy('date', 'desc')
-                ->limit(5)
-                ->get();
+            if ($totalResellers > 0) {
+                $thirtyDaysAgo = strtotime('-30 days');
+                foreach ($myDirectResellers as $r) {
+                    if ((int)($r['last_login'] ?? 0) < $thirtyDaysAgo) $inactiveResellers++;
+                    if ((float)($r['credits'] ?? 0) <= 0) $resellersNoCredit++;
+                    $rid = (int)($r['id'] ?? 0);
+                    $topResellers[] = [
+                        'id'          => $rid,
+                        'username'    => $r['username'] ?? '',
+                        'credits'     => (float)($r['credits'] ?? 0),
+                        'total_lines' => $linesByMember[$rid] ?? 0,
+                    ];
+                }
+                usort($topResellers, fn($a, $b) => $b['total_lines'] <=> $a['total_lines']);
+                $topResellers = array_slice($topResellers, 0, 5);
+            }
+
+            // Últimas recargas via API credit_logs
+            $creditLogsResp = $this->api->getCreditLogs($userId);
+            $lastRecharges = collect($creditLogsResp['data'] ?? [])
+                ->filter(fn($l) => (int)($l['admin_id'] ?? 0) === $userId
+                    && (int)($l['target_id'] ?? 0) !== $userId
+                    && (float)($l['amount'] ?? 0) > 0)
+                ->sortByDesc('date')
+                ->take(5)
+                ->map(fn($l) => (object) $l)
+                ->values();
 
             return [
-                'total_clients' => $totalClients,
-                'active_clients' => $activeClients,
-                'expired_clients' => $expiredClients,
-                'expiring_today' => $expiringToday,
-                'online_now' => $onlineNow,
-                'sales_today' => $salesToday,
-                'sales_month' => $salesMonth,
-                'trials_today' => $trialsToday,
-                'trials_month' => $trialsMonth,
-                'my_resellers' => $totalResellers,
-                'inactive_resellers' => $inactiveResellers,
+                'total_clients'       => $totalClients,
+                'active_clients'      => $activeClients,
+                'expired_clients'     => $expiredClients,
+                'expiring_today'      => $expiringToday,
+                'online_now'          => $onlineNow,
+                'sales_today'         => $salesToday,
+                'sales_month'         => $salesMonth,
+                'trials_today'        => $trialsToday,
+                'trials_month'        => $trialsMonth,
+                'my_resellers'        => $totalResellers,
+                'inactive_resellers'  => $inactiveResellers,
                 'resellers_no_credit' => $resellersNoCredit,
-                'top_resellers' => $topResellers,
-                'last_recharges' => $lastRecharges,
+                'top_resellers'       => $topResellers,
+                'last_recharges'      => $lastRecharges,
             ];
         });
     }
@@ -360,50 +318,65 @@ class DashboardController extends Controller
     private function getMainServerStats(): array
     {
         return Cache::remember('main_server_stats', 60, function () {
-            $server = DB::connection('xui')
-                ->table('servers')
-                ->where('is_main', 1)
-                ->select('id', 'server_name', 'status', 'total_clients', 'connections', 'users', 'requests_per_second', 'watchdog_data')
-                ->first();
+            $statsResp = $this->api->getServerStats();
 
-            if (!$server) {
-                return [
-                    'status' => 'offline',
-                    'error' => 'Servidor não encontrado'
-                ];
+            if (($statsResp['status'] ?? '') !== 'STATUS_SUCCESS') {
+                return ['status' => 'offline', 'error' => 'Servidor não encontrado'];
             }
 
-            if ($server->status != 1) {
-                return [
-                    'status' => 'down',
-                    'server_name' => $server->server_name ?? 'Main Server'
-                ];
+            $data = $statsResp['data'] ?? [];
+
+            if ((int)($data['status'] ?? 0) !== 1) {
+                return ['status' => 'down', 'server_name' => $data['server_name'] ?? 'Main Server'];
             }
 
-            $data = json_decode($server->watchdog_data, true) ?? [];
-
-            $totalDisk = $data['total_disk_space'] ?? 1;
-            $freeDisk = $data['free_disk_space'] ?? 0;
-            $usedDiskPerc = round(100 - (($freeDisk / $totalDisk) * 100), 2);
-
-            $inputMbps = round(($data['bytes_received'] ?? 0) * 0.008, 2);
-            $outputMbps = round(($data['bytes_sent'] ?? 0) * 0.008, 2);
+            $totalDisk    = $data['total_disk_space'] ?? 1;
+            $freeDisk     = $data['free_disk_space'] ?? 0;
+            $usedDiskPerc = round(100 - (($freeDisk / max($totalDisk, 1)) * 100), 2);
+            $inputMbps    = round(($data['bytes_received'] ?? 0) * 0.008, 2);
+            $outputMbps   = round(($data['bytes_sent'] ?? 0) * 0.008, 2);
 
             return [
-                'status' => 'online',
-                'server_name' => $server->server_name ?? 'Main Server',
-                'connections' => $server->connections ?? 0,
-                'users' => $server->users ?? 0,
-                'cpu' => $data['cpu'] ?? 0,
+                'status'       => 'online',
+                'server_name'  => $data['server_name'] ?? 'Main Server',
+                'connections'  => $data['connections'] ?? 0,
+                'users'        => $data['users'] ?? 0,
+                'cpu'          => $data['cpu'] ?? 0,
                 'streams_live' => $data['total_running_streams'] ?? 0,
-                'mem' => $data['total_mem_used_percent'] ?? 0,
-                'requests_sec' => $server->requests_per_second ?? 0,
-                'uptime' => $data['uptime'] ?? 'N/A',
-                'io_wait' => $data['iostat_info']['cpu']['iowait'] ?? 0,
-                'input_mbps' => $inputMbps,
-                'output_mbps' => $outputMbps,
-                'disk_usage' => $usedDiskPerc,
+                'mem'          => $data['total_mem_used_percent'] ?? 0,
+                'requests_sec' => $data['requests_per_second'] ?? 0,
+                'uptime'       => $data['uptime'] ?? 'N/A',
+                'io_wait'      => $data['iostat_info']['cpu']['iowait'] ?? 0,
+                'input_mbps'   => $inputMbps,
+                'output_mbps'  => $outputMbps,
+                'disk_usage'   => $usedDiskPerc,
             ];
         });
+    }
+
+    // -------------------------------------------------------------------------
+    // Helper privado
+    // -------------------------------------------------------------------------
+
+    private function getSubResellerIds(int $userId): array
+    {
+        $usersResp = $this->api->getUsers();
+        $allUsers  = $usersResp['data'] ?? [];
+        $ids       = [$userId];
+        $changed   = true;
+
+        while ($changed) {
+            $changed = false;
+            foreach ($allUsers as $u) {
+                $uid = (int)($u['id'] ?? 0);
+                $oid = (int)($u['owner_id'] ?? 0);
+                if ($oid && in_array($oid, $ids) && !in_array($uid, $ids)) {
+                    $ids[]   = $uid;
+                    $changed = true;
+                }
+            }
+        }
+
+        return array_unique($ids);
     }
 }

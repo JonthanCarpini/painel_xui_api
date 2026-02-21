@@ -2,66 +2,58 @@
 
 namespace App\Http\Controllers;
 
+use App\Services\XuiApiService;
 use Illuminate\Http\Request;
+use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Facades\DB;
-use App\Models\XuiUser;
 
 class CreditLogController extends Controller
 {
-    /**
-     * Meus Logs (Logs do usuário logado)
-     */
+    public function __construct(private XuiApiService $api) {}
+
     public function index(Request $request)
     {
         $user = Auth::user();
-        $logs = $this->fetchLogs($request, $user->id);
+        $logs = $this->fetchLogs($request, (int)$user->xui_id);
 
-        return view('credit-logs.index', [
-            'logs' => $logs
-        ]);
+        return view('credit-logs.index', ['logs' => $logs]);
     }
 
-    /**
-     * Logs de Revendas (Visível apenas para Admin/Revendedor Mestre)
-     */
     public function resellers(Request $request)
     {
-        $user = Auth::user();
+        $user      = Auth::user();
+        $usersResp = $this->api->getUsers();
+        $allUsers  = $usersResp['data'] ?? [];
 
-        // Se não for admin, limitar aos sub-revendedores
-        $resellers = [];
         if ($user->isAdmin()) {
-            $resellers = XuiUser::where('member_group_id', 2)->orderBy('username')->get();
+            $resellers = array_values(array_filter($allUsers, fn($u) => (int)($u['member_group_id'] ?? 0) === 2));
         } else {
-            // Revendedor vendo seus sub-revendedores
-            $resellers = XuiUser::where('owner_id', $user->id)->orderBy('username')->get();
+            $resellers = array_values(array_filter($allUsers, fn($u) => (int)($u['owner_id'] ?? 0) === (int)$user->xui_id));
         }
+
+        usort($resellers, fn($a, $b) => strcmp($a['username'] ?? '', $b['username'] ?? ''));
 
         $targetResellerId = $request->input('reseller_id');
         $logs = null;
 
         if ($targetResellerId === 'all' && $user->isAdmin()) {
-             $logs = $this->fetchLogs($request, null, true);
+            $logs = $this->fetchLogs($request, null, true);
         } elseif ($targetResellerId) {
-            // Verifica permissão (se é meu sub ou sou admin)
             if (!$user->isAdmin()) {
-                $targetUser = XuiUser::find($targetResellerId);
-                // Se não encontrar ou não for meu filho
-                if (!$targetUser || $targetUser->owner_id != $user->id) {
-                     // Se não for meu filho, mas for eu mesmo? (Pode acontecer se selecionar a si mesmo na lista, mas a lista filtra)
-                     if ($targetResellerId != $user->id) {
+                $targetUser = collect($allUsers)->firstWhere('id', (int)$targetResellerId);
+                if (!$targetUser || (int)($targetUser['owner_id'] ?? 0) !== (int)$user->xui_id) {
+                    if ((int)$targetResellerId !== (int)$user->xui_id) {
                         abort(403, 'Acesso negado a esta revenda.');
-                     }
+                    }
                 }
             }
-            $logs = $this->fetchLogs($request, $targetResellerId);
+            $logs = $this->fetchLogs($request, (int)$targetResellerId);
         }
 
         return view('credit-logs.resellers', [
-            'logs' => $logs,
-            'resellers' => $resellers,
-            'selectedResellerId' => $targetResellerId
+            'logs'               => $logs,
+            'resellers'          => $resellers,
+            'selectedResellerId' => $targetResellerId,
         ]);
     }
 
@@ -72,186 +64,173 @@ class CreditLogController extends Controller
             return response()->json([]);
         }
 
-        // Buscar em Revendedores/Admins
-        $users = DB::connection('xui')->table('users')
-            ->where('username', 'like', "%{$term}%")
-            ->limit(5)
+        $usersResp = $this->api->getUsers();
+        $linesResp = $this->api->getLines();
+
+        $usernames = collect($usersResp['data'] ?? [])
+            ->filter(fn($u) => str_contains(strtolower($u['username'] ?? ''), strtolower($term)))
+            ->take(5)
             ->pluck('username');
 
-        // Buscar em Linhas (Clientes)
-        $lines = DB::connection('xui')->table('lines')
-            ->where('username', 'like', "%{$term}%")
-            ->limit(5)
+        $lineNames = collect($linesResp['data'] ?? [])
+            ->filter(fn($l) => str_contains(strtolower($l['username'] ?? ''), strtolower($term)))
+            ->take(5)
             ->pluck('username');
 
-        $results = $users->merge($lines)->unique()->values();
-
-        return response()->json($results);
+        return response()->json($usernames->merge($lineNames)->unique()->values());
     }
 
-    /**
-     * Lógica Central de Busca de Logs (Baseado na tabela users_logs)
-     */
-    private function fetchLogs(Request $request, $ownerId = null, $allResellers = false)
+    private function fetchLogs(Request $request, ?int $ownerId = null, bool $allResellers = false): LengthAwarePaginator
     {
-        $query = DB::connection('xui')->table('users_logs as log')
-            ->join('users as owner', 'log.owner', '=', 'owner.id')
-            ->leftJoin('users_packages as pkg', 'log.package_id', '=', 'pkg.id')
-            // Join for Line info
-            ->leftJoin('lines', function($join) {
-                $join->on('log.log_id', '=', 'lines.id')
-                     ->whereIn('log.type', ['line_create', 'line_extend']);
-            })
-            // Join for Target User info (Reseller/Admin interaction)
-            ->leftJoin('users as target_user', function($join) {
-                $join->on('log.log_id', '=', 'target_user.id')
-                     ->whereIn('log.type', ['credit_change', 'reseller_create']);
-            })
-            ->select([
-                'log.id',
-                'log.date',
-                'log.type',
-                'log.action',
-                'log.cost',
-                'log.credits_after',
-                // Saldo Anterior = Saldo Atual + Custo (Invertido)
-                DB::raw("(log.credits_after + log.cost) as credits_before"),
-                'owner.username as owner_name',
-                'pkg.package_name',
-                'lines.username as line_username',
-                'target_user.username as target_username'
-            ]);
+        $logsResp = $this->api->getUserLogs($ownerId);
+        $items    = $logsResp['data'] ?? [];
 
-        // Filtro por Dono
-        if ($ownerId) {
-            $query->where('log.owner', $ownerId);
-        } elseif ($allResellers) {
-            $query->where('owner.member_group_id', 2);
-        }
+        // Enriquecer com mapas de usuários e linhas
+        $usersResp = $this->api->getUsers();
+        $linesResp = $this->api->getLines();
+        $usersMap  = collect($usersResp['data'] ?? [])->keyBy('id');
+        $linesMap  = collect($linesResp['data'] ?? [])->keyBy('id');
 
-        // Filtro por Data
-        if ($request->filled(['date_start', 'date_end'])) {
-            $startDate = strtotime($request->date_start . ' 00:00:00');
-            $endDate = strtotime($request->date_end . ' 23:59:59');
-            $query->whereBetween('log.date', [$startDate, $endDate]);
-        }
+        // Filtros
+        $dateStart   = $request->filled('date_start') ? strtotime($request->date_start . ' 00:00:00') : null;
+        $dateEnd     = $request->filled('date_end')   ? strtotime($request->date_end   . ' 23:59:59') : null;
+        $nature      = $request->input('nature');
+        $type        = $request->input('type');
+        $destination = $request->input('destination');
+        $search      = $request->input('search');
 
-        // Filtro por Natureza (Entrada/Saída)
-        if ($request->filled('nature')) {
-            if ($request->nature == 'in') {
-                $query->where('log.cost', '<', 0);
-            } elseif ($request->nature == 'out') {
-                $query->where('log.cost', '>', 0);
+        $filtered = collect($items)->filter(function ($log) use (
+            $ownerId, $allResellers, $usersMap,
+            $dateStart, $dateEnd, $nature, $type, $destination, $search
+        ) {
+            // Filtro por dono
+            if ($ownerId && (int)($log['owner'] ?? 0) !== $ownerId) return false;
+            if ($allResellers) {
+                $owner = $usersMap->get((int)($log['owner'] ?? 0));
+                if (!$owner || (int)($owner['member_group_id'] ?? 0) !== 2) return false;
             }
-        }
 
-        // Filtro por Tipo (Cliente/Revenda)
-        if ($request->filled('type')) {
-            $type = $request->type;
-            if ($type == 'reseller') {
-                // Revenda = Transferências e Criação de Revenda
-                $query->whereIn('log.type', ['credit_change', 'reseller_create']);
-            } elseif ($type == 'client') {
-                // Cliente = Linhas
-                $query->whereIn('log.type', ['line_create', 'line_extend']);
-            } elseif ($type != 'all') {
-                $query->where('log.type', $type);
+            // Filtro por data
+            $logDate = (int)($log['date'] ?? 0);
+            if ($dateStart && $logDate < $dateStart) return false;
+            if ($dateEnd   && $logDate > $dateEnd)   return false;
+
+            // Filtro por natureza
+            $cost = (float)($log['cost'] ?? 0);
+            if ($nature === 'in'  && $cost >= 0) return false;
+            if ($nature === 'out' && $cost <= 0) return false;
+
+            // Filtro por tipo
+            $logType = $log['type'] ?? '';
+            if ($type === 'reseller' && !in_array($logType, ['credit_change', 'reseller_create'])) return false;
+            if ($type === 'client'   && !in_array($logType, ['line_create', 'line_extend']))       return false;
+            if ($type && $type !== 'all' && $type !== 'reseller' && $type !== 'client' && $logType !== $type) return false;
+
+            // Filtro por destino
+            if ($destination) {
+                $d       = strtolower($destination);
+                $logId   = (int)($log['log_id'] ?? 0);
+                $lineUsername  = '';
+                $targetUsername = '';
+
+                if (in_array($logType, ['line_create', 'line_extend'])) {
+                    $lineUsername = strtolower($linesMap->get($logId)['username'] ?? '');
+                } elseif (in_array($logType, ['credit_change', 'reseller_create'])) {
+                    $targetUsername = strtolower($usersMap->get($logId)['username'] ?? '');
+                }
+
+                if (strpos($lineUsername, $d) === false && strpos($targetUsername, $d) === false) return false;
             }
-        }
 
-        // Filtro por Destino (Username da linha ou da revenda alvo)
-        if ($request->filled('destination')) {
-            $dest = $request->destination;
-            $query->where(function($q) use ($dest) {
-                $q->where('lines.username', 'like', "%{$dest}%")
-                  ->orWhere('target_user.username', 'like', "%{$dest}%");
-            });
-        }
+            // Filtro por busca geral
+            if ($search) {
+                $s = strtolower($search);
+                $action    = strtolower($log['action'] ?? '');
+                $ownerName = strtolower($usersMap->get((int)($log['owner'] ?? 0))['username'] ?? '');
+                if (strpos($action, $s) === false && strpos($ownerName, $s) === false) return false;
+            }
 
-        // Filtro de Busca Geral (Mantido para compatibilidade, mas focado em descrição)
-        if ($request->filled('search')) {
-            $search = $request->search;
-            $query->where(function($q) use ($search) {
-                $q->where('log.action', 'like', "%{$search}%")
-                  ->orWhere('owner.username', 'like', "%{$search}%")
-                  ->orWhere('lines.username', 'like', "%{$search}%")
-                  ->orWhere('target_user.username', 'like', "%{$search}%");
-            });
-        }
+            return true;
+        });
 
-        // Ordenação
-        $query->orderBy('log.date', 'desc');
+        // Ordenar por data desc
+        $sorted = $filtered->sortByDesc(fn($l) => (int)($l['date'] ?? 0))->values();
 
-        // Paginação
-        $logs = $query->paginate(20)->withQueryString();
+        // Paginação manual
+        $perPage     = 20;
+        $currentPage = LengthAwarePaginator::resolveCurrentPage();
+        $pageItems   = $sorted->slice(($currentPage - 1) * $perPage, $perPage)->values();
 
-        // Transformação para View
-        $logs->getCollection()->transform(function ($log) {
-            $log->formatted_date = date('d/m/Y H:i:s', $log->date);
+        $paginator = new LengthAwarePaginator(
+            $pageItems,
+            $sorted->count(),
+            $perPage,
+            $currentPage,
+            ['path' => $request->url(), 'query' => $request->query()]
+        );
 
-            // Natureza & Movimentação
-            if ($log->cost > 0) {
-                $log->nature = 'out';
-                $log->nature_label = 'Saída';
-                $log->amount = $log->cost;
-                $log->amount_formatted = '- ' . number_format($log->cost, 2);
-                $log->nature_class = 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400';
-            } elseif ($log->cost < 0) {
-                $log->nature = 'in';
-                $log->nature_label = 'Entrada';
-                $log->amount = abs($log->cost);
-                $log->amount_formatted = '+ ' . number_format(abs($log->cost), 2);
-                $log->nature_class = 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400';
+        // Transformar cada item para a view
+        $paginator->getCollection()->transform(function ($log) use ($usersMap, $linesMap) {
+            $cost        = (float)($log['cost'] ?? 0);
+            $logType     = $log['type'] ?? '';
+            $ownerId     = (int)($log['owner'] ?? 0);
+            $logId       = (int)($log['log_id'] ?? 0);
+            $ownerUser   = $usersMap->get($ownerId);
+            $lineUser    = in_array($logType, ['line_create', 'line_extend']) ? $linesMap->get($logId) : null;
+            $targetUser  = in_array($logType, ['credit_change', 'reseller_create']) ? $usersMap->get($logId) : null;
+
+            $log['formatted_date']  = date('d/m/Y H:i:s', (int)($log['date'] ?? 0));
+            $log['owner_name']      = $ownerUser['username'] ?? 'N/A';
+            $log['line_username']   = $lineUser['username'] ?? null;
+            $log['target_username'] = $targetUser['username'] ?? null;
+            $log['credits_before']  = (float)($log['credits_after'] ?? 0) + $cost;
+
+            if ($cost > 0) {
+                $log['nature'] = 'out'; $log['nature_label'] = 'Saída';
+                $log['amount'] = $cost; $log['amount_formatted'] = '- ' . number_format($cost, 2);
+                $log['nature_class'] = 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400';
+            } elseif ($cost < 0) {
+                $log['nature'] = 'in'; $log['nature_label'] = 'Entrada';
+                $log['amount'] = abs($cost); $log['amount_formatted'] = '+ ' . number_format(abs($cost), 2);
+                $log['nature_class'] = 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400';
             } else {
-                $log->nature = 'neutral';
-                $log->nature_label = '-';
-                $log->amount = 0;
-                $log->amount_formatted = '0.00';
-                $log->nature_class = 'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-400';
+                $log['nature'] = 'neutral'; $log['nature_label'] = '-';
+                $log['amount'] = 0; $log['amount_formatted'] = '0.00';
+                $log['nature_class'] = 'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-400';
             }
 
-            // Tipo e Destino
-            if (in_array($log->type, ['line_create', 'line_extend'])) {
-                $log->type_label = 'Cliente';
-                $log->destination = $log->line_username ?? 'Desconhecido';
-                $log->type_icon = 'bi-person';
-                $log->type_class = 'text-blue-600 dark:text-blue-400';
+            if (in_array($logType, ['line_create', 'line_extend'])) {
+                $log['type_label'] = 'Cliente';
+                $log['destination'] = $log['line_username'] ?? 'Desconhecido';
+                $log['type_icon']  = 'bi-person';
+                $log['type_class'] = 'text-blue-600 dark:text-blue-400';
             } else {
-                $log->type_label = 'Revenda';
-                $log->destination = $log->target_username ?? 'Sistema/Admin';
-                $log->type_icon = 'bi-shop';
-                $log->type_class = 'text-purple-600 dark:text-purple-400';
+                $log['type_label'] = 'Revenda';
+                $log['destination'] = $log['target_username'] ?? 'Sistema/Admin';
+                $log['type_icon']  = 'bi-shop';
+                $log['type_class'] = 'text-purple-600 dark:text-purple-400';
             }
 
-            // Descrição Detalhada
             $details = '';
-            if ($log->type == 'line_create') {
-                $details = "Cliente criado";
-                if ($log->package_name) $details .= " - Pct: {$log->package_name}";
-            } elseif ($log->type == 'line_extend') {
-                $details = "Cliente renovado";
-                // Extrair duração do action se possível (Ex: "Extended line x (+1 Month)")
-                if (preg_match('/\(\+(.*?)\)/', $log->action, $matches)) {
-                    $details .= " ({$matches[1]})";
-                }
-            } elseif ($log->type == 'credit_change') {
-                if ($log->cost > 0) {
-                    $details = "Envio de créditos";
-                } else {
-                    $details = "Recebimento de créditos";
-                }
-                $details .= " (" . abs($log->cost) . ")";
-            } elseif ($log->type == 'reseller_create') {
-                $details = "Criação de Revenda";
+            if ($logType === 'line_create') {
+                $details = 'Cliente criado';
+                if (!empty($log['package_name'])) $details .= " - Pct: {$log['package_name']}";
+            } elseif ($logType === 'line_extend') {
+                $details = 'Cliente renovado';
+                if (preg_match('/\(\+(.*?)\)/', $log['action'] ?? '', $m)) $details .= " ({$m[1]})";
+            } elseif ($logType === 'credit_change') {
+                $details = $cost > 0 ? 'Envio de créditos' : 'Recebimento de créditos';
+                $details .= ' (' . abs($cost) . ')';
+            } elseif ($logType === 'reseller_create') {
+                $details = 'Criação de Revenda';
             } else {
-                $details = $log->action;
+                $details = $log['action'] ?? '';
             }
-            
-            $log->description_formatted = $details;
+            $log['description_formatted'] = $details;
 
             return $log;
         });
 
-        return $logs;
+        return $paginator;
     }
 }

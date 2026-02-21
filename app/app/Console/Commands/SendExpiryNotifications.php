@@ -3,10 +3,10 @@
 namespace App\Console\Commands;
 
 use App\Models\ClientDetail;
-use App\Models\Line;
 use App\Models\NotificationLog;
 use App\Models\WhatsappSetting;
 use App\Services\EvolutionService;
+use App\Services\XuiApiService;
 use Illuminate\Console\Command;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Log;
@@ -34,6 +34,7 @@ class SendExpiryNotifications extends Command
         }
 
         $evo = new EvolutionService();
+        $api = app(XuiApiService::class);
 
         $todayCarbon = Carbon::today($tz);
         $todayStart = $todayCarbon->timestamp;
@@ -44,6 +45,10 @@ class SendExpiryNotifications extends Command
         $in3dEnd = $todayCarbon->copy()->addDays(3)->endOfDay()->timestamp;
 
         $totalSent = 0;
+
+        // Buscar todas as linhas via API uma única vez (evita N chamadas)
+        $allLinesResp = $api->getLines();
+        $allLines = collect($allLinesResp['data'] ?? []);
 
         foreach ($settings as $setting) {
             $startTime = $setting->send_start_time ?? '09:00';
@@ -56,17 +61,18 @@ class SendExpiryNotifications extends Command
             $panelUser = $setting->panelUser;
             if (!$panelUser) continue;
 
-            $memberId = $panelUser->xui_id;
+            $memberId = (string) $panelUser->xui_id;
             $intervalSeconds = $setting->send_interval_seconds ?? 30;
 
-            // Remontar a lista a cada execução — clientes que renovaram não aparecerão mais
-            $lines = Line::where('member_id', $memberId)
-                ->where('is_trial', 0)
-                ->where('admin_enabled', 1)
-                ->where('enabled', 1)
-                ->where('exp_date', '>=', $todayStart)
-                ->where('exp_date', '<=', $in3dEnd)
-                ->get();
+            // Filtrar em memória — substitui Line::where() com DB direto
+            $lines = $allLines->filter(function ($line) use ($memberId, $todayStart, $in3dEnd) {
+                return (string)($line['member_id'] ?? '') === $memberId
+                    && (int)($line['is_trial'] ?? 0) === 0
+                    && (int)($line['admin_enabled'] ?? 1) === 1
+                    && (int)($line['enabled'] ?? 1) === 1
+                    && (int)($line['exp_date'] ?? 0) >= $todayStart
+                    && (int)($line['exp_date'] ?? 0) <= $in3dEnd;
+            })->map(fn($l) => (object) $l);
 
             $this->info("[{$setting->instance_name}] Encontrados {$lines->count()} clientes para notificar (intervalo: {$intervalSeconds}s).");
 
@@ -74,6 +80,7 @@ class SendExpiryNotifications extends Command
 
             foreach ($lines as $line) {
                 $expDate = (int) $line->exp_date;
+                $lineId  = (int) $line->id;
                 $notifType = null;
                 $template = null;
 
@@ -91,7 +98,7 @@ class SendExpiryNotifications extends Command
                 if (!$template || !$notifType) continue;
 
                 $alreadySent = NotificationLog::where('whatsapp_setting_id', $setting->id)
-                    ->where('xui_client_id', $line->id)
+                    ->where('xui_client_id', $lineId)
                     ->where('notification_type', $notifType)
                     ->where('sent_date', $today)
                     ->where('success', true)
@@ -99,7 +106,7 @@ class SendExpiryNotifications extends Command
 
                 if ($alreadySent) continue;
 
-                $detail = ClientDetail::where('xui_client_id', $line->id)->first();
+                $detail = ClientDetail::where('xui_client_id', $lineId)->first();
                 $phone = $detail->phone ?? null;
 
                 if (!$phone) continue;
@@ -124,7 +131,7 @@ class SendExpiryNotifications extends Command
                 NotificationLog::updateOrCreate(
                     [
                         'whatsapp_setting_id' => $setting->id,
-                        'xui_client_id' => $line->id,
+                        'xui_client_id' => $lineId,
                         'notification_type' => $notifType,
                         'sent_date' => $today,
                     ],

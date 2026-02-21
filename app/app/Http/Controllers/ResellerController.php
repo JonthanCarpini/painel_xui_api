@@ -2,31 +2,31 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\CreditLog;
-use App\Models\UserLog;
-use App\Models\XuiUser;
+use App\Services\XuiApiService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Hash;
 
 class ResellerController extends Controller
 {
+    public function __construct(private XuiApiService $api) {}
+
+    // -------------------------------------------------------------------------
+    // Listagem
+    // -------------------------------------------------------------------------
+
     public function index()
     {
-        $user = Auth::user();
+        $user     = Auth::user();
+        $response = $this->api->getUsers();
+        $all      = $response['data'] ?? [];
 
-        if ($user->isAdmin()) {
-            $resellers = XuiUser::where('member_group_id', 2)->get();
-        } else {
-            $resellers = XuiUser::where('owner_id', $user->id)
-                ->where('member_group_id', 2)
-                ->get();
-        }
+        $resellers = array_filter($all, function ($u) use ($user) {
+            if ((int)($u['member_group_id'] ?? 0) !== 2) return false;
+            if ($user->isAdmin()) return true;
+            return (int)($u['owner_id'] ?? 0) === (int)$user->xui_id;
+        });
 
-        return view('resellers.index', [
-            'resellers' => $resellers
-        ]);
+        return view('resellers.index', ['resellers' => array_values($resellers)]);
     }
 
     public function create()
@@ -34,287 +34,223 @@ class ResellerController extends Controller
         return view('resellers.create');
     }
 
+    // -------------------------------------------------------------------------
+    // Criar revenda
+    // -------------------------------------------------------------------------
+
     public function store(Request $request)
     {
         $validated = $request->validate([
             'username' => 'required|string|min:3|max:50',
             'password' => 'required|string|min:6',
-            'email' => 'nullable|email',
-            'credits' => 'required|numeric|min:0',
-            'notes' => 'nullable|string',
+            'email'    => 'nullable|email',
+            'credits'  => 'required|numeric|min:0',
+            'notes'    => 'nullable|string',
         ]);
 
-        $user = Auth::user();
+        $user    = Auth::user();
+        $credits = (float)$validated['credits'];
 
-        if (!$user->isAdmin()) {
-            if ($user->credits < $validated['credits']) {
-                return back()->withErrors([
-                    'error' => "Saldo insuficiente! Você tem {$user->credits} créditos e precisa de {$validated['credits']}."
-                ])->withInput();
+        // Validar saldo do revendedor pai (via API)
+        if (!$user->isAdmin() && $credits > 0) {
+            $ownerResp = $this->api->getUser((int)$user->xui_id);
+            $ownerData = $ownerResp['data'] ?? [];
+            $ownerCredits = (float)($ownerData['credits'] ?? 0);
+
+            if ($ownerCredits < $credits) {
+                return back()->withErrors(['error' => "Saldo insuficiente! Você tem {$ownerCredits} créditos e precisa de {$credits}."])->withInput();
             }
         }
 
-        $existingUser = XuiUser::where('username', $validated['username'])->first();
-        if ($existingUser) {
-            return back()->withErrors(['error' => 'Nome de usuário já existe'])->withInput();
+        // Criar revenda via API
+        $result = $this->api->createUser([
+            'username'        => $validated['username'],
+            'password'        => $validated['password'],
+            'email'           => $validated['email'] ?? '',
+            'member_group_id' => 2,
+            'credits'         => $credits,
+            'notes'           => $validated['notes'] ?? '',
+            'status'          => 1,
+        ]);
+
+        if (($result['status'] ?? '') !== 'STATUS_SUCCESS') {
+            return back()->withErrors(['error' => 'Erro ao criar revenda: ' . ($result['message'] ?? 'erro desconhecido')])->withInput();
         }
 
-        DB::connection('xui')->beginTransaction();
+        $resellerId = (int)($result['id'] ?? 0);
 
-        try {
-            $reseller = XuiUser::create([
-                'username' => $validated['username'],
-                'password' => md5($validated['password']),
-                'email' => $validated['email'] ?? '',
-                'member_group_id' => 2,
-                'owner_id' => $user->id,
-                'credits' => $validated['credits'],
-                'notes' => $validated['notes'] ?? '',
-                'status' => 1,
-                'date_registered' => time(),
-            ]);
+        // Debitar créditos do pai (revendedor) via API
+        if (!$user->isAdmin() && $credits > 0) {
+            $parentId = (int)$user->xui_id;
+            $reason   = "Criação de sub-revenda: {$validated['username']} ({$credits} créditos)";
+            $debit    = $this->api->subtractCredits($parentId, $credits, $parentId, $reason);
 
-            if (!$user->isAdmin()) {
-                $user->decrement('credits', $validated['credits']);
-
-                // Log Legado (Admin pagando)
-                CreditLog::create([
-                    'admin_id' => $user->id,
-                    'target_id' => $reseller->id,
-                    'amount' => -$validated['credits'],
-                    'date' => time(),
-                    'reason' => "Criação de revenda: {$validated['username']}",
-                ]);
-
-                // Log Novo (Admin pagando) - Type: credit_change
-                // Na lógica do XUI, quando se transfere créditos, cria-se um log.
-                UserLog::create([
-                    'owner' => $user->id,
-                    'type' => 'credit_change',
-                    'action' => "Criou revenda {$validated['username']} com {$validated['credits']} créditos",
-                    'log_id' => $reseller->id,
-                    'package_id' => 0,
-                    'cost' => $validated['credits'], // Custo positivo = Saída
-                    'credits_after' => $user->fresh()->credits,
-                    'date' => time(),
-                    'deleted_info' => null
-                ]);
-
-                // Log Legado (Revenda recebendo)
-                CreditLog::create([
-                    'admin_id' => $user->id,
-                    'target_id' => $reseller->id,
-                    'amount' => $validated['credits'],
-                    'date' => time(),
-                    'reason' => "Crédito inicial da revenda: {$validated['username']}",
-                ]);
-                
-                 // Log Novo (Revenda Recebendo)
-                 UserLog::create([
-                    'owner' => $reseller->id,
-                    'type' => 'credit_change',
-                    'action' => "Créditos iniciais de {$user->username}",
-                    'log_id' => $user->id, // De quem veio
-                    'package_id' => 0,
-                    'cost' => -$validated['credits'], // Custo negativo = Entrada
-                    'credits_after' => $reseller->credits,
-                    'date' => time(),
-                    'deleted_info' => null
-                ]);
-            } else {
-                // Se for admin criando, apenas logar a criação/entrada na revenda, sem débito no admin
-                 UserLog::create([
-                    'owner' => $reseller->id,
-                    'type' => 'credit_change',
-                    'action' => "Créditos iniciais do Admin",
-                    'log_id' => $user->id,
-                    'package_id' => 0,
-                    'cost' => -$validated['credits'],
-                    'credits_after' => $reseller->credits,
-                    'date' => time(),
-                    'deleted_info' => null
-                ]);
+            if (($debit['status'] ?? '') !== 'STATUS_SUCCESS') {
+                // Compensação: deletar a revenda criada
+                $this->api->deleteUser($resellerId);
+                return back()->withErrors(['error' => 'Falha ao debitar créditos do pai. Revenda cancelada.'])->withInput();
             }
 
-            DB::connection('xui')->commit();
-
-            return redirect()->route('resellers.index')
-                ->with('success', 'Revenda criada com sucesso!');
-
-        } catch (\Exception $e) {
-            DB::connection('xui')->rollBack();
-            
-            return back()->withErrors(['error' => 'Erro ao criar revenda: ' . $e->getMessage()])
-                ->withInput();
         }
+
+        return redirect()->route('resellers.index')->with('success', 'Revenda criada com sucesso!');
     }
+
+    // -------------------------------------------------------------------------
+    // Editar revenda
+    // -------------------------------------------------------------------------
 
     public function edit(int $id)
     {
-        $user = Auth::user();
-        $reseller = XuiUser::find($id);
+        $user   = Auth::user();
+        $result = $this->api->getUser($id);
 
-        if (!$reseller || $reseller->member_group_id != 2) {
+        if (($result['status'] ?? '') !== 'STATUS_SUCCESS' || (int)($result['data']['member_group_id'] ?? 0) !== 2) {
             return back()->withErrors(['error' => 'Revenda não encontrada']);
         }
 
-        if (!$user->isAdmin() && $reseller->owner_id != $user->id) {
+        $reseller = $result['data'];
+
+        if (!$user->isAdmin() && (int)($reseller['owner_id'] ?? 0) !== (int)$user->xui_id) {
             return back()->withErrors(['error' => 'Sem permissão']);
         }
 
-        return view('resellers.edit', [
-            'reseller' => $reseller
-        ]);
+        return view('resellers.edit', ['reseller' => $reseller]);
     }
 
     public function update(Request $request, int $id)
     {
         $validated = $request->validate([
-            'email' => 'nullable|email',
+            'email'    => 'nullable|email',
             'password' => 'nullable|string|min:6',
-            'notes' => 'nullable|string',
-            'status' => 'required|boolean',
+            'notes'    => 'nullable|string',
+            'status'   => 'required|boolean',
         ]);
 
-        $user = Auth::user();
-        $reseller = XuiUser::find($id);
+        $user   = Auth::user();
+        $result = $this->api->getUser($id);
 
-        if (!$reseller || $reseller->member_group_id != 2) {
+        if (($result['status'] ?? '') !== 'STATUS_SUCCESS' || (int)($result['data']['member_group_id'] ?? 0) !== 2) {
             return back()->withErrors(['error' => 'Revenda não encontrada']);
         }
 
-        if (!$user->isAdmin() && $reseller->owner_id != $user->id) {
+        $reseller = $result['data'];
+
+        if (!$user->isAdmin() && (int)($reseller['owner_id'] ?? 0) !== (int)$user->xui_id) {
             return back()->withErrors(['error' => 'Sem permissão']);
         }
 
         $updateData = [
-            'email' => $validated['email'] ?? '',
-            'notes' => $validated['notes'] ?? '',
-            'status' => $validated['status'],
+            'email'  => $validated['email'] ?? '',
+            'notes'  => $validated['notes'] ?? '',
+            'status' => (int)$validated['status'],
         ];
 
         if (!empty($validated['password'])) {
-            $updateData['password'] = md5($validated['password']);
+            $updateData['password'] = $validated['password'];
         }
 
-        $reseller->update($updateData);
+        $editResult = $this->api->editUser($id, $updateData);
 
-        return redirect()->route('resellers.index')
-            ->with('success', 'Revenda atualizada com sucesso!');
+        if (($editResult['status'] ?? '') !== 'STATUS_SUCCESS') {
+            return back()->withErrors(['error' => 'Erro ao atualizar revenda: ' . ($editResult['message'] ?? 'erro')]);
+        }
+
+        return redirect()->route('resellers.index')->with('success', 'Revenda atualizada com sucesso!');
     }
+
+    // -------------------------------------------------------------------------
+    // Recarga de créditos
+    // -------------------------------------------------------------------------
 
     public function recharge(Request $request, int $id)
     {
-        $validated = $request->validate([
-            'amount' => 'required|numeric',
-        ]);
+        $validated = $request->validate(['amount' => 'required|numeric']);
 
-        $user = Auth::user();
-        $reseller = XuiUser::find($id);
+        $user   = Auth::user();
+        $amount = (float)$validated['amount'];
 
-        if (!$reseller || $reseller->member_group_id != 2) {
+        $resellerResp = $this->api->getUser($id);
+        if (($resellerResp['status'] ?? '') !== 'STATUS_SUCCESS' || (int)($resellerResp['data']['member_group_id'] ?? 0) !== 2) {
             return response()->json(['success' => false, 'message' => 'Revenda não encontrada'], 404);
         }
 
-        if (!$user->isAdmin() && $reseller->owner_id != $user->id) {
+        $reseller = $resellerResp['data'];
+
+        if (!$user->isAdmin() && (int)($reseller['owner_id'] ?? 0) !== (int)$user->xui_id) {
             return response()->json(['success' => false, 'message' => 'Sem permissão'], 403);
         }
-
-        $amount = (float) $validated['amount'];
 
         if ($amount < 0 && !$user->isAdmin()) {
             return response()->json(['success' => false, 'message' => 'Apenas admin pode remover créditos'], 403);
         }
 
+        // Validar saldo do pai
         if (!$user->isAdmin() && $amount > 0) {
-            if ($user->credits < $amount) {
-                return response()->json([
-                    'success' => false, 
-                    'message' => "Saldo insuficiente! Você tem {$user->credits} créditos."
-                ], 400);
+            $ownerResp    = $this->api->getUser((int)$user->xui_id);
+            $ownerCredits = (float)($ownerResp['data']['credits'] ?? 0);
+
+            if ($ownerCredits < $amount) {
+                return response()->json(['success' => false, 'message' => "Saldo insuficiente! Você tem {$ownerCredits} créditos."], 400);
             }
         }
 
-        DB::connection('xui')->beginTransaction();
+        // Aplicar créditos na revenda
+        $adminId       = (int)$user->xui_id;
+        $rechargeLabel = $amount >= 0 ? "Recarga de {$amount} créditos por {$user->username}" : "Remoção de " . abs($amount) . " créditos por {$user->username}";
+        $rechargeResult = $amount >= 0
+            ? $this->api->addCredits($id, $amount, $adminId, $rechargeLabel)
+            : $this->api->subtractCredits($id, abs($amount), $adminId, $rechargeLabel);
 
-        try {
-            $reseller->increment('credits', $amount);
+        if (($rechargeResult['status'] ?? '') !== 'STATUS_SUCCESS') {
+            return response()->json(['success' => false, 'message' => 'Erro ao atualizar créditos da revenda: ' . ($rechargeResult['message'] ?? 'erro')], 500);
+        }
 
-            if (!$user->isAdmin() && $amount > 0) {
-                $user->decrement('credits', $amount);
+        $resellerCreditsAfter = $rechargeResult['credits_after'] ?? 0;
 
-                // Log Legado (Admin/Revenda Pai enviando)
-                CreditLog::create([
-                    'admin_id' => $user->id,
-                    'target_id' => $user->id,
-                    'amount' => -$amount,
-                    'date' => time(),
-                    'reason' => "Transferência para revenda: {$reseller->username}",
-                ]);
+        // Debitar do pai (se não for admin)
+        if (!$user->isAdmin() && $amount > 0) {
+            $parentId    = (int)$user->xui_id;
+            $parentReason = "Transferência de {$amount} créditos para {$reseller['username']}";
+            $debit = $this->api->subtractCredits($parentId, $amount, $parentId, $parentReason);
 
-                // Log Novo (Admin/Revenda Pai enviando)
-                UserLog::create([
-                    'owner' => $user->id,
-                    'type' => 'credit_change',
-                    'action' => "Transferência de créditos para {$reseller->username}",
-                    'log_id' => $reseller->id,
-                    'package_id' => 0,
-                    'cost' => $amount, // Positivo = Gasto
-                    'credits_after' => $user->fresh()->credits,
-                    'date' => time(),
-                    'deleted_info' => null
-                ]);
+            if (($debit['status'] ?? '') !== 'STATUS_SUCCESS') {
+                // Compensação: reverter créditos da revenda
+                $this->api->subtractCredits($id, $amount, $adminId, "Estorno: falha na transferência para {$reseller['username']}");
+                return response()->json(['success' => false, 'message' => 'Falha ao debitar créditos do pai. Operação revertida.'], 500);
             }
 
-            // Log Legado (Revenda recebendo ou perdendo)
-            CreditLog::create([
-                'admin_id' => $user->id,
-                'target_id' => $reseller->id,
-                'amount' => $amount,
-                'date' => time(),
-                'reason' => $amount > 0 ? "Recarga de créditos" : "Remoção de créditos",
-            ]);
-
-            // Log Novo (Revenda recebendo ou perdendo)
-            UserLog::create([
-                'owner' => $reseller->id,
-                'type' => 'credit_change',
-                'action' => $amount > 0 ? "Créditos recebidos de {$user->username}" : "Créditos removidos pelo Admin",
-                'log_id' => $user->id,
-                'package_id' => 0,
-                'cost' => -$amount, // Se amount=10 (ganhou), cost=-10. Se amount=-10 (perdeu), cost=10.
-                'credits_after' => $reseller->fresh()->credits,
-                'date' => time(),
-                'deleted_info' => null
-            ]);
-
-            DB::connection('xui')->commit();
-
-            return response()->json(['success' => true, 'message' => 'Créditos atualizados com sucesso!']);
-
-        } catch (\Exception $e) {
-            DB::connection('xui')->rollBack();
-            
-            return response()->json(['success' => false, 'message' => 'Erro: ' . $e->getMessage()], 500);
         }
+
+        return response()->json(['success' => true, 'message' => 'Créditos atualizados com sucesso!']);
     }
+
+    // -------------------------------------------------------------------------
+    // Excluir revenda
+    // -------------------------------------------------------------------------
 
     public function destroy(int $id)
     {
-        $user = Auth::user();
-        $reseller = XuiUser::find($id);
+        $user   = Auth::user();
+        $result = $this->api->getUser($id);
 
-        if (!$reseller || $reseller->member_group_id != 2) {
+        if (($result['status'] ?? '') !== 'STATUS_SUCCESS' || (int)($result['data']['member_group_id'] ?? 0) !== 2) {
             return back()->withErrors(['error' => 'Revenda não encontrada']);
         }
 
-        if (!$user->isAdmin() && $reseller->owner_id != $user->id) {
+        $reseller = $result['data'];
+
+        if (!$user->isAdmin() && (int)($reseller['owner_id'] ?? 0) !== (int)$user->xui_id) {
             return back()->withErrors(['error' => 'Sem permissão']);
         }
 
-        $reseller->delete();
+        $deleteResult = $this->api->deleteUser($id);
 
-        return redirect()->route('resellers.index')
-            ->with('success', 'Revenda excluída com sucesso!');
+        if (($deleteResult['status'] ?? '') !== 'STATUS_SUCCESS') {
+            return back()->withErrors(['error' => 'Erro ao excluir revenda: ' . ($deleteResult['message'] ?? 'erro')]);
+        }
+
+        return redirect()->route('resellers.index')->with('success', 'Revenda excluída com sucesso!');
     }
+
 }

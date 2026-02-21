@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use App\Models\VodRequest;
 use App\Services\TmdbService;
+use App\Services\XuiApiService;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -14,10 +15,34 @@ use Illuminate\Support\Facades\Log;
 class VodRequestController extends Controller
 {
     protected TmdbService $tmdb;
+    protected XuiApiService $api;
 
-    public function __construct(TmdbService $tmdb)
+    public function __construct(TmdbService $tmdb, XuiApiService $api)
     {
         $this->tmdb = $tmdb;
+        $this->api  = $api;
+    }
+
+    private function enrichWithUsers(iterable $items): void
+    {
+        $userIds = collect($items)
+            ->flatMap(fn($r) => array_filter([$r->user_id ?? null, $r->resolved_by ?? null]))
+            ->unique()->values()->all();
+
+        $usersMap = [];
+        foreach ($userIds as $uid) {
+            $resp = $this->api->getUser((int)$uid);
+            if (($resp['status'] ?? '') === 'STATUS_SUCCESS') {
+                $usersMap[$uid] = $resp['data'];
+            }
+        }
+
+        foreach ($items as $item) {
+            $item->user     = isset($item->user_id, $usersMap[$item->user_id])
+                ? (object)$usersMap[$item->user_id] : null;
+            $item->resolver = isset($item->resolved_by, $usersMap[$item->resolved_by])
+                ? (object)$usersMap[$item->resolved_by] : null;
+        }
     }
 
     public function index(Request $request)
@@ -61,11 +86,12 @@ class VodRequestController extends Controller
 
         // Buscar solicitantes para cada grupo
         foreach ($requests as $req) {
-            $req->requesters = VodRequest::where('tmdb_id', $req->tmdb_id)
+            $requesters = VodRequest::where('tmdb_id', $req->tmdb_id)
                 ->where('type', $req->type)
-                ->with('user')
                 ->orderBy('created_at', 'desc')
                 ->get();
+            $this->enrichWithUsers($requesters);
+            $req->requesters = $requesters;
         }
 
         $stats = [
@@ -93,7 +119,8 @@ class VodRequestController extends Controller
             abort(403);
         }
 
-        $vodRequest = VodRequest::with('user')->findOrFail($id);
+        $vodRequest = VodRequest::findOrFail($id);
+        $this->enrichWithUsers([$vodRequest]);
 
         $requestCount = VodRequest::where('tmdb_id', $vodRequest->tmdb_id)
             ->where('type', $vodRequest->type)
@@ -101,20 +128,20 @@ class VodRequestController extends Controller
 
         $allRequesters = VodRequest::where('tmdb_id', $vodRequest->tmdb_id)
             ->where('type', $vodRequest->type)
-            ->with('user')
             ->orderBy('created_at', 'desc')
             ->get();
+        $this->enrichWithUsers($allRequesters);
 
         $existsInXui = $this->tmdb->checkExistsInXui($vodRequest->tmdb_id, $vodRequest->type);
         $categoryName = null;
         $addedDate = null;
 
         if ($existsInXui) {
-            $categoryName = $this->tmdb->getCategoryName($existsInXui->category_id ?? null);
-            if ($vodRequest->type === 'movie' && $existsInXui->added) {
-                $addedDate = Carbon::createFromTimestamp($existsInXui->added)->format('d/m/Y H:i');
-            } elseif ($vodRequest->type === 'series' && $existsInXui->last_modified) {
-                $addedDate = Carbon::createFromTimestamp($existsInXui->last_modified)->format('d/m/Y H:i');
+            $categoryName = $this->tmdb->getCategoryName($existsInXui['category_id'] ?? null);
+            if ($vodRequest->type === 'movie' && !empty($existsInXui['added'])) {
+                $addedDate = Carbon::createFromTimestamp((int)$existsInXui['added'])->format('d/m/Y H:i');
+            } elseif ($vodRequest->type === 'series' && !empty($existsInXui['last_modified'])) {
+                $addedDate = Carbon::createFromTimestamp((int)$existsInXui['last_modified'])->format('d/m/Y H:i');
             }
         }
 
@@ -160,23 +187,25 @@ class VodRequestController extends Controller
         if ($existing) {
             $categoryName = 'Sem categoria';
             try {
-                $categoryName = $this->tmdb->getCategoryName($existing->category_id ?? null);
+                $categoryName = $this->tmdb->getCategoryName($existing['category_id'] ?? null);
             } catch (\Exception $e) {
                 Log::warning('Admin VodRequest: getCategoryName failed', ['error' => $e->getMessage()]);
             }
 
             $addedDate = null;
             try {
-                if ($type === 'movie' && !empty($existing->added)) {
-                    $addedDate = Carbon::createFromTimestamp((int) $existing->added)->format('d/m/Y H:i');
-                } elseif ($type === 'series' && !empty($existing->last_modified)) {
-                    $addedDate = Carbon::createFromTimestamp((int) $existing->last_modified)->format('d/m/Y H:i');
+                if ($type === 'movie' && !empty($existing['added'])) {
+                    $addedDate = Carbon::createFromTimestamp((int) $existing['added'])->format('d/m/Y H:i');
+                } elseif ($type === 'series' && !empty($existing['last_modified'])) {
+                    $addedDate = Carbon::createFromTimestamp((int) $existing['last_modified'])->format('d/m/Y H:i');
                 }
             } catch (\Exception $e) {
                 Log::warning('Admin VodRequest: date parse failed', ['error' => $e->getMessage()]);
             }
 
-            $name = $type === 'movie' ? ($existing->stream_display_name ?? 'Sem nome') : ($existing->title ?? 'Sem nome');
+            $name = $type === 'movie'
+                ? ($existing['name'] ?? $existing['stream_display_name'] ?? 'Sem nome')
+                : ($existing['name'] ?? $existing['title'] ?? 'Sem nome');
 
             return response()->json([
                 'exists' => true,
@@ -184,8 +213,8 @@ class VodRequestController extends Controller
                     'name' => $name,
                     'category' => $categoryName,
                     'added_date' => $addedDate,
-                    'year' => $existing->year ?? null,
-                    'rating' => $existing->rating ?? null,
+                    'year' => $existing['year'] ?? null,
+                    'rating' => $existing['rating'] ?? null,
                 ],
             ]);
         }

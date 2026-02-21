@@ -1,4 +1,238 @@
-# ⚡ GUIA DE DEPLOY RÁPIDO - PAINEL XUI
+# ⚡ GUIA DE DEPLOY RÁPIDO - PAINELSHARK
+
+> **Arquitetura:** Build local → Push Docker Hub (`carpini/painelshark:latest`) → VPS puxa e recria containers  
+> **VPS:** 5.189.164.31 (Contabo) | Docker + Traefik  
+> **Última atualização:** 20/02/2026
+
+---
+
+## 🏗️ FLUXO GERAL
+
+```
+[Local] docker build → docker push carpini/painelshark:latest
+                                        ↓
+[VPS]   bash /opt/update_containers.sh  (docker pull + recria painel_N)
+```
+
+---
+
+## 🚀 CENÁRIO 1: BUILD LOCAL E DEPLOY NA VPS
+
+### Pré-requisitos locais
+- Docker Desktop instalado e rodando
+- Conta Docker Hub: `carpini`
+- Acesso SSH à VPS: `ssh root@5.189.164.31`
+
+### Passo 1 — Login no Docker Hub (apenas na primeira vez)
+
+```powershell
+docker login
+# usuário: carpini
+```
+
+### Passo 2 — Build da imagem
+
+```powershell
+# Na raiz do projeto (onde está o Dockerfile)
+cd "c:\Users\admin\Documents\Projetos\painel_xui - API"
+
+docker build -t carpini/painelshark:latest .
+```
+
+> ⏱️ Primeiro build: ~5-10 min (baixa dependências). Builds seguintes: ~2-3 min (cache).
+
+### Passo 3 — Push para Docker Hub
+
+```powershell
+docker push carpini/painelshark:latest
+```
+
+### Passo 4 — Atualizar containers na VPS
+
+```bash
+# Via SSH (Git Bash)
+ssh root@5.189.164.31
+bash /opt/update_containers.sh
+```
+
+O script automaticamente:
+1. Faz `docker pull carpini/painelshark:latest`
+2. Para e remove cada `painel_N`
+3. Recria com a nova imagem (preservando env vars e labels)
+4. Roda `php artisan migrate --force` + `optimize`
+
+### Passo 5 — Verificar
+
+```bash
+docker ps | grep painel
+docker logs painel_5 --tail 30
+```
+
+---
+
+## ⚙️ CENÁRIO 2: NOVA INSTÂNCIA PAINELSHARK
+
+### Passo 1 — Criar banco no MySQL Central
+
+```bash
+docker exec -it mysql_central mysql -uroot -pPainelShark@2026
+
+CREATE DATABASE painel_XX CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+CREATE USER 'user_XX'@'%' IDENTIFIED BY 'GERAR_SENHA_FORTE';
+GRANT ALL PRIVILEGES ON painel_XX.* TO 'user_XX'@'%';
+FLUSH PRIVILEGES;
+EXIT;
+```
+
+### Passo 2 — Criar config do XUI Proxy
+
+```bash
+cat > /opt/xui_proxy_XX.conf << 'EOF'
+server {
+    listen 80;
+    server_name _;
+    location / {
+        proxy_pass http://IP_DO_XUI;
+        proxy_set_header Host IP_DO_XUI;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto https;
+        proxy_buffering off;
+        proxy_read_timeout 300s;
+        proxy_connect_timeout 10s;
+        proxy_redirect ~^http://IP_DO_XUI(:\d+)?(.*)$ https://$host$2;
+    }
+}
+EOF
+```
+
+### Passo 3 — Subir XUI Proxy
+
+```bash
+docker run -d \
+  --name xui_proxy_XX \
+  --restart always \
+  --network web_network \
+  -v /opt/xui_proxy_XX.conf:/etc/nginx/conf.d/default.conf:ro \
+  --label "traefik.enable=true" \
+  --label "traefik.http.routers.xui_proxy_XX.rule=Host(\`xui.NOME.vp1.officex.site\`)" \
+  --label "traefik.http.routers.xui_proxy_XX.entrypoints=websecure" \
+  --label "traefik.http.routers.xui_proxy_XX.tls.certresolver=myresolver" \
+  --label "traefik.http.services.xui_proxy_XX.loadbalancer.server.port=80" \
+  nginx:alpine
+```
+
+### Passo 4 — Subir container PainelShark
+
+```bash
+docker run -d \
+  --name painel_XX \
+  --restart always \
+  --network web_network \
+  -v /opt/custom_entrypoint.sh:/usr/local/bin/entrypoint.sh \
+  -e APP_URL=https://NOME.vp1.officex.site \
+  -e APP_KEY=base64:$(openssl rand -base64 32) \
+  -e APP_ENV=production \
+  -e APP_DEBUG=false \
+  -e DB_CONNECTION=mysql \
+  -e DB_HOST=mysql_central \
+  -e DB_PORT=3306 \
+  -e DB_DATABASE=painel_XX \
+  -e DB_USERNAME=user_XX \
+  -e DB_PASSWORD=SENHA_DO_PASSO_1 \
+  -e XUI_HOST=http://IP_DO_XUI \
+  -e XUI_BASE_URL=http://IP_DO_XUI/API_PATH/ \
+  -e XUI_API_KEY=API_KEY_DO_XUI \
+  -e XUI_TIMEOUT=30 \
+  -e EVOLUTION_API_URL=https://evo.onpanel.site \
+  -e EVOLUTION_API_KEY=evo_standalone_key_2026 \
+  --label "traefik.enable=true" \
+  --label "traefik.http.routers.painel_XX.rule=Host(\`NOME.vp1.officex.site\`)" \
+  --label "traefik.http.routers.painel_XX.entrypoints=websecure" \
+  --label "traefik.http.routers.painel_XX.tls.certresolver=myresolver" \
+  --label "traefik.http.services.painel_XX.loadbalancer.server.port=80" \
+  carpini/painelshark:latest
+```
+
+### Passo 5 — Configurar DNS
+
+Adicionar no Cloudflare/registrar:
+- `NOME.vp1.officex.site` → `5.189.164.31`
+- `xui.NOME.vp1.officex.site` → `5.189.164.31`
+
+---
+
+## 🔑 VARIÁVEIS DE AMBIENTE — REFERÊNCIA COMPLETA
+
+| Variável | Obrigatória | Descrição | Exemplo |
+|---|---|---|---|
+| `APP_URL` | ✅ | URL pública do painel | `https://opera.vp1.officex.site` |
+| `APP_KEY` | ✅ | Chave Laravel (base64) | `base64:...` |
+| `APP_ENV` | ✅ | Ambiente | `production` |
+| `APP_DEBUG` | ✅ | Debug | `false` |
+| `DB_CONNECTION` | ✅ | Driver | `mysql` |
+| `DB_HOST` | ✅ | Host MySQL local | `mysql_central` |
+| `DB_PORT` | ✅ | Porta MySQL | `3306` |
+| `DB_DATABASE` | ✅ | Banco local | `painel_5` |
+| `DB_USERNAME` | ✅ | Usuário MySQL | `user_5` |
+| `DB_PASSWORD` | ✅ | Senha MySQL | `...` |
+| `XUI_HOST` | ✅ | URL base do XUI (para proxy) | `http://109.205.178.143` |
+| `XUI_BASE_URL` | ✅ | URL completa da API XUI | `http://109.205.178.143/fXvFkkfq/` |
+| `XUI_API_KEY` | ✅ | API Key do XUI | `5EE3138A43E3190ED00F031B1107EA30` |
+| `XUI_TIMEOUT` | — | Timeout API (segundos) | `30` |
+| `EVOLUTION_API_URL` | — | URL WAHA WhatsApp | `https://evo.onpanel.site` |
+| `EVOLUTION_API_KEY` | — | API Key WAHA | `evo_standalone_key_2026` |
+
+> ⚠️ `XUI_DB_*` foram **removidas** — o painel não usa mais conexão direta ao banco XUI.
+
+---
+
+## 🔧 INSTÂNCIAS ATIVAS (referência)
+
+| ID | Container | Domínio | XUI Host | DB |
+|---|---|---|---|---|
+| 5 | `painel_5` | `opera.vp1.officex.site` | `109.205.178.143` | `painel_5` |
+| 6 | `painel_6` | `genial.vp1.officex.site` | `109.205.178.143` | `painel_6` |
+| 9 | `painel_9` | `blade.vp1.officex.site` | `109.205.178.143` | `painel_9` |
+| 18 | `painel_18` | `carpini2.vp1.officex.site` | `109.205.178.143` | `painel_18` |
+| 20 | `painel_20` | `p2player.vp1.officex.site` | `5.189.164.31` | `painel_20` |
+
+---
+
+## 🛠️ COMANDOS DE EMERGÊNCIA
+
+```bash
+# Ver logs de um painel
+docker logs painel_5 --tail 50 -f
+
+# Reiniciar um painel específico
+docker restart painel_5
+
+# Limpar cache dentro do container
+docker exec painel_5 php artisan optimize:clear
+
+# Ver todos os containers
+docker ps -a
+
+# Entrar no container
+docker exec -it painel_5 bash
+```
+
+---
+
+## 📋 CHECKLIST NOVA INSTÂNCIA
+
+- [ ] DNS configurado (A record → 5.189.164.31)
+- [ ] Banco criado no `mysql_central`
+- [ ] Usuário MySQL criado com grants
+- [ ] Arquivo `xui_proxy_XX.conf` criado em `/opt/`
+- [ ] Container `xui_proxy_XX` rodando
+- [ ] Container `painel_XX` rodando com todas as env vars
+- [ ] SSL gerado pelo Traefik (automático, aguardar ~1min)
+- [ ] Acesso HTTPS funcionando
+- [ ] Login no painel funcionando
+
+---
 
 ## 🎯 CENÁRIO 1: VPS NOVA (Ubuntu 22.04)
 

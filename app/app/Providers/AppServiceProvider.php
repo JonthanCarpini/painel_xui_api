@@ -2,10 +2,11 @@
 
 namespace App\Providers;
 
-use App\Auth\XuiDatabaseUserProvider;
+use App\Auth\XuiApiUserProvider;
 use App\Models\Notice;
 use App\Models\PanelUser;
 use App\Models\Ticket;
+use App\Services\XuiApiService;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\URL;
 use Illuminate\Support\Facades\View;
@@ -31,7 +32,7 @@ class AppServiceProvider extends ServiceProvider
         }
 
         Auth::provider('xui_db', function ($app, array $config) {
-            return new XuiDatabaseUserProvider();
+            return new XuiApiUserProvider($app->make(XuiApiService::class));
         });
 
         // Compartilhar contadores com todas as views

@@ -3,13 +3,15 @@
 namespace App\Http\Controllers;
 
 use App\Models\AppSetting;
+use App\Services\XuiApiService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Artisan;
-use Illuminate\Support\Facades\DB;
 
 class MaintenanceController extends Controller
 {
+    public function __construct(private XuiApiService $api) {}
+
     public function index()
     {
         // Apenas admin
@@ -17,28 +19,26 @@ class MaintenanceController extends Controller
             abort(403);
         }
 
-        // Buscar configuração do XUI
-        $xuiSettings = DB::connection('xui')->table('settings')->where('id', 1)->first();
+        // Buscar configurações via API XUI
+        $settingsResp = $this->api->getSettings();
+        $xuiSettings  = $settingsResp['data'] ?? [];
 
-        // Buscar Load Balancers
-        $servers = DB::connection('xui')->table('servers')
-            ->select('id', 'server_name', 'server_ip', 'status', 'total_clients', 'is_main', 'last_check_ago')
-            ->get();
+        // Buscar servidores via API XUI
+        $serversRaw = $this->api->getServers();
+        $servers = collect($serversRaw)->map(fn($s) => (object) $s);
 
-        // Buscar Streams (Apenas uma amostra ou os que estão com problema? Vamos pegar os últimos adicionados ou offline)
-        // Para uma gestão completa, seria melhor uma rota separada com DataTables, mas vamos colocar uma lista básica aqui.
-        // Vamos pegar streams e seus status
-        $streams = DB::connection('xui')->table('streams as s')
-            ->leftJoin('streams_servers as ss', 's.id', '=', 'ss.stream_id')
-            ->select('s.id', 's.stream_display_name', 's.stream_source', 'ss.stream_status', 'ss.pid', 'ss.server_id')
-            ->orderBy('s.id', 'desc')
-            ->limit(50)
-            ->get();
+        // Buscar streams via API XUI (últimos 50)
+        $streamsResp = $this->api->getStreams();
+        $streams = collect($streamsResp['data'] ?? [])
+            ->sortByDesc('id')
+            ->take(50)
+            ->map(fn($s) => (object) $s)
+            ->values();
 
         $settings = [
             'maintenance_resellers' => AppSetting::get('maintenance_resellers', '0'),
-            'maintenance_tests' => AppSetting::get('maintenance_tests', '0'),
-            'disable_trial' => $xuiSettings->disable_trial ?? 0,
+            'maintenance_tests'     => AppSetting::get('maintenance_tests', '0'),
+            'disable_trial'         => $xuiSettings['disable_trial'] ?? 0,
         ];
 
         return view('maintenance.index', compact('settings', 'servers', 'streams'));
@@ -50,18 +50,18 @@ class MaintenanceController extends Controller
             abort(403);
         }
 
-        $validated = $request->validate([
+        $request->validate([
             'maintenance_resellers' => 'boolean',
-            'maintenance_tests' => 'boolean',
-            'disable_trial' => 'boolean',
+            'maintenance_tests'     => 'boolean',
+            'disable_trial'         => 'boolean',
         ]);
 
         AppSetting::set('maintenance_resellers', $request->has('maintenance_resellers') ? '1' : '0');
         AppSetting::set('maintenance_tests', $request->has('maintenance_tests') ? '1' : '0');
-        
-        // Atualizar no XUI
-        DB::connection('xui')->table('settings')->where('id', 1)->update([
-            'disable_trial' => $request->has('disable_trial') ? 1 : 0
+
+        // Atualizar disable_trial via API XUI
+        $this->api->updateSettings([
+            'disable_trial' => $request->has('disable_trial') ? 1 : 0,
         ]);
 
         return redirect()->route('settings.maintenance.index')->with('success', 'Configurações de manutenção atualizadas com sucesso!');

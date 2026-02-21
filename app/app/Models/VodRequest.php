@@ -34,16 +34,6 @@ class VodRequest extends Model
         'resolved_at' => 'datetime',
     ];
 
-    public function user()
-    {
-        return $this->belongsTo(XuiUser::class, 'user_id');
-    }
-
-    public function resolver()
-    {
-        return $this->belongsTo(XuiUser::class, 'resolved_by');
-    }
-
     public function scopePending($query)
     {
         return $query->where('status', 'pending');

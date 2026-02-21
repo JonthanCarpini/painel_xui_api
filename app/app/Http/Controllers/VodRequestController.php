@@ -28,13 +28,11 @@ class VodRequestController extends Controller
 
         $completedRequests = VodRequest::where('user_id', $userId)
             ->where('status', 'completed')
-            ->with('resolver')
             ->orderBy('resolved_at', 'desc')
             ->get();
 
         $rejectedRequests = VodRequest::where('user_id', $userId)
             ->where('status', 'rejected')
-            ->with('resolver')
             ->orderBy('resolved_at', 'desc')
             ->get();
 
@@ -104,17 +102,17 @@ class VodRequestController extends Controller
         if ($existing) {
             $categoryName = 'Sem categoria';
             try {
-                $categoryName = $this->tmdb->getCategoryName($existing->category_id ?? null);
+                $categoryName = $this->tmdb->getCategoryName($existing['category_id'] ?? null);
             } catch (\Exception $e) {
                 \Log::warning('VodRequest: getCategoryName failed', ['error' => $e->getMessage()]);
             }
 
             $addedDate = null;
             try {
-                if ($type === 'movie' && !empty($existing->added)) {
-                    $addedDate = Carbon::createFromTimestamp((int) $existing->added)->format('d/m/Y H:i');
-                } elseif ($type === 'series' && !empty($existing->last_modified)) {
-                    $addedDate = Carbon::createFromTimestamp((int) $existing->last_modified)->format('d/m/Y H:i');
+                if ($type === 'movie' && !empty($existing['added'])) {
+                    $addedDate = Carbon::createFromTimestamp((int) $existing['added'])->format('d/m/Y H:i');
+                } elseif ($type === 'series' && !empty($existing['last_modified'])) {
+                    $addedDate = Carbon::createFromTimestamp((int) $existing['last_modified'])->format('d/m/Y H:i');
                 }
             } catch (\Exception $e) {
                 \Log::warning('VodRequest: date parse failed', ['error' => $e->getMessage()]);
@@ -123,12 +121,12 @@ class VodRequestController extends Controller
             return response()->json([
                 'exists' => true,
                 'data' => [
-                    'name' => $type === 'movie' ? ($existing->stream_display_name ?? 'Sem nome') : ($existing->title ?? 'Sem nome'),
-                    'cover' => $type === 'movie' ? ($existing->stream_icon ?? null) : ($existing->cover ?? null),
+                    'name' => $type === 'movie' ? ($existing['name'] ?? $existing['stream_display_name'] ?? 'Sem nome') : ($existing['name'] ?? $existing['title'] ?? 'Sem nome'),
+                    'cover' => $type === 'movie' ? ($existing['stream_icon'] ?? null) : ($existing['cover'] ?? null),
                     'category' => $categoryName,
                     'added_date' => $addedDate,
-                    'year' => $existing->year ?? null,
-                    'rating' => $existing->rating ?? null,
+                    'year' => $existing['year'] ?? null,
+                    'rating' => $existing['rating'] ?? null,
                 ],
             ]);
         }

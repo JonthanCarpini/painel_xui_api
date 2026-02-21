@@ -2,105 +2,112 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\Line;
-use App\Models\UserLog;
-use App\Models\XuiUser;
+use App\Services\XuiApiService;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 
 class ResellerStatsController extends Controller
 {
+    public function __construct(private XuiApiService $api) {}
+
     public function index(Request $request)
     {
-        $user = Auth::user();
-        $sortBy = $request->input('sort', 'username');
+        $user    = Auth::user();
+        $sortBy  = $request->input('sort', 'username');
         $sortDir = $request->input('dir', 'asc');
         $dateFrom = $request->input('date_from');
-        $dateTo = $request->input('date_to');
+        $dateTo   = $request->input('date_to');
 
         $allowedSorts = ['username', 'credits', 'sub_resellers_count', 'clients_count', 'credits_sold'];
-        if (!in_array($sortBy, $allowedSorts)) {
-            $sortBy = 'username';
-        }
-        if (!in_array($sortDir, ['asc', 'desc'])) {
-            $sortDir = 'asc';
-        }
+        if (!in_array($sortBy, $allowedSorts)) $sortBy = 'username';
+        if (!in_array($sortDir, ['asc', 'desc'])) $sortDir = 'asc';
 
-        $resellers = $this->getResellers($user);
-        $stats = $this->buildStats($resellers, $dateFrom, $dateTo);
-        $stats = $this->sortStats($stats, $sortBy, $sortDir);
+        $usersResp = $this->api->getUsers();
+        $allUsers  = $usersResp['data'] ?? [];
 
+        $resellers = $this->getResellers($user, $allUsers);
+        $stats     = $this->buildStats($resellers, $allUsers, $dateFrom, $dateTo);
+        $stats     = $this->sortStats($stats, $sortBy, $sortDir);
         $chartData = $this->buildChartData($stats);
 
         return view('reseller-stats.index', [
-            'stats' => $stats,
+            'stats'     => $stats,
             'chartData' => $chartData,
-            'sortBy' => $sortBy,
-            'sortDir' => $sortDir,
-            'dateFrom' => $dateFrom,
-            'dateTo' => $dateTo,
+            'sortBy'    => $sortBy,
+            'sortDir'   => $sortDir,
+            'dateFrom'  => $dateFrom,
+            'dateTo'    => $dateTo,
         ]);
     }
 
-    private function getResellers(XuiUser $user): \Illuminate\Support\Collection
+    private function getResellers($user, array $allUsers): array
     {
         if ($user->isAdmin()) {
-            return XuiUser::where('member_group_id', 2)->get();
+            return array_values(array_filter($allUsers, fn($u) => (int)($u['member_group_id'] ?? 0) === 2));
         }
 
-        return XuiUser::where('owner_id', $user->id)
-            ->where('member_group_id', 2)
-            ->get();
+        return array_values(array_filter($allUsers, fn($u) =>
+            (int)($u['member_group_id'] ?? 0) === 2 &&
+            (int)($u['owner_id'] ?? 0) === (int)$user->xui_id
+        ));
     }
 
-    private function buildStats($resellers, ?string $dateFrom, ?string $dateTo): array
+    private function buildStats(array $resellers, array $allUsers, ?string $dateFrom, ?string $dateTo): array
     {
-        $resellerIds = $resellers->pluck('id')->toArray();
+        $resellerIds = array_column($resellers, 'id');
 
         // Sub-revendedores por revenda
-        $subCounts = XuiUser::whereIn('owner_id', $resellerIds)
-            ->where('member_group_id', 2)
-            ->selectRaw('owner_id, COUNT(*) as cnt')
-            ->groupBy('owner_id')
-            ->pluck('cnt', 'owner_id')
-            ->toArray();
-
-        // Clientes (lines) por revenda
-        $clientCounts = Line::whereIn('member_id', $resellerIds)
-            ->selectRaw('member_id, COUNT(*) as cnt')
-            ->groupBy('member_id')
-            ->pluck('cnt', 'member_id')
-            ->toArray();
-
-        // Créditos vendidos (transferidos) por revenda
-        $creditsSoldQuery = UserLog::whereIn('owner', $resellerIds)
-            ->where('type', 'credit_change')
-            ->where('cost', '>', 0);
-
-        if ($dateFrom) {
-            $creditsSoldQuery->where('date', '>=', Carbon::parse($dateFrom)->startOfDay()->timestamp);
-        }
-        if ($dateTo) {
-            $creditsSoldQuery->where('date', '<=', Carbon::parse($dateTo)->endOfDay()->timestamp);
+        $subCounts = [];
+        foreach ($allUsers as $u) {
+            if ((int)($u['member_group_id'] ?? 0) !== 2) continue;
+            $oid = (int)($u['owner_id'] ?? 0);
+            if (in_array($oid, $resellerIds)) {
+                $subCounts[$oid] = ($subCounts[$oid] ?? 0) + 1;
+            }
         }
 
-        $creditsSold = $creditsSoldQuery
-            ->selectRaw('owner, SUM(cost) as total')
-            ->groupBy('owner')
-            ->pluck('total', 'owner')
-            ->toArray();
+        // Clientes por revenda via API
+        $linesResp    = $this->api->getLines();
+        $allLines     = $linesResp['data'] ?? [];
+        $clientCounts = [];
+        foreach ($allLines as $l) {
+            $mid = (int)($l['member_id'] ?? 0);
+            if (in_array($mid, $resellerIds)) {
+                $clientCounts[$mid] = ($clientCounts[$mid] ?? 0) + 1;
+            }
+        }
+
+        // Créditos vendidos via API de logs
+        $logsResp    = $this->api->getUserLogs();
+        $allLogs     = $logsResp['data'] ?? [];
+        $creditsSold = [];
+
+        $tsFrom = $dateFrom ? Carbon::parse($dateFrom)->startOfDay()->timestamp : null;
+        $tsTo   = $dateTo   ? Carbon::parse($dateTo)->endOfDay()->timestamp     : null;
+
+        foreach ($allLogs as $log) {
+            if (($log['type'] ?? '') !== 'credit_change') continue;
+            if ((float)($log['cost'] ?? 0) <= 0) continue;
+            $owner = (int)($log['owner'] ?? 0);
+            if (!in_array($owner, $resellerIds)) continue;
+            $logDate = (int)($log['date'] ?? 0);
+            if ($tsFrom && $logDate < $tsFrom) continue;
+            if ($tsTo   && $logDate > $tsTo)   continue;
+            $creditsSold[$owner] = ($creditsSold[$owner] ?? 0) + (float)($log['cost'] ?? 0);
+        }
 
         $stats = [];
-        foreach ($resellers as $reseller) {
+        foreach ($resellers as $r) {
+            $rid     = (int)($r['id'] ?? 0);
             $stats[] = [
-                'id' => $reseller->id,
-                'username' => $reseller->username,
-                'credits' => (float) $reseller->credits,
-                'status' => $reseller->status,
-                'sub_resellers_count' => $subCounts[$reseller->id] ?? 0,
-                'clients_count' => $clientCounts[$reseller->id] ?? 0,
-                'credits_sold' => (float) ($creditsSold[$reseller->id] ?? 0),
+                'id'                  => $rid,
+                'username'            => $r['username'] ?? '',
+                'credits'             => (float)($r['credits'] ?? 0),
+                'status'              => (int)($r['status'] ?? 1),
+                'sub_resellers_count' => $subCounts[$rid] ?? 0,
+                'clients_count'       => $clientCounts[$rid] ?? 0,
+                'credits_sold'        => (float)($creditsSold[$rid] ?? 0),
             ];
         }
 
@@ -112,13 +119,7 @@ class ResellerStatsController extends Controller
         usort($stats, function ($a, $b) use ($sortBy, $sortDir) {
             $valA = $a[$sortBy];
             $valB = $b[$sortBy];
-
-            if (is_string($valA)) {
-                $cmp = strcasecmp($valA, $valB);
-            } else {
-                $cmp = $valA <=> $valB;
-            }
-
+            $cmp  = is_string($valA) ? strcasecmp($valA, $valB) : ($valA <=> $valB);
             return $sortDir === 'desc' ? -$cmp : $cmp;
         });
 
@@ -128,21 +129,21 @@ class ResellerStatsController extends Controller
     private function buildChartData(array $stats): array
     {
         $bySubResellers = collect($stats)->sortByDesc('sub_resellers_count')->take(20)->values();
-        $byClients = collect($stats)->sortByDesc('clients_count')->take(20)->values();
-        $byCreditsSold = collect($stats)->sortByDesc('credits_sold')->take(20)->values();
+        $byClients      = collect($stats)->sortByDesc('clients_count')->take(20)->values();
+        $byCreditsSold  = collect($stats)->sortByDesc('credits_sold')->take(20)->values();
 
         return [
             'sub_resellers' => [
                 'labels' => $bySubResellers->pluck('username')->toArray(),
-                'data' => $bySubResellers->pluck('sub_resellers_count')->toArray(),
+                'data'   => $bySubResellers->pluck('sub_resellers_count')->toArray(),
             ],
             'clients' => [
                 'labels' => $byClients->pluck('username')->toArray(),
-                'data' => $byClients->pluck('clients_count')->toArray(),
+                'data'   => $byClients->pluck('clients_count')->toArray(),
             ],
             'credits_sold' => [
                 'labels' => $byCreditsSold->pluck('username')->toArray(),
-                'data' => $byCreditsSold->pluck('credits_sold')->toArray(),
+                'data'   => $byCreditsSold->pluck('credits_sold')->toArray(),
             ],
         ];
     }

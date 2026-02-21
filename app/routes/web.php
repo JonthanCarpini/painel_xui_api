@@ -7,25 +7,6 @@ use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\MonitorController;
 use App\Http\Controllers\ResellerController;
 use Illuminate\Support\Facades\Route;
-use Illuminate\Support\Facades\DB;
-
-Route::get('/test-db', function () {
-    try {
-        $pdo = DB::connection('xui')->getPdo();
-        $users = DB::connection('xui')->table('users')->count();
-        
-        return response()->json([
-            'status' => 'success',
-            'message' => 'Conexão XUI OK',
-            'users_count' => $users,
-        ]);
-    } catch (\Exception $e) {
-        return response()->json([
-            'status' => 'error',
-            'message' => $e->getMessage(),
-        ], 500);
-    }
-});
 
 Route::get('/clear-cache', function () {
     try {

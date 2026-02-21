@@ -3,11 +3,11 @@
 namespace App\Http\Controllers;
 
 use App\Models\ClientDetail;
-use App\Models\Line;
 use App\Models\NotificationLog;
 use App\Models\PanelUser;
 use App\Models\WhatsappSetting;
 use App\Services\EvolutionService;
+use App\Services\XuiApiService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Auth;
@@ -15,6 +15,7 @@ use Illuminate\Support\Facades\Log;
 
 class WhatsappController extends Controller
 {
+    public function __construct(private XuiApiService $api) {}
     // ─── Página: Conexão ───────────────────────────────────────
 
     public function connection()
@@ -220,32 +221,37 @@ class WhatsappController extends Controller
             return redirect()->route('whatsapp.connection');
         }
 
-        $memberId = $panelUser->xui_id;
+        $memberId        = $panelUser->xui_id;
         $intervalSeconds = $setting->send_interval_seconds ?? 30;
 
-        $tz = 'America/Sao_Paulo';
+        $tz          = 'America/Sao_Paulo';
         $todayCarbon = Carbon::today($tz);
-        $todayStart = $todayCarbon->timestamp;
-        $todayEnd = $todayCarbon->copy()->endOfDay()->timestamp;
-        $in1dStart = $todayCarbon->copy()->addDay()->startOfDay()->timestamp;
-        $in1dEnd = $todayCarbon->copy()->addDay()->endOfDay()->timestamp;
-        $in3dStart = $todayCarbon->copy()->addDays(3)->startOfDay()->timestamp;
-        $in3dEnd = $todayCarbon->copy()->addDays(3)->endOfDay()->timestamp;
+        $todayStart  = $todayCarbon->timestamp;
+        $todayEnd    = $todayCarbon->copy()->endOfDay()->timestamp;
+        $in1dStart   = $todayCarbon->copy()->addDay()->startOfDay()->timestamp;
+        $in1dEnd     = $todayCarbon->copy()->addDay()->endOfDay()->timestamp;
+        $in3dStart   = $todayCarbon->copy()->addDays(3)->startOfDay()->timestamp;
+        $in3dEnd     = $todayCarbon->copy()->addDays(3)->endOfDay()->timestamp;
 
-        $lines = Line::where('member_id', $memberId)
-            ->where('is_trial', 0)
-            ->where('admin_enabled', 1)
-            ->where('enabled', 1)
-            ->where('exp_date', '>=', $todayStart)
-            ->where('exp_date', '<=', $in3dEnd)
-            ->get();
+        // Buscar linhas via API e filtrar em memória
+        $linesResp = $this->api->getLines();
+        $allLines  = $linesResp['data'] ?? [];
+
+        $lines = array_filter($allLines, function ($l) use ($memberId, $todayStart, $in3dEnd) {
+            if ((int)($l['member_id'] ?? 0) !== (int)$memberId) return false;
+            if ((int)($l['is_trial'] ?? 0) !== 0) return false;
+            if ((int)($l['admin_enabled'] ?? 1) !== 1) return false;
+            if ((int)($l['enabled'] ?? 1) !== 1) return false;
+            $exp = (int)($l['exp_date'] ?? 0);
+            return $exp >= $todayStart && $exp <= $in3dEnd;
+        });
 
         $today = $todayCarbon->toDateString();
 
         $groups = [
-            'today' => ['label' => 'Vence Hoje', 'color' => 'red', 'icon' => 'bi-exclamation-triangle-fill', 'clients' => []],
-            '1d' => ['label' => 'Vence Amanhã', 'color' => 'yellow', 'icon' => 'bi-clock-fill', 'clients' => []],
-            '3d' => ['label' => 'Vence em 3 Dias', 'color' => 'blue', 'icon' => 'bi-calendar-event', 'clients' => []],
+            'today' => ['label' => 'Vence Hoje',      'color' => 'red',    'icon' => 'bi-exclamation-triangle-fill', 'clients' => []],
+            '1d'    => ['label' => 'Vence Amanhã',    'color' => 'yellow', 'icon' => 'bi-clock-fill',                'clients' => []],
+            '3d'    => ['label' => 'Vence em 3 Dias', 'color' => 'blue',   'icon' => 'bi-calendar-event',            'clients' => []],
         ];
 
         $sentLogs = NotificationLog::where('whatsapp_setting_id', $setting->id)
@@ -253,10 +259,15 @@ class WhatsappController extends Controller
             ->get()
             ->keyBy(fn($log) => $log->xui_client_id . '_' . $log->notification_type);
 
+        // Pré-carregar detalhes locais
+        $lineIds      = array_column(array_values($lines), 'id');
+        $localDetails = ClientDetail::whereIn('xui_client_id', $lineIds)->get()->keyBy('xui_client_id');
+
         $queuePosition = 0;
 
         foreach ($lines as $line) {
-            $expDate = (int) $line->exp_date;
+            $expDate   = (int)($line['exp_date'] ?? 0);
+            $lineId    = (int)($line['id'] ?? 0);
             $notifType = null;
 
             if ($expDate >= $todayStart && $expDate <= $todayEnd) {
@@ -269,39 +280,32 @@ class WhatsappController extends Controller
 
             if (!$notifType) continue;
 
-            $detail = ClientDetail::where('xui_client_id', $line->id)->first();
-            $phone = $detail->phone ?? null;
+            $detail     = $localDetails->get($lineId);
+            $phone      = $detail ? $detail->phone : null;
             $phoneClean = $phone ? preg_replace('/\D/', '', $phone) : null;
 
-            $logKey = $line->id . '_' . $notifType;
-            $log = $sentLogs->get($logKey);
+            $logKey = $lineId . '_' . $notifType;
+            $log    = $sentLogs->get($logKey);
 
             if ($log && $log->success) {
-                $status = 'sent';
-                $statusLabel = 'Enviado';
-                $sentAt = $log->created_at;
+                $status = 'sent'; $statusLabel = 'Enviado'; $sentAt = $log->created_at;
             } elseif ($log && !$log->success) {
-                $status = 'failed';
-                $statusLabel = 'Falhou';
-                $sentAt = $log->created_at;
+                $status = 'failed'; $statusLabel = 'Falhou'; $sentAt = $log->created_at;
             } elseif (!$phoneClean || strlen($phoneClean) < 10) {
-                $status = 'no_phone';
-                $statusLabel = 'Sem Telefone';
-                $sentAt = null;
+                $status = 'no_phone'; $statusLabel = 'Sem Telefone'; $sentAt = null;
             } else {
-                $status = 'pending';
-                $statusLabel = 'Aguardando';
+                $status = 'pending'; $statusLabel = 'Aguardando';
                 $queuePosition++;
                 $sentAt = Carbon::now('America/Sao_Paulo')->addSeconds($queuePosition * $intervalSeconds);
             }
 
             $groups[$notifType]['clients'][] = [
-                'username' => $line->username,
-                'phone' => $phoneClean,
-                'status' => $status,
+                'username'     => $line['username'] ?? '',
+                'phone'        => $phoneClean,
+                'status'       => $status,
                 'status_label' => $statusLabel,
-                'sent_at' => $sentAt,
-                'exp_date' => date('d/m/Y', $expDate),
+                'sent_at'      => $sentAt,
+                'exp_date'     => date('d/m/Y', $expDate),
             ];
         }
 
