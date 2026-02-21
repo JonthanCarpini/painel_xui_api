@@ -319,11 +319,6 @@ class ClientController extends Controller
                 'phone' => 'nullable|string',
                 'notes' => 'nullable|string',
             ]);
-                'max_connections' => 'required|integer|min:1|max:10',
-                'email' => 'nullable|email',
-                'phone' => 'nullable|string',
-                'notes' => 'nullable|string',
-            ]);
         } catch (\Illuminate\Validation\ValidationException $e) {
             if ($request->expectsJson()) {
                 return response()->json([
@@ -570,7 +565,6 @@ class ClientController extends Controller
         }
     }
 
-    // Renovar em Confiança
     public function renewTrust(int $id, LineService $lineService)
     {
         $user   = Auth::user();
