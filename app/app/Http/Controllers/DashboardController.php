@@ -187,9 +187,12 @@ class DashboardController extends Controller
                     && (float)($l['amount'] ?? 0) > 0)
                 ->sortByDesc('date')
                 ->take(5)
-                ->map(function($l) {
+                ->map(function($l) use ($allUsers) {
                     $obj = (object) $l;
                     $obj->date = (int)($l['date'] ?? 0);
+                    $targetId = (int)($l['target_id'] ?? 0);
+                    $targetUser = collect($allUsers)->firstWhere('id', $targetId);
+                    $obj->target = (object)['username' => $targetUser['username'] ?? 'N/A'];
                     return $obj;
                 })
                 ->values();
@@ -303,9 +306,12 @@ class DashboardController extends Controller
                     && (float)($l['amount'] ?? 0) > 0)
                 ->sortByDesc('date')
                 ->take(5)
-                ->map(function($l) {
+                ->map(function($l) use ($allUsers) {
                     $obj = (object) $l;
                     $obj->date = (int)($l['date'] ?? 0);
+                    $targetId = (int)($l['target_id'] ?? 0);
+                    $targetUser = collect($allUsers)->firstWhere('id', $targetId);
+                    $obj->target = (object)['username' => $targetUser['username'] ?? 'N/A'];
                     return $obj;
                 })
                 ->values();
