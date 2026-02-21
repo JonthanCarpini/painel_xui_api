@@ -29,8 +29,8 @@
                     <option value="all" {{ $selectedResellerId == 'all' ? 'selected' : '' }}>Todas as Revendas</option>
                 @endif
                 @foreach($resellers as $reseller)
-                    <option value="{{ $reseller->id }}" {{ $selectedResellerId == $reseller->id ? 'selected' : '' }}>
-                        {{ $reseller->username }} (ID: {{ $reseller->id }})
+                    <option value="{{ $reseller['id'] }}" {{ $selectedResellerId == $reseller['id'] ? 'selected' : '' }}>
+                        {{ $reseller['username'] }} (ID: {{ $reseller['id'] }})
                     </option>
                 @endforeach
             </select>
@@ -111,42 +111,42 @@
                 @foreach($logs as $log)
                 <tr class="hover:bg-gray-50 dark:hover:bg-dark-200 transition-colors duration-150">
                     <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-600 dark:text-gray-300">
-                        {{ $log->formatted_date }}
+                        {{ $log['formatted_date'] }}
                     </td>
                     <td class="px-4 py-3 whitespace-nowrap">
                         <div class="text-sm font-medium text-gray-900 dark:text-white">
-                            {{ $log->owner_name }}
+                            {{ $log['owner_name'] }}
                         </div>
                     </td>
                     <td class="px-4 py-3 text-center">
-                        <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium {{ $log->nature_class }}">
-                            {{ $log->nature_label }}
+                        <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium {{ $log['nature_class'] }}">
+                            {{ $log['nature_label'] }}
                         </span>
                     </td>
                     <td class="px-4 py-3 whitespace-nowrap">
-                        <div class="flex items-center gap-2 text-sm {{ $log->type_class }}">
-                            <i class="bi {{ $log->type_icon }}"></i>
-                            <span class="font-medium">{{ $log->type_label }}</span>
+                        <div class="flex items-center gap-2 text-sm {{ $log['type_class'] }}">
+                            <i class="bi {{ $log['type_icon'] }}"></i>
+                            <span class="font-medium">{{ $log['type_label'] }}</span>
                         </div>
                     </td>
                     <td class="px-4 py-3">
-                        <div class="text-sm text-gray-900 dark:text-white font-medium">{{ $log->description_formatted }}</div>
+                        <div class="text-sm text-gray-900 dark:text-white font-medium">{{ $log['description_formatted'] }}</div>
                     </td>
                     <td class="px-4 py-3 whitespace-nowrap">
                         <div class="text-sm font-mono text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-dark-100 px-2 py-0.5 rounded inline-block">
-                            {{ $log->destination }}
+                            {{ $log['destination'] }}
                         </div>
                     </td>
                     <td class="px-4 py-3 whitespace-nowrap text-right text-sm font-mono text-gray-600 dark:text-gray-400">
-                        {{ number_format($log->credits_before, 2) }}
+                        {{ number_format((float)$log['credits_before'], 2) }}
                     </td>
                     <td class="px-4 py-3 whitespace-nowrap text-right">
-                        <span class="text-sm font-bold {{ $log->nature == 'in' ? 'text-green-600 dark:text-green-400' : ($log->nature == 'out' ? 'text-red-600 dark:text-red-400' : 'text-gray-600') }}">
-                            {{ $log->amount_formatted }}
+                        <span class="text-sm font-bold {{ $log['nature'] == 'in' ? 'text-green-600 dark:text-green-400' : ($log['nature'] == 'out' ? 'text-red-600 dark:text-red-400' : 'text-gray-600') }}">
+                            {{ $log['amount_formatted'] }}
                         </span>
                     </td>
                     <td class="px-4 py-3 whitespace-nowrap text-right text-sm font-bold font-mono text-gray-900 dark:text-white">
-                        {{ number_format($log->credits_after, 2) }}
+                        {{ number_format((float)$log['credits_after'], 2) }}
                     </td>
                 </tr>
                 @endforeach

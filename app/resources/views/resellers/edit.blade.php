@@ -18,13 +18,13 @@
         <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
             <div class="lg:col-span-2">
                 <div class="bg-gray-50 dark:bg-dark-200 rounded-xl border border-gray-200 dark:border-dark-100 p-6">
-                    <form action="{{ route('resellers.update', $reseller->id) }}" method="POST">
+                    <form action="{{ route('resellers.update', $reseller['id']) }}" method="POST">
                         @csrf
                         @method('PUT')
                         
                         <div class="mb-6">
                             <label class="block text-sm font-medium text-gray-700 dark:text-gray-400 mb-2">Usu&aacute;rio</label>
-                            <input type="text" value="{{ $reseller->username }}" readonly class="w-full px-4 py-2 bg-gray-100 dark:bg-dark-200 border border-gray-300 dark:border-dark-100 rounded-lg text-gray-500 dark:text-gray-400 cursor-not-allowed">
+                            <input type="text" value="{{ $reseller['username'] }}" readonly class="w-full px-4 py-2 bg-gray-100 dark:bg-dark-200 border border-gray-300 dark:border-dark-100 rounded-lg text-gray-500 dark:text-gray-400 cursor-not-allowed">
                             <p class="text-xs text-gray-500 mt-1">O usu&aacute;rio n&atilde;o pode ser alterado</p>
                         </div>
 
@@ -36,15 +36,15 @@
                             </div>
                             <div>
                                 <label class="block text-sm font-medium text-gray-700 dark:text-gray-400 mb-2">E-mail (Opcional)</label>
-                                <input type="email" name="email" value="{{ old('email', $reseller->email ?? '') }}" class="w-full px-4 py-2 bg-white dark:bg-dark-200 border border-gray-300 dark:border-dark-100 rounded-lg text-gray-900 dark:text-white focus:border-orange-500 focus:outline-none transition-colors" placeholder="email@exemplo.com">
+                                <input type="email" name="email" value="{{ old('email', $reseller['email'] ?? '') }}" class="w-full px-4 py-2 bg-white dark:bg-dark-200 border border-gray-300 dark:border-dark-100 rounded-lg text-gray-900 dark:text-white focus:border-orange-500 focus:outline-none transition-colors" placeholder="email@exemplo.com">
                             </div>
                         </div>
 
                         <div class="mb-6">
                             <label class="block text-sm font-medium text-gray-700 dark:text-gray-400 mb-2">Status *</label>
                             <select name="status" required class="w-full px-4 py-2 bg-white dark:bg-dark-200 border border-gray-300 dark:border-dark-100 rounded-lg text-gray-900 dark:text-white focus:border-orange-500 focus:outline-none transition-colors">
-                                <option value="1" {{ old('status', $reseller->status ?? 1) == 1 ? 'selected' : '' }}>Ativo</option>
-                                <option value="0" {{ old('status', $reseller->status ?? 1) == 0 ? 'selected' : '' }}>Bloqueado</option>
+                                <option value="1" {{ old('status', $reseller['status'] ?? 1) == 1 ? 'selected' : '' }}>Ativo</option>
+                                <option value="0" {{ old('status', $reseller['status'] ?? 1) == 0 ? 'selected' : '' }}>Bloqueado</option>
                             </select>
                             <p class="text-xs text-gray-500 mt-1">Bloqueie o revendedor para impedir o acesso</p>
                         </div>
@@ -68,7 +68,7 @@
                     </h3>
                     <div class="mb-4">
                         <label class="block text-sm font-medium text-gray-500 dark:text-gray-400 mb-2">Saldo Atual</label>
-                        <div class="text-4xl font-bold text-orange-500">{{ number_format($reseller->credits, 2, ',', '.') }}</div>
+                        <div class="text-4xl font-bold text-orange-500">{{ number_format((float)($reseller['credits'] ?? 0), 2, ',', '.') }}</div>
                     </div>
                     <button onclick="openRechargeModal()" class="w-full px-4 py-3 bg-gradient-to-r from-orange-500 to-orange-600 text-white rounded-lg hover:shadow-lg transition-all flex items-center justify-center gap-2 font-medium">
                         <i class="bi bi-cash-coin"></i>
@@ -84,7 +84,7 @@
                     <div class="space-y-2 text-sm">
                         <div class="flex justify-between border-b border-gray-200 dark:border-dark-200 pb-2">
                             <span class="text-gray-500 dark:text-gray-400">ID:</span>
-                            <span class="text-gray-900 dark:text-white font-semibold">{{ $reseller->id }}</span>
+                            <span class="text-gray-900 dark:text-white font-semibold">{{ $reseller['id'] }}</span>
                         </div>
                         <div class="flex justify-between pt-2">
                             <span class="text-gray-500 dark:text-gray-400">Grupo:</span>
@@ -104,15 +104,15 @@
                         <i class="bi bi-x-lg"></i>
                     </button>
                 </div>
-                <form action="{{ route('resellers.recharge', $reseller->id) }}" method="POST" class="p-6">
+                <form action="{{ route('resellers.recharge', $reseller['id']) }}" method="POST" class="p-6">
                     @csrf
                     <div class="mb-4">
                         <label class="block text-sm font-medium text-gray-700 dark:text-gray-400 mb-2">Revendedor</label>
-                        <input type="text" value="{{ $reseller->username }}" readonly class="w-full px-4 py-2 bg-gray-100 dark:bg-dark-200 border border-gray-300 dark:border-dark-100 rounded-lg text-gray-500 dark:text-white opacity-70">
+                        <input type="text" value="{{ $reseller['username'] }}" readonly class="w-full px-4 py-2 bg-gray-100 dark:bg-dark-200 border border-gray-300 dark:border-dark-100 rounded-lg text-gray-500 dark:text-white opacity-70">
                     </div>
                     <div class="mb-4">
                         <label class="block text-sm font-medium text-gray-700 dark:text-gray-400 mb-2">Saldo Atual</label>
-                        <input type="text" value="{{ number_format($reseller->credits, 2, ',', '.') }}" readonly class="w-full px-4 py-2 bg-gray-100 dark:bg-dark-200 border border-gray-300 dark:border-dark-100 rounded-lg text-gray-500 dark:text-white opacity-70">
+                        <input type="text" value="{{ number_format((float)($reseller['credits'] ?? 0), 2, ',', '.') }}" readonly class="w-full px-4 py-2 bg-gray-100 dark:bg-dark-200 border border-gray-300 dark:border-dark-100 rounded-lg text-gray-500 dark:text-white opacity-70">
                     </div>
                     <div class="mb-6">
                         <label class="block text-sm font-medium text-gray-700 dark:text-gray-400 mb-2">Valor da Recarga</label>

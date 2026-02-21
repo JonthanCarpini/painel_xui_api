@@ -25,7 +25,7 @@
         </div>
         @endif
 
-        <form action="{{ route('clients.update', $client->id) }}" method="POST" class="space-y-6">
+        <form action="{{ route('clients.update', $client['id']) }}" method="POST" class="space-y-6">
             @csrf
             @method('PUT')
 
@@ -35,7 +35,7 @@
                     <label class="block text-gray-400 text-sm font-medium mb-2">
                         <i class="bi bi-person"></i> Usuário
                     </label>
-                    <input type="text" name="username" value="{{ old('username', $client->username) }}" required
+                    <input type="text" name="username" value="{{ old('username', $client['username']) }}" required
                         class="w-full bg-dark-200 border border-dark-100 rounded-lg px-4 py-3 text-white focus:border-orange-500 focus:outline-none transition-colors">
                 </div>
 
@@ -44,7 +44,7 @@
                     <label class="block text-gray-400 text-sm font-medium mb-2">
                         <i class="bi bi-key"></i> Senha
                     </label>
-                    <input type="text" name="password" value="{{ old('password', $client->password) }}" required
+                    <input type="text" name="password" value="{{ old('password', $client['password']) }}" required
                         class="w-full bg-dark-200 border border-dark-100 rounded-lg px-4 py-3 text-white focus:border-orange-500 focus:outline-none transition-colors">
                 </div>
 
@@ -56,7 +56,7 @@
                     <select name="package_id" class="w-full bg-dark-200 border border-dark-100 rounded-lg px-4 py-3 text-white focus:border-orange-500 focus:outline-none transition-colors">
                         <option value="">Nenhum</option>
                         @foreach($packages as $package)
-                        <option value="{{ $package->id }}" {{ old('package_id', $client->package_id) == $package->id ? 'selected' : '' }}>
+                        <option value="{{ $package->id }}" {{ old('package_id', $client['package_id'] ?? '') == $package->id ? 'selected' : '' }}>
                             {{ $package->package_name }}
                         </option>
                         @endforeach
@@ -68,7 +68,7 @@
                     <label class="block text-gray-400 text-sm font-medium mb-2">
                         <i class="bi bi-hdd-network"></i> Máx. Conexões
                     </label>
-                    <input type="number" name="max_connections" value="{{ old('max_connections', $client->max_connections) }}" min="1" max="10" required
+                    <input type="number" name="max_connections" value="{{ old('max_connections', $client['max_connections'] ?? 1) }}" min="1" max="10" required
                         class="w-full bg-dark-200 border border-dark-100 rounded-lg px-4 py-3 text-white focus:border-orange-500 focus:outline-none transition-colors">
                 </div>
 
@@ -77,7 +77,7 @@
                     <label class="block text-gray-400 text-sm font-medium mb-2">
                         <i class="bi bi-envelope"></i> Email (Opcional)
                     </label>
-                    <input type="email" name="email" value="{{ old('email', $client->contact) }}"
+                    <input type="email" name="email" value="{{ old('email', $client['contact'] ?? '') }}"
                         class="w-full bg-dark-200 border border-dark-100 rounded-lg px-4 py-3 text-white focus:border-orange-500 focus:outline-none transition-colors">
                 </div>
 
@@ -87,8 +87,8 @@
                         <i class="bi bi-toggle-on"></i> Status
                     </label>
                     <select name="enabled" class="w-full bg-dark-200 border border-dark-100 rounded-lg px-4 py-3 text-white focus:border-orange-500 focus:outline-none transition-colors">
-                        <option value="1" {{ old('enabled', $client->enabled) == 1 ? 'selected' : '' }}>Ativo</option>
-                        <option value="0" {{ old('enabled', $client->enabled) == 0 ? 'selected' : '' }}>Inativo</option>
+                        <option value="1" {{ old('enabled', $client['enabled'] ?? 1) == 1 ? 'selected' : '' }}>Ativo</option>
+                        <option value="0" {{ old('enabled', $client['enabled'] ?? 1) == 0 ? 'selected' : '' }}>Inativo</option>
                     </select>
                 </div>
             </div>

@@ -97,16 +97,16 @@
                 @forelse($tickets as $ticket)
                 <tr class="hover:bg-gray-50 dark:hover:bg-dark-200/50 transition-colors">
                     <td class="px-4 py-3 text-sm font-medium text-gray-900 dark:text-white whitespace-nowrap hidden sm:table-cell">
-                        #{{ $ticket->id }}
+                        #{{ $ticket['id'] ?? '' }}
                     </td>
                     @if(Auth::user()->isAdmin())
                     <td class="px-4 py-3 text-sm text-gray-600 dark:text-gray-300 whitespace-nowrap">
-                        {{ $ticket->user->username ?? 'Desconhecido' }}
+                        {{ $ticket['member_username'] ?? ($ticket['username'] ?? 'Desconhecido') }}
                     </td>
                     @endif
                     <td class="px-4 py-3 min-w-[200px]">
-                        <span class="text-sm font-medium text-gray-900 dark:text-white block truncate">{{ $ticket->title }}</span>
-                        @if((Auth::user()->isAdmin() && !$ticket->admin_read) || (!Auth::user()->isAdmin() && !$ticket->user_read))
+                        <span class="text-sm font-medium text-gray-900 dark:text-white block truncate">{{ $ticket['title'] ?? '' }}</span>
+                        @if((Auth::user()->isAdmin() && !($ticket['admin_read'] ?? 1)) || (!Auth::user()->isAdmin() && !($ticket['user_read'] ?? 1)))
                             <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold bg-blue-100 text-blue-700 dark:bg-blue-500/20 dark:text-blue-400 mt-1">
                                 <span class="w-1.5 h-1.5 rounded-full bg-blue-500"></span> Nova Mensagem
                             </span>
@@ -114,9 +114,12 @@
                     </td>
                     @if(Auth::user()->isAdmin())
                     <td class="px-4 py-3 text-sm text-gray-600 dark:text-gray-300 whitespace-nowrap hidden md:table-cell">
-                        @if($ticket->extra && $ticket->extra->category)
+                        @php
+                            $ticketExtra = \App\Models\TicketExtra::where('ticket_id', $ticket['id'] ?? 0)->first();
+                        @endphp
+                        @if($ticketExtra && $ticketExtra->category)
                             <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300">
-                                {{ $ticket->extra->category->name }}
+                                {{ $ticketExtra->category->name }}
                             </span>
                         @else
                             <span class="text-gray-400 italic text-xs">Sem Categoria</span>
@@ -136,12 +139,12 @@
                                 2 => 'Respondido',
                             ];
                         @endphp
-                        <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium {{ $statusColors[$ticket->status] ?? 'bg-gray-100 text-gray-500' }}">
-                            {{ $statusLabel[$ticket->status] ?? 'Desconhecido' }}
+                        <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium {{ $statusColors[$ticket['status'] ?? 0] ?? 'bg-gray-100 text-gray-500' }}">
+                            {{ $statusLabel[$ticket['status'] ?? 0] ?? 'Desconhecido' }}
                         </span>
                     </td>
                     <td class="px-4 py-3 text-right whitespace-nowrap">
-                        <a href="{{ route('tickets.show', $ticket->id) }}" class="inline-flex items-center justify-center w-8 h-8 rounded-lg bg-orange-50 text-orange-600 dark:bg-orange-500/10 dark:text-orange-400 hover:bg-orange-100 dark:hover:bg-orange-500/20 transition-colors" title="Ver Ticket">
+                        <a href="{{ route('tickets.show', $ticket['id'] ?? 0) }}" class="inline-flex items-center justify-center w-8 h-8 rounded-lg bg-orange-50 text-orange-600 dark:bg-orange-500/10 dark:text-orange-400 hover:bg-orange-100 dark:hover:bg-orange-500/20 transition-colors" title="Ver Ticket">
                             <i class="bi bi-eye"></i>
                         </a>
                     </td>
