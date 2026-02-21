@@ -238,7 +238,7 @@ class LineService
     // Helpers privados
     // -------------------------------------------------------------------------
 
-    private function resolvePackageRules(Package $package, bool $isTrial): array
+    private function resolvePackageRules(object $package, bool $isTrial): array
     {
         if ($isTrial) {
             return [
@@ -254,7 +254,7 @@ class LineService
         ];
     }
 
-    private function resolveBouquetIds(array $data, Package $package): array
+    private function resolveBouquetIds(array $data, object $package): array
     {
         if (!empty($data['bouquet_ids']) && is_array($data['bouquet_ids'])) {
             return array_values(array_map('intval', $data['bouquet_ids']));
