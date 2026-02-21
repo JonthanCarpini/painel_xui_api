@@ -102,11 +102,11 @@ class DashboardController extends Controller
                 $start   = strtotime(date('Y-m-d', strtotime("-$i days")) . ' 00:00:00');
                 $end     = strtotime(date('Y-m-d', strtotime("-$i days")) . ' 23:59:59');
 
-                // Vendas e trials via credit_logs (get_lines NÃO retorna created_at)
+                // Vendas e trials via credit_logs (date é FROM_UNIXTIME string)
                 $clients = $trials = 0;
                 foreach ($logItems as $log) {
-                    $ld = (int)($log['date'] ?? 0);
-                    if ($ld < $start || $ld > $end) continue;
+                    $ld = strtotime($log['date'] ?? '');
+                    if (!$ld || $ld < $start || $ld > $end) continue;
                     if ((float)($log['amount'] ?? 0) >= 0) continue;
                     $adminId = (int)($log['admin_id'] ?? 0);
                     if ($allowedIds !== null && !in_array($adminId, $allowedIds)) continue;
@@ -134,8 +134,8 @@ class DashboardController extends Controller
                 // Recargas feitas por mim para outros
                 $recharges = 0;
                 foreach ($logItems as $log) {
-                    $ld = (int)($log['date'] ?? 0);
-                    if ($ld < $start || $ld > $end) continue;
+                    $ld = strtotime($log['date'] ?? '');
+                    if (!$ld || $ld < $start || $ld > $end) continue;
                     if ((float)($log['amount'] ?? 0) <= 0) continue;
                     if ((int)($log['admin_id'] ?? 0) !== $userId) continue;
                     if ((int)($log['target_id'] ?? 0) === $userId) continue;
@@ -193,11 +193,11 @@ class DashboardController extends Controller
                 ->filter(fn($l) => (int)($l['admin_id'] ?? 0) === (int)$user->xui_id
                     && (int)($l['target_id'] ?? 0) !== (int)$user->xui_id
                     && (float)($l['amount'] ?? 0) > 0)
-                ->sortByDesc('date')
+                ->sortByDesc(fn($l) => strtotime($l['date'] ?? ''))
                 ->take(5)
                 ->map(function($l) use ($allUsers) {
                     $obj = (object) $l;
-                    $obj->date = (int)($l['date'] ?? 0);
+                    $obj->date = strtotime($l['date'] ?? '') ?: 0;
                     $targetId = (int)($l['target_id'] ?? 0);
                     $targetUser = collect($allUsers)->firstWhere('id', $targetId);
                     $obj->target = (object)['username' => $targetUser['username'] ?? 'N/A'];
@@ -325,11 +325,11 @@ class DashboardController extends Controller
                 ->filter(fn($l) => (int)($l['admin_id'] ?? 0) === $userId
                     && (int)($l['target_id'] ?? 0) !== $userId
                     && (float)($l['amount'] ?? 0) > 0)
-                ->sortByDesc('date')
+                ->sortByDesc(fn($l) => strtotime($l['date'] ?? ''))
                 ->take(5)
                 ->map(function($l) use ($allUsers) {
                     $obj = (object) $l;
-                    $obj->date = (int)($l['date'] ?? 0);
+                    $obj->date = strtotime($l['date'] ?? '') ?: 0;
                     $targetId = (int)($l['target_id'] ?? 0);
                     $targetUser = collect($allUsers)->firstWhere('id', $targetId);
                     $obj->target = (object)['username' => $targetUser['username'] ?? 'N/A'];
@@ -362,32 +362,31 @@ class DashboardController extends Controller
             $statsResp = $this->api->getServerStats();
 
             if (($statsResp['status'] ?? '') !== 'STATUS_SUCCESS') {
-                return ['status' => 'offline', 'error' => 'Servidor não encontrado'];
+                return ['status' => 'offline', 'server_name' => 'Main Server'];
             }
 
             $data = $statsResp['data'] ?? [];
-
-            if ((int)($data['status'] ?? 0) !== 1) {
-                return ['status' => 'down', 'server_name' => $data['server_name'] ?? 'Main Server'];
+            if (empty($data)) {
+                return ['status' => 'offline', 'server_name' => 'Main Server'];
             }
 
-            $totalDisk    = $data['total_disk_space'] ?? 1;
-            $freeDisk     = $data['free_disk_space'] ?? 0;
-            $usedDiskPerc = round(100 - (($freeDisk / max($totalDisk, 1)) * 100), 2);
-            $inputMbps    = round(($data['bytes_received'] ?? 0) * 0.008, 2);
-            $outputMbps   = round(($data['bytes_sent'] ?? 0) * 0.008, 2);
+            $totalDisk    = max((float)($data['total_disk_space'] ?? 1), 1);
+            $freeDisk     = (float)($data['free_disk_space'] ?? 0);
+            $usedDiskPerc = round(100 - (($freeDisk / $totalDisk) * 100), 2);
+            $inputMbps    = round(((float)($data['bytes_received'] ?? 0)) * 0.008, 2);
+            $outputMbps   = round(((float)($data['bytes_sent'] ?? 0)) * 0.008, 2);
 
             return [
                 'status'       => 'online',
                 'server_name'  => $data['server_name'] ?? 'Main Server',
-                'connections'  => $data['connections'] ?? 0,
-                'users'        => $data['users'] ?? 0,
-                'cpu'          => $data['cpu'] ?? 0,
-                'streams_live' => $data['total_running_streams'] ?? 0,
-                'mem'          => $data['total_mem_used_percent'] ?? 0,
-                'requests_sec' => $data['requests_per_second'] ?? 0,
+                'connections'  => (int)($data['open_connections'] ?? $data['total_connections'] ?? 0),
+                'users'        => (int)($data['online_users'] ?? $data['total_users'] ?? 0),
+                'cpu'          => (float)($data['cpu'] ?? 0),
+                'streams_live' => (int)($data['total_running_streams'] ?? 0),
+                'mem'          => (float)($data['total_mem_used_percent'] ?? 0),
+                'requests_sec' => (int)($data['requests_per_second'] ?? 0),
                 'uptime'       => $data['uptime'] ?? 'N/A',
-                'io_wait'      => $data['iostat_info']['cpu']['iowait'] ?? 0,
+                'io_wait'      => (float)($data['iostat_info']['cpu']['iowait'] ?? 0),
                 'input_mbps'   => $inputMbps,
                 'output_mbps'  => $outputMbps,
                 'disk_usage'   => $usedDiskPerc,
@@ -450,11 +449,12 @@ class DashboardController extends Controller
         $salesToday = $salesMonth = $trialsToday = $trialsMonth = 0;
 
         foreach ($allLogs as $log) {
-            $date     = (int)($log['date'] ?? 0);
+            $date     = strtotime($log['date'] ?? '');
             $amount   = (float)($log['amount'] ?? 0);
             $adminId  = (int)($log['admin_id'] ?? 0);
             $reason   = strtolower($log['reason'] ?? '');
 
+            if (!$date) continue;
             if (!in_array($adminId, $myTreeIds)) continue;
             if ($amount >= 0) continue;
 

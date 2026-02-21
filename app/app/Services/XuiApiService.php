@@ -382,10 +382,10 @@ class XuiApiService
         return $this->get('activity_logs', ['limit' => $limit, 'offset' => $offset]);
     }
 
-    public function getCreditLogs(?int $userId = null): array
+    public function getCreditLogs(?int $resellerId = null): array
     {
         $params = ['limit' => 100000];
-        if ($userId !== null) $params['user_id'] = $userId;
+        if ($resellerId !== null) $params['reseller'] = $resellerId;
         return $this->get('credit_logs', $params);
     }
 
@@ -567,6 +567,11 @@ class XuiApiService
         return $this->post('edit_settings', $data);
     }
 
+    public function getStream(int $id): array
+    {
+        return $this->get('get_stream', ['id' => $id]);
+    }
+
     public function getStreams(): array
     {
         return $this->get('get_streams', ['limit' => 100000]);
@@ -587,14 +592,18 @@ class XuiApiService
         return $this->get('get_series_list', ['limit' => 100000]);
     }
 
-    public function startStream(int $id): array
+    public function startStream(int $id, ?int $serverId = null): array
     {
-        return $this->post('start_stream', ['id' => $id]);
+        $params = ['id' => $id];
+        if ($serverId !== null) $params['server_id'] = $serverId;
+        return $this->post('start_stream', $params);
     }
 
-    public function stopStream(int $id): array
+    public function stopStream(int $id, ?int $serverId = null): array
     {
-        return $this->post('stop_stream', ['id' => $id]);
+        $params = ['id' => $id];
+        if ($serverId !== null) $params['server_id'] = $serverId;
+        return $this->post('stop_stream', $params);
     }
 
     public function reloadNginx(): array

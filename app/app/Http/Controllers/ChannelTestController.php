@@ -79,10 +79,20 @@ class ChannelTestController extends Controller
         try {
             $streamId = (int) $channel->stream_id;
 
-            // 1. Dados Básicos via API get_streams — filtrar pelo stream_id
-            $streamsResp = $this->api->getStreams();
-            $streamData  = collect($streamsResp['data'] ?? [])
-                ->firstWhere('stream_id', (string) $streamId);
+            // 1. Dados Básicos via API get_stream (individual)
+            $streamResp = $this->api->getStream($streamId);
+            $streamData = null;
+
+            if (($streamResp['status'] ?? '') === 'STATUS_SUCCESS') {
+                $streamData = $streamResp['data'] ?? null;
+            }
+
+            // Fallback: buscar em get_streams e filtrar por id
+            if (!$streamData) {
+                $streamsResp = $this->api->getStreams();
+                $streamData  = collect($streamsResp['data'] ?? [])
+                    ->first(fn($s) => (int)($s['id'] ?? 0) === $streamId);
+            }
 
             if (!$streamData) {
                 return response()->json(['error' => 'Stream não encontrada via API XUI'], 404);
@@ -102,7 +112,7 @@ class ChannelTestController extends Controller
             // 3. Audiência via live_connections — contar conexões no stream_id
             $connectionsResp = $this->api->getLiveConnections();
             $onlineClients   = collect($connectionsResp['data'] ?? [])
-                ->where('stream_id', (string) $streamId)
+                ->filter(fn($c) => (int)($c['stream_id'] ?? 0) === $streamId)
                 ->count();
 
             return response()->json([
