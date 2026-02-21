@@ -75,6 +75,8 @@ Route::middleware(['auth', 'maintenance'])->group(function () {
         Route::get('/{id}/m3u-data', [ClientController::class, 'getM3uData'])->name('m3u-data');
         Route::get('/{id}/message', [ClientController::class, 'getMessage'])->name('message');
         Route::post('/send-whatsapp', [ClientController::class, 'sendWhatsapp'])->name('send-whatsapp');
+        Route::post('/{id}/toggle-status', [ClientController::class, 'toggleStatus'])->name('toggle-status');
+        Route::post('/{id}/sync', [ClientController::class, 'syncLine'])->name('sync-line');
         Route::delete('/{id}', [ClientController::class, 'destroy'])->name('destroy');
     });
 

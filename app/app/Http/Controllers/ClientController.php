@@ -923,6 +923,88 @@ class ClientController extends Controller
         ]);
     }
 
+    public function syncLine(int $id)
+    {
+        $user   = Auth::user();
+        $result = $this->api->getLine($id);
+
+        if (($result['status'] ?? '') !== 'STATUS_SUCCESS') {
+            return back()->withErrors(['error' => 'Cliente não encontrado']);
+        }
+
+        $line = $result['data'];
+
+        if (!$user->isAdmin()) {
+            $allowedIds = $this->getSubResellerIds($user->xui_id);
+            if (!in_array((int)($line['member_id'] ?? 0), $allowedIds)) {
+                return back()->withErrors(['error' => 'Sem permissão para sincronizar este cliente']);
+            }
+        }
+
+        $syncData = [
+            'username'          => $line['username'] ?? '',
+            'password'          => $line['password'] ?? '',
+            'member_id'         => $line['member_id'] ?? 0,
+            'max_connections'   => $line['max_connections'] ?? 1,
+            'exp_date'          => date('Y-m-d H:i:s', (int)($line['exp_date'] ?? 0)),
+            'bouquets_selected' => $line['bouquet'] ?? '[]',
+            'admin_notes'       => $line['admin_notes'] ?? '',
+            'reseller_notes'    => $line['reseller_notes'] ?? '',
+        ];
+
+        if (!empty($line['allowed_outputs'])) {
+            $outputs = is_string($line['allowed_outputs'])
+                ? json_decode($line['allowed_outputs'], true)
+                : $line['allowed_outputs'];
+            if (is_array($outputs)) {
+                $syncData['access_output'] = array_map('intval', $outputs);
+            }
+        }
+
+        $apiResult = $this->api->editLine($id, $syncData);
+
+        if (($apiResult['status'] ?? '') !== 'STATUS_SUCCESS') {
+            return back()->withErrors(['error' => 'Erro ao sincronizar: ' . ($apiResult['message'] ?? 'erro')]);
+        }
+
+        return back()->with('success', 'Cliente sincronizado com o servidor com sucesso!');
+    }
+
+    public function toggleStatus(int $id)
+    {
+        $user   = Auth::user();
+        $result = $this->api->getLine($id);
+
+        if (($result['status'] ?? '') !== 'STATUS_SUCCESS') {
+            return back()->withErrors(['error' => 'Cliente não encontrado']);
+        }
+
+        $line = $result['data'];
+
+        if (!$user->isAdmin()) {
+            $allowedIds = $this->getSubResellerIds($user->xui_id);
+            if (!in_array((int)($line['member_id'] ?? 0), $allowedIds)) {
+                return back()->withErrors(['error' => 'Sem permissão para alterar este cliente']);
+            }
+        }
+
+        $isEnabled = (int)($line['admin_enabled'] ?? 1);
+
+        if ($isEnabled) {
+            $apiResult = $this->api->disableLine($id);
+            $msg = 'Cliente desabilitado com sucesso!';
+        } else {
+            $apiResult = $this->api->enableLine($id);
+            $msg = 'Cliente habilitado com sucesso!';
+        }
+
+        if (($apiResult['status'] ?? '') !== 'STATUS_SUCCESS') {
+            return back()->withErrors(['error' => 'Erro ao alterar status: ' . ($apiResult['message'] ?? 'erro')]);
+        }
+
+        return back()->with('success', $msg);
+    }
+
     public function destroy(int $id)
     {
         $user   = Auth::user();

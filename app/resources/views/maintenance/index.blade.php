@@ -158,10 +158,10 @@
                             </td>
                             <td class="px-4 py-3 text-sm font-medium text-gray-900 dark:text-white">
                                 <a href="{{ route('settings.admin.channels.edit', $stream->id) }}" class="hover:text-blue-600">
-                                    {{ $stream->stream_display_name }}
+                                    {{ $stream->stream_display_name ?? $stream->name ?? 'Stream #'.$stream->id }}
                                 </a>
                             </td>
-                            <td class="px-4 py-3 text-xs text-gray-500 truncate max-w-xs" title="{{ $stream->stream_source }}">{{ $stream->stream_source }}</td>
+                            <td class="px-4 py-3 text-xs text-gray-500 truncate max-w-xs" title="{{ $stream->stream_source ?? '' }}">{{ $stream->stream_source ?? '-' }}</td>
                             <td class="px-4 py-3 text-sm text-gray-500">
                                 @if($stream->server_id)
                                     <a href="{{ route('settings.admin.servers.show', $stream->server_id) }}" class="bg-gray-100 dark:bg-dark-100 px-2 py-0.5 rounded hover:bg-blue-100 hover:text-blue-700 transition-colors">SRV #{{ $stream->server_id }}</a>
@@ -171,7 +171,7 @@
                             </td>
                             <td class="px-4 py-3 text-sm font-mono text-gray-500">{{ $stream->pid ?? '-' }}</td>
                             <td class="px-4 py-3 text-right">
-                                @if($stream->pid && $stream->stream_status != 0)
+                                @if(($stream->pid ?? null) && ($stream->stream_status ?? 0) != 0)
                                     <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400">
                                         Online
                                     </span>
@@ -223,11 +223,11 @@
                     </div>
                     <div class="flex justify-between items-center">
                         <span class="text-gray-500">Clientes Conectados</span>
-                        <span class="font-mono bg-gray-100 dark:bg-dark-200 px-2 py-0.5 rounded">{{ $server->total_clients }}</span>
+                        <span class="font-mono bg-gray-100 dark:bg-dark-200 px-2 py-0.5 rounded">{{ $server->total_clients ?? 0 }}</span>
                     </div>
                     <div class="flex justify-between items-center">
                         <span class="text-gray-500">Última Checagem</span>
-                        <span class="text-gray-700 dark:text-gray-300">{{ $server->last_check_ago }}s atrás</span>
+                        <span class="text-gray-700 dark:text-gray-300">{{ $server->last_check_ago ?? '?' }}s atrás</span>
                     </div>
                 </div>
             </div>

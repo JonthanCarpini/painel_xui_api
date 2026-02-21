@@ -91,7 +91,7 @@ class XuiApiService
 
     public function getLines(): array
     {
-        return $this->get('get_lines');
+        return $this->get('get_lines', ['limit' => 100000]);
     }
 
     public function getLine(int $id): array
@@ -161,7 +161,7 @@ class XuiApiService
 
     public function getUsers(): array
     {
-        return $this->get('get_users');
+        return $this->get('get_users', ['limit' => 100000]);
     }
 
     public function getUser(int $id): array
@@ -369,7 +369,7 @@ class XuiApiService
 
     public function getLiveConnections(): array
     {
-        return $this->get('live_connections');
+        return $this->get('live_connections', ['limit' => 100000]);
     }
 
     public function killConnection(int $activityId): array
@@ -384,31 +384,36 @@ class XuiApiService
 
     public function getCreditLogs(?int $userId = null): array
     {
-        $params = $userId !== null ? ['user_id' => $userId] : [];
+        $params = ['limit' => 100000];
+        if ($userId !== null) $params['user_id'] = $userId;
         return $this->get('credit_logs', $params);
     }
 
     public function getClientLogs(?int $lineId = null): array
     {
-        $params = $lineId !== null ? ['line_id' => $lineId] : [];
+        $params = ['limit' => 100000];
+        if ($lineId !== null) $params['line_id'] = $lineId;
         return $this->get('client_logs', $params);
     }
 
     public function getUserLogs(?int $userId = null): array
     {
-        $params = $userId !== null ? ['user_id' => $userId] : [];
+        $params = ['limit' => 100000];
+        if ($userId !== null) $params['user_id'] = $userId;
         return $this->get('user_logs', $params);
     }
 
     public function getLoginLogs(?int $success = null): array
     {
-        $params = $success !== null ? ['success' => $success] : [];
+        $params = ['limit' => 100000];
+        if ($success !== null) $params['success'] = $success;
         return $this->get('login_logs', $params);
     }
 
     public function getStreamErrors(?int $streamId = null): array
     {
-        $params = $streamId !== null ? ['stream_id' => $streamId] : [];
+        $params = ['limit' => 100000];
+        if ($streamId !== null) $params['stream_id'] = $streamId;
         return $this->get('stream_errors', $params);
     }
 
@@ -463,7 +468,7 @@ class XuiApiService
 
     /**
      * Listar servidores.
-     * ATENÇÃO: retorna array direto, sem wrapper STATUS_SUCCESS.
+     * Retorna array de servidores (extraído de data se wrapper STATUS_SUCCESS).
      */
     public function getServers(): array
     {
@@ -474,8 +479,14 @@ class XuiApiService
                     'action'  => 'get_servers',
                 ]);
 
-            $data = $response->json();
-            return is_array($data) ? $data : [];
+            $json = $response->json();
+            if (!is_array($json)) return [];
+
+            if (isset($json['data']) && is_array($json['data'])) {
+                return array_values($json['data']);
+            }
+
+            return array_values($json);
         } catch (\Exception $e) {
             Log::error('XUI API exceção', ['action' => 'get_servers', 'error' => $e->getMessage()]);
             return [];
@@ -558,22 +569,22 @@ class XuiApiService
 
     public function getStreams(): array
     {
-        return $this->get('get_streams');
+        return $this->get('get_streams', ['limit' => 100000]);
     }
 
     public function getChannels(): array
     {
-        return $this->get('get_channels');
+        return $this->get('get_channels', ['limit' => 100000]);
     }
 
     public function getMovies(): array
     {
-        return $this->get('get_movies');
+        return $this->get('get_movies', ['limit' => 100000]);
     }
 
     public function getSeriesList(): array
     {
-        return $this->get('get_series_list');
+        return $this->get('get_series_list', ['limit' => 100000]);
     }
 
     public function startStream(int $id): array

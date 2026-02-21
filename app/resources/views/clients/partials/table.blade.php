@@ -140,6 +140,21 @@
                             <i class="bi bi-arrow-clockwise"></i>
                         </button>
                         @php
+                            $isClientEnabled = (int)($client['enabled'] ?? 0) && (int)($client['admin_enabled'] ?? 1);
+                        @endphp
+                        <form method="POST" action="{{ route('clients.toggle-status', $client['id']) }}" class="inline" onsubmit="return confirm('{{ $isClientEnabled ? 'Desabilitar' : 'Habilitar' }} o cliente {{ $client['username'] }}?')">
+                            @csrf
+                            @if($isClientEnabled)
+                            <button type="submit" class="p-1.5 bg-yellow-50 dark:bg-yellow-500/10 text-yellow-600 dark:text-yellow-400 hover:bg-yellow-100 dark:hover:bg-yellow-500/20 rounded-lg transition-colors" title="Desabilitar">
+                                <i class="bi bi-pause-circle"></i>
+                            </button>
+                            @else
+                            <button type="submit" class="p-1.5 bg-teal-50 dark:bg-teal-500/10 text-teal-600 dark:text-teal-400 hover:bg-teal-100 dark:hover:bg-teal-500/20 rounded-lg transition-colors" title="Habilitar">
+                                <i class="bi bi-play-circle"></i>
+                            </button>
+                            @endif
+                        </form>
+                        @php
                             $clientPhone = $client['local_phone'] ?? $client['contact'] ?? null;
                         @endphp
                         @if($clientPhone)
@@ -147,6 +162,12 @@
                             <i class="bi bi-whatsapp"></i>
                         </button>
                         @endif
+                        <form method="POST" action="{{ route('clients.sync-line', $client['id']) }}" class="inline" onsubmit="return confirm('Sincronizar o cliente {{ $client['username'] }} com o servidor?')">
+                            @csrf
+                            <button type="submit" class="p-1.5 bg-cyan-50 dark:bg-cyan-500/10 text-cyan-600 dark:text-cyan-400 hover:bg-cyan-100 dark:hover:bg-cyan-500/20 rounded-lg transition-colors" title="Sincronizar com Servidor">
+                                <i class="bi bi-arrow-repeat"></i>
+                            </button>
+                        </form>
                         <button onclick="deleteClient({{ $client['id'] }})" class="p-1.5 bg-red-50 dark:bg-red-500/10 text-red-600 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-500/20 rounded-lg transition-colors" title="Excluir">
                             <i class="bi bi-trash"></i>
                         </button>
