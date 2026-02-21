@@ -116,7 +116,7 @@
                     </div>
                     <div class="mb-6">
                         <label class="block text-sm font-medium text-gray-700 dark:text-gray-400 mb-2">Valor da Recarga</label>
-                        <input type="number" name="amount" step="0.01" min="0.01" required class="w-full px-4 py-2 bg-white dark:bg-dark-200 border border-gray-300 dark:border-dark-100 rounded-lg text-gray-900 dark:text-white focus:border-orange-500 focus:outline-none transition-colors" placeholder="0.00">
+                        <input type="number" name="amount" step="0.01" required class="w-full px-4 py-2 bg-white dark:bg-dark-200 border border-gray-300 dark:border-dark-100 rounded-lg text-gray-900 dark:text-white focus:border-orange-500 focus:outline-none transition-colors" placeholder="Ex: 10 ou -10">
                     </div>
                     <div class="flex gap-3">
                         <button type="button" onclick="closeRechargeModal()" class="flex-1 px-4 py-2 bg-gray-100 dark:bg-dark-200 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-200 dark:hover:bg-dark-100 transition-colors font-medium">Cancelar</button>

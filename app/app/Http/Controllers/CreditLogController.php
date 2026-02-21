@@ -104,6 +104,9 @@ class CreditLogController extends Controller
             : $this->api->getCreditLogs($resellerId);
         $items = $logsResp['data'] ?? [];
 
+        // Filtrar registros sem reason (gerados pelo editUser antigo — dados inconsistentes)
+        $items = array_values(array_filter($items, fn($l) => !empty($l['reason'])));
+
         // Calcular saldos e movimentação real (compensa bug XUI: amount = saldo final)
         $items = $this->calculateBalances($items);
 
