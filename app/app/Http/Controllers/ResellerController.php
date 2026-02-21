@@ -62,12 +62,13 @@ class ResellerController extends Controller
             }
         }
 
-        // Criar revenda via API
+        // Criar revenda via API (owner_id = reseller logado)
         $result = $this->api->createUser([
             'username'        => $validated['username'],
             'password'        => $validated['password'],
             'email'           => $validated['email'] ?? '',
             'member_group_id' => 2,
+            'owner_id'        => (int)$user->xui_id,
             'credits'         => $credits,
             'notes'           => $validated['notes'] ?? '',
             'status'          => 1,

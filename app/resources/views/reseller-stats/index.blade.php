@@ -251,7 +251,6 @@
     const defaultOptions = {
         responsive: true,
         maintainAspectRatio: false,
-        indexAxis: 'y',
         plugins: {
             legend: { display: false },
             tooltip: {
@@ -266,13 +265,13 @@
         },
         scales: {
             x: {
+                grid: { display: false },
+                ticks: { color: labelColor, font: { size: 11, weight: '500' }, maxRotation: 45, minRotation: 25 },
+            },
+            y: {
                 grid: { color: gridColor },
                 ticks: { color: labelColor, font: { size: 12 } },
                 beginAtZero: true,
-            },
-            y: {
-                grid: { display: false },
-                ticks: { color: labelColor, font: { size: 12, weight: '500' } },
             }
         }
     };

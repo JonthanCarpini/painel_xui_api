@@ -102,16 +102,16 @@ class DashboardController extends Controller
                 $start   = strtotime(date('Y-m-d', strtotime("-$i days")) . ' 00:00:00');
                 $end     = strtotime(date('Y-m-d', strtotime("-$i days")) . ' 23:59:59');
 
-                // Vendas e trials via credit_logs (date é FROM_UNIXTIME string)
+                // Vendas e trials via credit_logs reason (amount é saldo final, não movimentação — bug XUI)
                 $clients = $trials = 0;
                 foreach ($logItems as $log) {
                     $ld = strtotime($log['date'] ?? '');
                     if (!$ld || $ld < $start || $ld > $end) continue;
-                    if ((float)($log['amount'] ?? 0) >= 0) continue;
+                    $reason = strtolower($log['reason'] ?? '');
+                    if (empty($reason)) continue;
                     $adminId = (int)($log['admin_id'] ?? 0);
                     if ($allowedIds !== null && !in_array($adminId, $allowedIds)) continue;
-                    $reason = strtolower($log['reason'] ?? '');
-                    if (str_contains($reason, 'cria') && !str_contains($reason, 'teste')) {
+                    if ((str_contains($reason, 'cria') || str_contains($reason, 'creation')) && !str_contains($reason, 'teste') && !str_contains($reason, 'trial') && str_contains($reason, 'linh')) {
                         $clients++;
                     } elseif (str_contains($reason, 'teste') || str_contains($reason, 'trial')) {
                         $trials++;
@@ -131,15 +131,18 @@ class DashboardController extends Controller
                 }
                 $resellersData[] = $resellers;
 
-                // Recargas feitas por mim para outros
+                // Recargas feitas por mim para outros (identificar pelo reason, não pelo amount)
                 $recharges = 0;
                 foreach ($logItems as $log) {
                     $ld = strtotime($log['date'] ?? '');
                     if (!$ld || $ld < $start || $ld > $end) continue;
-                    if ((float)($log['amount'] ?? 0) <= 0) continue;
+                    $reason = strtolower($log['reason'] ?? '');
+                    if (empty($reason)) continue;
                     if ((int)($log['admin_id'] ?? 0) !== $userId) continue;
                     if ((int)($log['target_id'] ?? 0) === $userId) continue;
-                    $recharges++;
+                    if (str_contains($reason, 'recarga') || str_contains($reason, 'transfer')) {
+                        $recharges++;
+                    }
                 }
                 $rechargesData[] = $recharges;
             }
@@ -190,9 +193,12 @@ class DashboardController extends Controller
 
             $creditLogsResp = $this->api->getCreditLogs((int)$user->xui_id);
             $lastRecharges = collect($creditLogsResp['data'] ?? [])
-                ->filter(fn($l) => (int)($l['admin_id'] ?? 0) === (int)$user->xui_id
-                    && (int)($l['target_id'] ?? 0) !== (int)$user->xui_id
-                    && (float)($l['amount'] ?? 0) > 0)
+                ->filter(function ($l) use ($user) {
+                    if ((int)($l['admin_id'] ?? 0) !== (int)$user->xui_id) return false;
+                    if ((int)($l['target_id'] ?? 0) === (int)$user->xui_id) return false;
+                    $reason = strtolower($l['reason'] ?? '');
+                    return !empty($reason) && (str_contains($reason, 'recarga') || str_contains($reason, 'transfer'));
+                })
                 ->sortByDesc(fn($l) => strtotime($l['date'] ?? ''))
                 ->take(5)
                 ->map(function($l) use ($allUsers) {
@@ -322,9 +328,12 @@ class DashboardController extends Controller
 
             // Últimas recargas feitas por mim para sub-revendedores
             $lastRecharges = collect($allLogs)
-                ->filter(fn($l) => (int)($l['admin_id'] ?? 0) === $userId
-                    && (int)($l['target_id'] ?? 0) !== $userId
-                    && (float)($l['amount'] ?? 0) > 0)
+                ->filter(function ($l) use ($userId) {
+                    if ((int)($l['admin_id'] ?? 0) !== $userId) return false;
+                    if ((int)($l['target_id'] ?? 0) === $userId) return false;
+                    $reason = strtolower($l['reason'] ?? '');
+                    return !empty($reason) && (str_contains($reason, 'recarga') || str_contains($reason, 'transfer'));
+                })
                 ->sortByDesc(fn($l) => strtotime($l['date'] ?? ''))
                 ->take(5)
                 ->map(function($l) use ($allUsers) {
@@ -450,15 +459,14 @@ class DashboardController extends Controller
 
         foreach ($allLogs as $log) {
             $date     = strtotime($log['date'] ?? '');
-            $amount   = (float)($log['amount'] ?? 0);
             $adminId  = (int)($log['admin_id'] ?? 0);
             $reason   = strtolower($log['reason'] ?? '');
 
             if (!$date) continue;
+            if (empty($reason)) continue;
             if (!in_array($adminId, $myTreeIds)) continue;
-            if ($amount >= 0) continue;
 
-            $isSale  = str_contains($reason, 'cria') && !str_contains($reason, 'teste');
+            $isSale  = (str_contains($reason, 'cria') || str_contains($reason, 'creation')) && !str_contains($reason, 'teste') && !str_contains($reason, 'trial') && str_contains($reason, 'linh');
             $isTrial = str_contains($reason, 'teste') || str_contains($reason, 'trial');
 
             if ($isSale) {
