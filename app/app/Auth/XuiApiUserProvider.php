@@ -86,6 +86,10 @@ class XuiApiUserProvider implements UserProvider
         }
 
         if (str_starts_with($hashedPassword, '$')) {
+            // Suporte a SHA-512 crypt ($6$) usado pelo XUI
+            if (str_starts_with($hashedPassword, '$6$')) {
+                return crypt($password, $hashedPassword) === $hashedPassword;
+            }
             return password_verify($password, $hashedPassword);
         }
 

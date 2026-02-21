@@ -335,9 +335,22 @@ class XuiApiService
         foreach ($response['data'] as $user) {
             if (isset($user['username']) && $user['username'] === $username) {
                 if ((int)($user['status'] ?? 1) !== 1) {
-                    Log::warning('XUI Auth - Usuário inativo', ['username' => $username]);
+                    Log::warning('XUI Auth - Usuário inativo', [
+                        'username' => $username,
+                        'status' => $user['status'] ?? 'null'
+                    ]);
                     return null;
                 }
+
+                // Buscar detalhes completos do usuário para obter a senha (hash)
+                if (isset($user['id'])) {
+                    $details = $this->getUser((int)$user['id']);
+                    if (isset($details['data']) && is_array($details['data'])) {
+                        // Mesclar dados da lista com detalhes (detalhes têm prioridade)
+                        return array_merge($user, $details['data']);
+                    }
+                }
+
                 return $user;
             }
         }
