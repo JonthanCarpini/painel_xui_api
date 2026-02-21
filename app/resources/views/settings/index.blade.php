@@ -100,6 +100,25 @@
                 </div>
             </div>
 
+            <!-- Integrações -->
+            <div class="bg-white dark:bg-dark-300 rounded-xl border border-gray-200 dark:border-dark-200 p-4 md:p-6 shadow-sm dark:shadow-none">
+                <h2 class="text-lg font-bold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
+                    <i class="bi bi-plug text-orange-500"></i>
+                    Integra&ccedil;&otilde;es
+                </h2>
+
+                <div class="space-y-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-400 mb-2">TMDB API Key</label>
+                        <input type="text" name="tmdb_api_key" value="{{ $tmdbApiKey ?? '' }}" class="w-full px-4 py-2 bg-gray-50 dark:bg-dark-200 border border-gray-300 dark:border-dark-100 rounded-lg text-gray-900 dark:text-white focus:border-orange-500 focus:outline-none transition-colors font-mono text-sm" placeholder="Ex: a1b2c3d4e5f6...">
+                        <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                            Necess&aacute;ria para busca de filmes e s&eacute;ries na p&aacute;gina de Pedidos VOD.
+                            Obtenha sua chave em <a href="https://www.themoviedb.org/settings/api" target="_blank" class="text-orange-500 hover:underline">themoviedb.org</a>.
+                        </p>
+                    </div>
+                </div>
+            </div>
+
             <!-- Configurações de Cliente Fantasma -->
             <div class="bg-white dark:bg-dark-300 rounded-xl border border-gray-200 dark:border-dark-200 p-4 md:p-6 shadow-sm dark:shadow-none">
                 <h2 class="text-lg font-bold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
