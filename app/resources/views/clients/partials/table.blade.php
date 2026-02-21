@@ -80,18 +80,18 @@
                     <span class="text-sm text-gray-600 dark:text-gray-300">{{ $client['member_username'] ?? 'N/A' }}</span>
                 </td>
                 <td class="px-4 py-3 whitespace-nowrap">
-                    @if($client['is_trial'])
+                    @if($client['is_trial'] ?? 0)
                         <span class="px-2 py-0.5 bg-yellow-100 dark:bg-yellow-500/20 text-yellow-700 dark:text-yellow-400 rounded-full text-xs font-semibold border border-yellow-200 dark:border-transparent">Teste</span>
                     @else
                         <span class="px-2 py-0.5 bg-green-100 dark:bg-green-500/20 text-green-700 dark:text-green-400 rounded-full text-xs font-semibold border border-green-200 dark:border-transparent">Cliente</span>
                     @endif
                 </td>
                 <td class="px-4 py-3 whitespace-nowrap hidden lg:table-cell">
-                    <span class="text-sm text-gray-500 dark:text-gray-400">{{ date('d/m/Y H:i', (int)$client['created_at']) }}</span>
+                    <span class="text-sm text-gray-500 dark:text-gray-400">{{ date('d/m/Y H:i', (int)($client['created_at'] ?? 0)) }}</span>
                 </td>
                 <td class="px-4 py-3 whitespace-nowrap">
                     @php
-                        $expDate = (int)$client['exp_date'];
+                        $expDate = (int)($client['exp_date'] ?? 0);
                         $isExpired = $expDate <= time();
                         $daysLeft = ceil(($expDate - time()) / 86400);
                         
@@ -113,7 +113,7 @@
                     </span>
                 </td>
                 <td class="px-4 py-3 whitespace-nowrap">
-                    @if($client['enabled'] && ($client['admin_enabled'] ?? true) && $client['exp_date'] > time())
+                    @if(($client['enabled'] ?? 0) && ($client['admin_enabled'] ?? true) && ($client['exp_date'] ?? 0) > time())
                         <span class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800 dark:bg-green-500/20 dark:text-green-400">
                             <span class="w-1.5 h-1.5 rounded-full bg-green-500"></span> Ativo
                         </span>
