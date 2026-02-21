@@ -286,7 +286,12 @@ class CreditLogController extends Controller
     {
         $reason = $log['reason'] ?? '';
 
-        // Padrão: "ação: USERNAME (detalhes)" ou "ação: USERNAME"
+        // Padrão: "Transferência de X créditos para USERNAME" / "Recarga de X créditos por USERNAME"
+        if (preg_match('/(?:para|por)\s+(\S+)/i', $reason, $m)) {
+            return $m[1];
+        }
+
+        // Padrão: "Criação de linha: USERNAME (Pacote: ...)" / "Renovação de linha: USERNAME"
         if (preg_match('/:\s*([^\s(]+)/', $reason, $m)) {
             return $m[1];
         }

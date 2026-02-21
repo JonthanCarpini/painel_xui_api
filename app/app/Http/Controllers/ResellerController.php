@@ -172,17 +172,17 @@ class ResellerController extends Controller
 
         $resellerResp = $this->api->getUser($id);
         if (($resellerResp['status'] ?? '') !== 'STATUS_SUCCESS' || (int)($resellerResp['data']['member_group_id'] ?? 0) !== 2) {
-            return response()->json(['success' => false, 'message' => 'Revenda não encontrada'], 404);
+            return back()->withErrors(['error' => 'Revenda não encontrada']);
         }
 
         $reseller = $resellerResp['data'];
 
         if (!$user->isAdmin() && (int)($reseller['owner_id'] ?? 0) !== (int)$user->xui_id) {
-            return response()->json(['success' => false, 'message' => 'Sem permissão'], 403);
+            return back()->withErrors(['error' => 'Sem permissão']);
         }
 
         if ($amount < 0 && !$user->isAdmin()) {
-            return response()->json(['success' => false, 'message' => 'Apenas admin pode remover créditos'], 403);
+            return back()->withErrors(['error' => 'Apenas admin pode remover créditos']);
         }
 
         // Validar saldo do pai
@@ -191,7 +191,7 @@ class ResellerController extends Controller
             $ownerCredits = (float)($ownerResp['data']['credits'] ?? 0);
 
             if ($ownerCredits < $amount) {
-                return response()->json(['success' => false, 'message' => "Saldo insuficiente! Você tem {$ownerCredits} créditos."], 400);
+                return back()->withErrors(['error' => "Saldo insuficiente! Você tem {$ownerCredits} créditos."]);
             }
         }
 
@@ -203,7 +203,7 @@ class ResellerController extends Controller
             : $this->api->subtractCredits($id, abs($amount), $adminId, $rechargeLabel);
 
         if (($rechargeResult['status'] ?? '') !== 'STATUS_SUCCESS') {
-            return response()->json(['success' => false, 'message' => 'Erro ao atualizar créditos da revenda: ' . ($rechargeResult['message'] ?? 'erro')], 500);
+            return back()->withErrors(['error' => 'Erro ao atualizar créditos da revenda: ' . ($rechargeResult['message'] ?? 'erro')]);
         }
 
         $resellerCreditsAfter = $rechargeResult['credits_after'] ?? 0;
@@ -217,12 +217,12 @@ class ResellerController extends Controller
             if (($debit['status'] ?? '') !== 'STATUS_SUCCESS') {
                 // Compensação: reverter créditos da revenda
                 $this->api->subtractCredits($id, $amount, $adminId, "Estorno: falha na transferência para {$reseller['username']}");
-                return response()->json(['success' => false, 'message' => 'Falha ao debitar créditos do pai. Operação revertida.'], 500);
+                return back()->withErrors(['error' => 'Falha ao debitar créditos do pai. Operação revertida.']);
             }
 
         }
 
-        return response()->json(['success' => true, 'message' => 'Créditos atualizados com sucesso!']);
+        return back()->with('success', 'Créditos atualizados com sucesso!');
     }
 
     // -------------------------------------------------------------------------

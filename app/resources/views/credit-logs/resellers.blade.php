@@ -115,7 +115,7 @@
                     </td>
                     <td class="px-4 py-3 whitespace-nowrap">
                         <div class="text-sm font-medium text-gray-900 dark:text-white">
-                            {{ $log['owner_name'] }}
+                            {{ $log['target_username'] ?? $log['owner_username'] ?? '-' }}
                         </div>
                     </td>
                     <td class="px-4 py-3 text-center">
