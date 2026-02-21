@@ -81,18 +81,32 @@ class CreditLogController extends Controller
     }
 
     /**
-     * Busca logs de crédito via API credit_logs (tabela users_credits_logs).
-     * Campos retornados: id, target_id, admin_id, target_username, owner_username,
-     *                     amount (float), date (FROM_UNIXTIME string), reason (string).
+     * Busca logs via API user_logs (tabela users_logs) — fonte principal.
+     *
+     * Campos retornados pela API user_logs:
+     *   id, owner (quem fez), username (owner_name), type (line/user/mag/enigma),
+     *   action (new/extend/edit/enable/disable/delete/adjust_credits/send_event/convert),
+     *   log_id (ID do destino), package_id, cost (créditos gastos),
+     *   credits_after (saldo após), date (unix timestamp int), deleted_info (JSON).
+     *
+     * Enriquecido com get_lines, get_users e get_packages para resolver nomes.
      */
     private function fetchLogs(Request $request, ?int $resellerId = null, bool $allResellers = false): LengthAwarePaginator
     {
         $logsResp = $allResellers
-            ? $this->api->getCreditLogs()
-            : $this->api->getCreditLogs($resellerId);
+            ? $this->api->getUserLogs()
+            : $this->api->getUserLogs($resellerId);
         $items = $logsResp['data'] ?? [];
 
-        // Filtros
+        // Filtrar apenas ações que envolvem créditos (cost != 0)
+        $items = array_values(array_filter($items, fn($l) => (float)($l['cost'] ?? 0) != 0));
+
+        // Mapas de referência para enriquecer dados
+        $linesMap   = $this->buildLinesMap();
+        $usersMap   = $this->buildUsersMap();
+        $packagesMap = $this->buildPackagesMap();
+
+        // Filtros do request
         $dateStart   = $request->filled('date_start') ? strtotime($request->date_start . ' 00:00:00') : null;
         $dateEnd     = $request->filled('date_end')   ? strtotime($request->date_end   . ' 23:59:59') : null;
         $nature      = $request->input('nature');
@@ -101,109 +115,174 @@ class CreditLogController extends Controller
         $search      = $request->input('search');
 
         $filtered = collect($items)->filter(function ($log) use (
-            $resellerId, $allResellers,
-            $dateStart, $dateEnd, $nature, $type, $destination, $search
+            $dateStart, $dateEnd, $nature, $type, $destination, $search,
+            $linesMap, $usersMap
         ) {
-            $logDate = strtotime($log['date'] ?? '');
+            $logDate = (int)($log['date'] ?? 0);
             if ($dateStart && $logDate < $dateStart) return false;
             if ($dateEnd   && $logDate > $dateEnd)   return false;
 
-            $amount = (float)($log['amount'] ?? 0);
-            if ($nature === 'in'  && $amount <= 0) return false;
-            if ($nature === 'out' && $amount >= 0) return false;
+            $cost = (float)($log['cost'] ?? 0);
+            if ($nature === 'out' && $cost <= 0) return false;
+            if ($nature === 'in'  && $cost >= 0) return false;
 
-            $reason = strtolower($log['reason'] ?? '');
-            $isClient   = str_contains($reason, 'line') || str_contains($reason, 'client')
-                       || str_contains($reason, 'cria') || str_contains($reason, 'renov')
-                       || str_contains($reason, 'teste') || str_contains($reason, 'trial');
-            $isReseller = !$isClient;
-
-            if ($type === 'client'   && !$isClient)   return false;
-            if ($type === 'reseller' && !$isReseller)  return false;
+            $logType = $log['type'] ?? '';
+            $isClient = in_array($logType, ['line', 'mag', 'enigma']);
+            if ($type === 'client'   && !$isClient) return false;
+            if ($type === 'reseller' && $isClient)  return false;
 
             if ($destination) {
-                $d = strtolower($destination);
-                $target = strtolower($log['target_username'] ?? '');
-                $owner  = strtolower($log['owner_username'] ?? '');
-                if (!str_contains($target, $d) && !str_contains($owner, $d)) return false;
+                $destName = $this->resolveDestinationName($log, $linesMap, $usersMap);
+                if (!str_contains(strtolower($destName), strtolower($destination))) return false;
             }
 
             if ($search) {
                 $s = strtolower($search);
-                $haystack = strtolower(
-                    ($log['reason'] ?? '') . ' ' .
-                    ($log['target_username'] ?? '') . ' ' .
-                    ($log['owner_username'] ?? '') . ' ' .
-                    ($log['amount'] ?? '')
-                );
+                $desc = $this->buildDescription($log, $linesMap, $usersMap, $packagesMap);
+                $destName = $this->resolveDestinationName($log, $linesMap, $usersMap);
+                $haystack = strtolower($desc . ' ' . $destName . ' ' . ($log['username'] ?? ''));
                 if (!str_contains($haystack, $s)) return false;
             }
 
             return true;
         });
 
-        $sorted = $filtered->sortByDesc(fn($l) => strtotime($l['date'] ?? ''))->values();
+        $sorted = $filtered->sortByDesc(fn($l) => (int)($l['date'] ?? 0))->values();
 
         $perPage     = 20;
         $currentPage = LengthAwarePaginator::resolveCurrentPage();
         $pageItems   = $sorted->slice(($currentPage - 1) * $perPage, $perPage)->values();
 
         $paginator = new LengthAwarePaginator(
-            $pageItems,
-            $sorted->count(),
-            $perPage,
-            $currentPage,
+            $pageItems, $sorted->count(), $perPage, $currentPage,
             ['path' => $request->url(), 'query' => $request->query()]
         );
 
-        $paginator->getCollection()->transform(function ($log) {
-            $amount = (float)($log['amount'] ?? 0);
-            $dateTs = strtotime($log['date'] ?? '');
-
-            $log['formatted_date']    = $dateTs ? date('d/m/Y H:i:s', $dateTs) : ($log['date'] ?? '-');
-            $log['owner_name']        = $log['owner_username'] ?? 'N/A';
-            $log['target_username']   = $log['target_username'] ?? 'N/A';
-
-            if ($amount < 0) {
-                $log['nature']       = 'out';
-                $log['nature_label'] = 'Saída';
-                $log['nature_class'] = 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400';
-                $log['amount_formatted'] = number_format(abs($amount), 2);
-            } elseif ($amount > 0) {
-                $log['nature']       = 'in';
-                $log['nature_label'] = 'Entrada';
-                $log['nature_class'] = 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400';
-                $log['amount_formatted'] = number_format($amount, 2);
-            } else {
-                $log['nature']       = 'neutral';
-                $log['nature_label'] = '-';
-                $log['nature_class'] = 'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-400';
-                $log['amount_formatted'] = '0.00';
-            }
-
-            $reason = strtolower($log['reason'] ?? '');
-            $isClient = str_contains($reason, 'line') || str_contains($reason, 'client')
-                     || str_contains($reason, 'cria') || str_contains($reason, 'renov')
-                     || str_contains($reason, 'teste') || str_contains($reason, 'trial');
-
-            if ($isClient) {
-                $log['type_label'] = 'Cliente';
-                $log['type_icon']  = 'bi-person';
-                $log['type_class'] = 'text-blue-600 dark:text-blue-400';
-            } else {
-                $log['type_label'] = 'Revenda';
-                $log['type_icon']  = 'bi-shop';
-                $log['type_class'] = 'text-purple-600 dark:text-purple-400';
-            }
-
-            $log['destination']            = $log['target_username'];
-            $log['description_formatted']  = $log['reason'] ?? '-';
-            $log['credits_before']         = 0;
-            $log['credits_after']          = 0;
-
-            return $log;
-        });
+        $paginator->getCollection()->transform(
+            fn($log) => $this->transformLog($log, $linesMap, $usersMap, $packagesMap)
+        );
 
         return $paginator;
+    }
+
+    private function transformLog(array $log, $linesMap, $usersMap, $packagesMap): array
+    {
+        $cost         = (float)($log['cost'] ?? 0);
+        $creditsAfter = (float)($log['credits_after'] ?? 0);
+        $creditsBefore = $creditsAfter + $cost;
+        $logDate      = (int)($log['date'] ?? 0);
+        $logType      = $log['type'] ?? '';
+        $action       = $log['action'] ?? '';
+        $isClient     = in_array($logType, ['line', 'mag', 'enigma']);
+
+        $log['formatted_date'] = $logDate ? date('d/m/Y H:i:s', $logDate) : '-';
+        $log['credits_before'] = $creditsBefore;
+        $log['credits_after']  = $creditsAfter;
+
+        // Natureza: cost > 0 = saída de créditos, cost < 0 = entrada
+        if ($cost > 0) {
+            $log['nature']       = 'out';
+            $log['nature_label'] = 'Saída';
+            $log['nature_class'] = 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400';
+            $log['amount_formatted'] = number_format($cost, 2);
+        } elseif ($cost < 0) {
+            $log['nature']       = 'in';
+            $log['nature_label'] = 'Entrada';
+            $log['nature_class'] = 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400';
+            $log['amount_formatted'] = number_format(abs($cost), 2);
+        } else {
+            $log['nature']       = 'neutral';
+            $log['nature_label'] = '-';
+            $log['nature_class'] = 'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-400';
+            $log['amount_formatted'] = '0.00';
+        }
+
+        // Tipo: Cliente ou Revenda
+        if ($isClient) {
+            $log['type_label'] = 'Cliente';
+            $log['type_icon']  = 'bi-person';
+            $log['type_class'] = 'text-blue-600 dark:text-blue-400';
+        } else {
+            $log['type_label'] = 'Revenda';
+            $log['type_icon']  = 'bi-shop';
+            $log['type_class'] = 'text-purple-600 dark:text-purple-400';
+        }
+
+        $log['destination']           = $this->resolveDestinationName($log, $linesMap, $usersMap);
+        $log['description_formatted'] = $this->buildDescription($log, $linesMap, $usersMap, $packagesMap);
+
+        return $log;
+    }
+
+    private function resolveDestinationName(array $log, $linesMap, $usersMap): string
+    {
+        $logId   = (int)($log['log_id'] ?? 0);
+        $logType = $log['type'] ?? '';
+
+        if (in_array($logType, ['line', 'mag', 'enigma'])) {
+            return $linesMap->get($logId)['username'] ?? $this->getDeletedName($log);
+        }
+        if ($logType === 'user') {
+            return $usersMap->get($logId)['username'] ?? $this->getDeletedName($log);
+        }
+        return 'N/A';
+    }
+
+    private function getDeletedName(array $log): string
+    {
+        $info = json_decode($log['deleted_info'] ?? '', true);
+        if (is_array($info)) {
+            return $info['username'] ?? $info['mac'] ?? 'Removido';
+        }
+        return 'Removido';
+    }
+
+    private function buildDescription(array $log, $linesMap, $usersMap, $packagesMap): string
+    {
+        $action    = $log['action'] ?? '';
+        $logType   = $log['type'] ?? '';
+        $logId     = (int)($log['log_id'] ?? 0);
+        $packageId = (int)($log['package_id'] ?? 0);
+        $cost      = (float)($log['cost'] ?? 0);
+
+        $deviceLabel = match ($logType) {
+            'line'    => 'Cliente',
+            'user'    => 'Revenda',
+            'mag'     => 'MAG',
+            'enigma'  => 'Enigma2',
+            default   => 'Item',
+        };
+
+        $destName = $this->resolveDestinationName($log, $linesMap, $usersMap);
+        $pkgName  = $packagesMap->get($packageId)['package_name'] ?? '';
+
+        return match ($action) {
+            'new'            => "Criou {$deviceLabel}: {$destName}" . ($pkgName ? " — Pacote: {$pkgName}" : ''),
+            'extend'         => "Renovou {$deviceLabel}: {$destName}" . ($pkgName ? " — Pacote: {$pkgName}" : ''),
+            'edit'           => "Editou {$deviceLabel}: {$destName}",
+            'enable'         => "Habilitou {$deviceLabel}: {$destName}",
+            'disable'        => "Desabilitou {$deviceLabel}: {$destName}",
+            'delete'         => "Excluiu {$deviceLabel}: {$destName}",
+            'adjust_credits' => "Ajuste de créditos: " . number_format(abs($cost), 2),
+            'convert'        => "Converteu dispositivo para {$deviceLabel}: {$destName}",
+            'send_event'     => "Enviou evento para {$deviceLabel}: {$destName}",
+            default          => $action ?: '-',
+        };
+    }
+
+    private function buildLinesMap(): \Illuminate\Support\Collection
+    {
+        return collect(($this->api->getLines())['data'] ?? [])->keyBy('id');
+    }
+
+    private function buildUsersMap(): \Illuminate\Support\Collection
+    {
+        return collect(($this->api->getUsers())['data'] ?? [])->keyBy('id');
+    }
+
+    private function buildPackagesMap(): \Illuminate\Support\Collection
+    {
+        $packages = $this->api->getPackages();
+        return collect(is_array($packages) ? $packages : [])->keyBy('id');
     }
 }

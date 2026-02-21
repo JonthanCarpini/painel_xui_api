@@ -396,10 +396,10 @@ class XuiApiService
         return $this->get('client_logs', $params);
     }
 
-    public function getUserLogs(?int $userId = null): array
+    public function getUserLogs(?int $resellerId = null): array
     {
         $params = ['limit' => 100000];
-        if ($userId !== null) $params['user_id'] = $userId;
+        if ($resellerId !== null) $params['reseller'] = $resellerId;
         return $this->get('user_logs', $params);
     }
 
