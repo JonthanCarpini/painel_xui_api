@@ -43,14 +43,39 @@ class AppServiceProvider extends ServiceProvider
             if (Auth::check()) {
                 $xuiUser = Auth::user();
                 
-                // Contagem de Tickets
-                if ($xuiUser->isAdmin()) {
-                    $unreadTicketsCount = Ticket::where('admin_read', 0)->count();
-                } else {
-                    $unreadTicketsCount = Ticket::where('member_id', $xuiUser->id)
-                        ->where('user_read', 0)
-                        ->count();
+                // Contagem de Tickets via API
+                try {
+                    $api = app(\App\Services\XuiApiService::class);
+                    $tickets = $api->getTickets(['limit' => 1000]); // Buscar tickets recentes
+                    
+                    if (isset($tickets['data']) && is_array($tickets['data'])) {
+                        foreach ($tickets['data'] as $ticket) {
+                            $isAdmin = $xuiUser->isAdmin();
+                            $isUnread = false;
+                            
+                            if ($isAdmin) {
+                                // Admin vê tickets onde admin_read = 0
+                                if ((int)($ticket['admin_read'] ?? 1) === 0) {
+                                    $isUnread = true;
+                                }
+                            } else {
+                                // Usuário vê SEUS tickets onde user_read = 0
+                                if ((int)($ticket['member_id'] ?? 0) === $xuiUser->id && (int)($ticket['user_read'] ?? 1) === 0) {
+                                    $isUnread = true;
+                                }
+                            }
+                            
+                            if ($isUnread) {
+                                $unreadTicketsCount++;
+                            }
+                        }
+                    }
+                } catch (\Exception $e) {
+                    // Falha silenciosa na contagem de tickets para não quebrar o site
+                    \Illuminate\Support\Facades\Log::warning('Falha ao contar tickets via API: ' . $e->getMessage());
                 }
+                
+                // Créditos e Notificações (mantido)
 
                 // Contagem de Avisos (Requer PanelUser)
                 $panelUser = PanelUser::where('xui_id', $xuiUser->id)->first();

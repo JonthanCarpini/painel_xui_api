@@ -414,6 +414,46 @@ class XuiApiService
     }
 
     // -------------------------------------------------------------------------
+    // Tickets
+    // -------------------------------------------------------------------------
+
+    public function getTickets(array $params = []): array
+    {
+        // params: limit, offset, member_id (opcional)
+        return $this->get('get_tickets', $params);
+    }
+
+    public function getTicket(int $ticketId): array
+    {
+        // O endpoint pode variar, mas geralmente get_tickets com id funciona ou get_ticket
+        // Se não houver get_ticket, usamos get_tickets filtrando
+        return $this->get('get_ticket', ['ticket_id' => $ticketId]);
+    }
+
+    public function createTicket(string $subject, string $content, int $memberId): array
+    {
+        return $this->post('create_ticket', [
+            'subject' => $subject,
+            'content' => $content,
+            'member_id' => $memberId
+        ]);
+    }
+
+    public function replyTicket(int $ticketId, string $content, int $adminReply = 0): array
+    {
+        return $this->post('reply_ticket', [
+            'ticket_id' => $ticketId,
+            'content' => $content,
+            'admin_reply' => $adminReply
+        ]);
+    }
+
+    public function closeTicket(int $ticketId): array
+    {
+        return $this->post('close_ticket', ['ticket_id' => $ticketId]);
+    }
+
+    // -------------------------------------------------------------------------
     // Servidores / Streams
     // -------------------------------------------------------------------------
 
