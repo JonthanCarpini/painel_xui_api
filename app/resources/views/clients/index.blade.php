@@ -89,7 +89,7 @@
                 <option value="">Todas</option>
                 <option value="mine">Meus Clientes Diretos</option>
                 @foreach($resellers as $reseller)
-                    <option value="{{ $reseller->id }}">{{ $reseller->username }}</option>
+                    <option value="{{ $reseller['id'] }}">{{ $reseller['username'] }}</option>
                 @endforeach
             </select>
         </div>

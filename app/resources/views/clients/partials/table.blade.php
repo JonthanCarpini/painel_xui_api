@@ -57,42 +57,43 @@
             @forelse($clients as $client)
             <tr class="hover:bg-gray-50 dark:hover:bg-dark-200/50 transition-colors">
                 <td class="px-4 py-3 whitespace-nowrap">
-                    <span class="text-sm font-medium text-gray-900 dark:text-white">{{ $client->username }}</span>
+                    <span class="text-sm font-medium text-gray-900 dark:text-white">{{ $client['username'] }}</span>
                 </td>
                 <td class="px-4 py-3 whitespace-nowrap">
                     <div class="flex items-center gap-2">
-                        <span class="text-sm text-gray-600 dark:text-gray-300 font-mono">{{ $client->password }}</span>
-                        <button onclick="copyToClipboardText('{{ $client->password }}')" class="text-gray-400 hover:text-orange-500 transition-colors" title="Copiar Senha">
+                        <span class="text-sm text-gray-600 dark:text-gray-300 font-mono">{{ $client['password'] }}</span>
+                        <button onclick="copyToClipboardText('{{ $client['password'] }}')" class="text-gray-400 hover:text-orange-500 transition-colors" title="Copiar Senha">
                             <i class="bi bi-clipboard text-xs"></i>
                         </button>
                     </div>
                 </td>
                 <td class="px-4 py-3 whitespace-nowrap hidden sm:table-cell">
                     <span class="text-sm text-gray-600 dark:text-gray-300">
-                        @if(!empty($client->local_phone))
-                            {{ $client->local_phone }} <i class="bi bi-database text-[10px] text-blue-400" title="Salvo localmente"></i>
+                        @if(!empty($client['local_phone']))
+                            {{ $client['local_phone'] }} <i class="bi bi-database text-[10px] text-blue-400" title="Salvo localmente"></i>
                         @else
-                            {{ $client->contact ?? '-' }}
+                            {{ $client['contact'] ?? '-' }}
                         @endif
                     </span>
                 </td>
                 <td class="px-4 py-3 whitespace-nowrap hidden md:table-cell">
-                    <span class="text-sm text-gray-600 dark:text-gray-300">{{ $client->member->username ?? 'N/A' }}</span>
+                    <span class="text-sm text-gray-600 dark:text-gray-300">{{ $client['member_username'] ?? 'N/A' }}</span>
                 </td>
                 <td class="px-4 py-3 whitespace-nowrap">
-                    @if($client->is_trial)
+                    @if($client['is_trial'])
                         <span class="px-2 py-0.5 bg-yellow-100 dark:bg-yellow-500/20 text-yellow-700 dark:text-yellow-400 rounded-full text-xs font-semibold border border-yellow-200 dark:border-transparent">Teste</span>
                     @else
                         <span class="px-2 py-0.5 bg-green-100 dark:bg-green-500/20 text-green-700 dark:text-green-400 rounded-full text-xs font-semibold border border-green-200 dark:border-transparent">Cliente</span>
                     @endif
                 </td>
                 <td class="px-4 py-3 whitespace-nowrap hidden lg:table-cell">
-                    <span class="text-sm text-gray-500 dark:text-gray-400">{{ date('d/m/Y H:i', $client->created_at) }}</span>
+                    <span class="text-sm text-gray-500 dark:text-gray-400">{{ date('d/m/Y H:i', (int)$client['created_at']) }}</span>
                 </td>
                 <td class="px-4 py-3 whitespace-nowrap">
                     @php
-                        $isExpired = $client->exp_date <= time();
-                        $daysLeft = ceil(($client->exp_date - time()) / 86400);
+                        $expDate = (int)$client['exp_date'];
+                        $isExpired = $expDate <= time();
+                        $daysLeft = ceil(($expDate - time()) / 86400);
                         
                         $textClass = 'text-gray-600 dark:text-gray-300';
                         if ($isExpired) {
@@ -102,17 +103,17 @@
                         }
                     @endphp
                     <span class="text-sm {{ $textClass }}">
-                        {{ date('d/m/Y H:i', $client->exp_date) }}
+                        {{ date('d/m/Y H:i', $expDate) }}
                     </span>
                 </td>
                 <td class="px-4 py-3 whitespace-nowrap hidden sm:table-cell">
                     <span class="text-sm text-gray-900 dark:text-white flex items-center gap-2">
                         <i class="bi bi-wifi text-orange-500"></i>
-                        {{ $client->max_connections }}
+                        {{ $client['max_connections'] }}
                     </span>
                 </td>
                 <td class="px-4 py-3 whitespace-nowrap">
-                    @if($client->enabled && ($client->admin_enabled ?? true) && $client->exp_date > time())
+                    @if($client['enabled'] && ($client['admin_enabled'] ?? true) && $client['exp_date'] > time())
                         <span class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800 dark:bg-green-500/20 dark:text-green-400">
                             <span class="w-1.5 h-1.5 rounded-full bg-green-500"></span> Ativo
                         </span>
@@ -124,29 +125,29 @@
                 </td>
                 <td class="px-4 py-3 whitespace-nowrap text-right">
                     <div class="flex items-center justify-end gap-1">
-                        <button onclick="openM3uModal({{ $client->id }}, '{{ $client->username }}')" class="p-1.5 bg-blue-50 dark:bg-blue-500/10 text-blue-600 dark:text-blue-400 hover:bg-blue-100 dark:hover:bg-blue-500/20 rounded-lg transition-colors" title="M3U">
+                        <button onclick="openM3uModal({{ $client['id'] }}, '{{ $client['username'] }}')" class="p-1.5 bg-blue-50 dark:bg-blue-500/10 text-blue-600 dark:text-blue-400 hover:bg-blue-100 dark:hover:bg-blue-500/20 rounded-lg transition-colors" title="M3U">
                             <i class="bi bi-file-earmark-code"></i>
                         </button>
-                        <button onclick="openEditModal({{ $client->id }})" class="p-1.5 bg-gray-50 dark:bg-gray-700/50 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-600/50 rounded-lg transition-colors" title="Editar">
+                        <button onclick="openEditModal({{ $client['id'] }})" class="p-1.5 bg-gray-50 dark:bg-gray-700/50 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-600/50 rounded-lg transition-colors" title="Editar">
                             <i class="bi bi-pencil"></i>
                         </button>
                         @if($trustPackageId)
-                        <button onclick="submitRenewTrustRow({{ $client->id }}, '{{ $client->username }}')" class="p-1.5 bg-purple-50 dark:bg-purple-500/10 text-purple-600 dark:text-purple-400 hover:bg-purple-100 dark:hover:bg-purple-500/20 rounded-lg transition-colors" title="Renovar em Confiança">
+                        <button onclick="submitRenewTrustRow({{ $client['id'] }}, '{{ $client['username'] }}')" class="p-1.5 bg-purple-50 dark:bg-purple-500/10 text-purple-600 dark:text-purple-400 hover:bg-purple-100 dark:hover:bg-purple-500/20 rounded-lg transition-colors" title="Renovar em Confiança">
                             <i class="bi bi-shield-check"></i>
                         </button>
                         @endif
-                        <button onclick="openRenewModal({{ $client->id }})" class="p-1.5 bg-green-50 dark:bg-green-500/10 text-green-600 dark:text-green-400 hover:bg-green-100 dark:hover:bg-green-500/20 rounded-lg transition-colors" title="Renovar">
+                        <button onclick="openRenewModal({{ $client['id'] }})" class="p-1.5 bg-green-50 dark:bg-green-500/10 text-green-600 dark:text-green-400 hover:bg-green-100 dark:hover:bg-green-500/20 rounded-lg transition-colors" title="Renovar">
                             <i class="bi bi-arrow-clockwise"></i>
                         </button>
                         @php
-                            $clientPhone = $client->local_phone ?? $client->contact ?? null;
+                            $clientPhone = $client['local_phone'] ?? $client['contact'] ?? null;
                         @endphp
                         @if($clientPhone)
-                        <button onclick="openWhatsappModal({{ $client->id }}, '{{ addslashes($client->username) }}', '{{ addslashes($clientPhone) }}', '{{ $client->password }}', '{{ date('d/m/Y H:i', $client->exp_date) }}', {{ $client->max_connections }})" class="p-1.5 bg-orange-50 dark:bg-orange-500/10 text-orange-600 dark:text-orange-400 hover:bg-orange-100 dark:hover:bg-orange-500/20 rounded-lg transition-colors" title="WhatsApp">
+                        <button onclick="openWhatsappModal({{ $client['id'] }}, '{{ addslashes($client['username']) }}', '{{ addslashes($clientPhone) }}', '{{ $client['password'] }}', '{{ date('d/m/Y H:i', $client['exp_date']) }}', {{ $client['max_connections'] }})" class="p-1.5 bg-orange-50 dark:bg-orange-500/10 text-orange-600 dark:text-orange-400 hover:bg-orange-100 dark:hover:bg-orange-500/20 rounded-lg transition-colors" title="WhatsApp">
                             <i class="bi bi-whatsapp"></i>
                         </button>
                         @endif
-                        <button onclick="deleteClient({{ $client->id }})" class="p-1.5 bg-red-50 dark:bg-red-500/10 text-red-600 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-500/20 rounded-lg transition-colors" title="Excluir">
+                        <button onclick="deleteClient({{ $client['id'] }})" class="p-1.5 bg-red-50 dark:bg-red-500/10 text-red-600 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-500/20 rounded-lg transition-colors" title="Excluir">
                             <i class="bi bi-trash"></i>
                         </button>
                     </div>
