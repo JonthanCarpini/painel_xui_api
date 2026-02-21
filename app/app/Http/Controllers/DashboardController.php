@@ -64,10 +64,16 @@ class DashboardController extends Controller
                 $exp = (int)($line['exp_date'] ?? 0);
                 if ($exp <= $now || $exp > $in7d) continue;
                 if ($allowedIds !== null && !in_array((int)($line['member_id'] ?? 0), $allowedIds)) continue;
-                $result[] = $line;
+                
+                // Converter para objeto para compatibilidade com a view e cast explícito
+                $obj = (object)$line;
+                $obj->exp_date = (int)($line['exp_date'] ?? 0);
+                $obj->member = (object)['username' => $line['member_username'] ?? 'Unknown']; // Simular relacionamento member
+                
+                $result[] = $obj;
             }
 
-            usort($result, fn($a, $b) => ($a['exp_date'] ?? 0) <=> ($b['exp_date'] ?? 0));
+            usort($result, fn($a, $b) => $a->exp_date <=> $b->exp_date);
             return array_slice($result, 0, 50);
         });
     }
@@ -181,7 +187,11 @@ class DashboardController extends Controller
                     && (float)($l['amount'] ?? 0) > 0)
                 ->sortByDesc('date')
                 ->take(5)
-                ->map(fn($l) => (object) $l)
+                ->map(function($l) {
+                    $obj = (object) $l;
+                    $obj->date = (int)($l['date'] ?? 0);
+                    return $obj;
+                })
                 ->values();
 
             // Stats de streams via API
