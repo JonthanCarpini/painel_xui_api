@@ -16,8 +16,10 @@ class DashboardController extends Controller
 
     public function index()
     {
-        $user           = Auth::user();
-        $currentBalance = $user->credits;
+        $user = Auth::user();
+
+        // Balance via API XUI (não do DB local)
+        $currentBalance = $this->getBalanceFromApi((int)$user->xui_id);
 
         if ($user->isAdmin()) {
             $stats = $this->getAdminStats();
@@ -68,7 +70,7 @@ class DashboardController extends Controller
                 // Converter para objeto para compatibilidade com a view e cast explícito
                 $obj = (object)$line;
                 $obj->exp_date = (int)($line['exp_date'] ?? 0);
-                $obj->member = (object)['username' => $line['member_username'] ?? 'Unknown']; // Simular relacionamento member
+                $obj->member = (object)['username' => $line['owner_name'] ?? $line['member_username'] ?? 'N/A'];
                 
                 $result[] = $obj;
             }
@@ -83,9 +85,7 @@ class DashboardController extends Controller
         $cacheKey = "dashboard_charts_{$userId}_{$daysCount}";
 
         return Cache::remember($cacheKey, 300, function () use ($userId, $isAdmin, $daysCount) {
-            $linesResp  = $this->api->getLines();
             $usersResp  = $this->api->getUsers();
-            $allLines   = $linesResp['data'] ?? [];
             $allUsers   = $usersResp['data'] ?? [];
             $creditLogs = $this->api->getCreditLogs($isAdmin ? null : $userId);
             $logItems   = $creditLogs['data'] ?? [];
@@ -102,16 +102,25 @@ class DashboardController extends Controller
                 $start   = strtotime(date('Y-m-d', strtotime("-$i days")) . ' 00:00:00');
                 $end     = strtotime(date('Y-m-d', strtotime("-$i days")) . ' 23:59:59');
 
+                // Vendas e trials via credit_logs (get_lines NÃO retorna created_at)
                 $clients = $trials = 0;
-                foreach ($allLines as $l) {
-                    $ca = (int)($l['created_at'] ?? 0);
-                    if ($ca < $start || $ca > $end) continue;
-                    if ($allowedIds !== null && !in_array((int)($l['member_id'] ?? 0), $allowedIds)) continue;
-                    (int)($l['is_trial'] ?? 0) ? $trials++ : $clients++;
+                foreach ($logItems as $log) {
+                    $ld = (int)($log['date'] ?? 0);
+                    if ($ld < $start || $ld > $end) continue;
+                    if ((float)($log['amount'] ?? 0) >= 0) continue;
+                    $adminId = (int)($log['admin_id'] ?? 0);
+                    if ($allowedIds !== null && !in_array($adminId, $allowedIds)) continue;
+                    $reason = strtolower($log['reason'] ?? '');
+                    if (str_contains($reason, 'cria') && !str_contains($reason, 'teste')) {
+                        $clients++;
+                    } elseif (str_contains($reason, 'teste') || str_contains($reason, 'trial')) {
+                        $trials++;
+                    }
                 }
-                $clientsData[]  = $clients;
-                $trialsData[]   = $trials;
+                $clientsData[] = $clients;
+                $trialsData[]  = $trials;
 
+                // Novos revendedores por dia (date_registered existe em get_users)
                 $resellers = 0;
                 foreach ($allUsers as $u) {
                     if ((int)($u['member_group_id'] ?? 0) !== 2) continue;
@@ -122,6 +131,7 @@ class DashboardController extends Controller
                 }
                 $resellersData[] = $resellers;
 
+                // Recargas feitas por mim para outros
                 $recharges = 0;
                 foreach ($logItems as $log) {
                     $ld = (int)($log['date'] ?? 0);
@@ -159,7 +169,6 @@ class DashboardController extends Controller
             $expiredClients = count(array_filter($allLines, fn($l) => (int)($l['exp_date'] ?? 0) < $now));
             $totalResellers = count(array_filter($allUsers, fn($u) => (int)($u['member_group_id'] ?? 0) === 2));
 
-            // Top 5 revendedores por clientes oficiais
             $linesByMember = [];
             foreach ($allLines as $l) {
                 if ((int)($l['is_trial'] ?? 0) !== 0) continue;
@@ -179,7 +188,6 @@ class DashboardController extends Controller
             usort($topResellersData, fn($a, $b) => $b['total_lines'] <=> $a['total_lines']);
             $topResellersData = array_slice($topResellersData, 0, 5);
 
-            // Últimas recargas via API credit_logs
             $creditLogsResp = $this->api->getCreditLogs((int)$user->xui_id);
             $lastRecharges = collect($creditLogsResp['data'] ?? [])
                 ->filter(fn($l) => (int)($l['admin_id'] ?? 0) === (int)$user->xui_id
@@ -197,19 +205,32 @@ class DashboardController extends Controller
                 })
                 ->values();
 
-            // Stats de streams via API
-            $streamsResp  = $this->api->getStreams();
+            // Streams: tipo 1=live, 2=movie, 3=created_live
+            $streamsResp   = $this->api->getStreams();
             $allStreams    = $streamsResp['data'] ?? [];
-            $liveChannels = count(array_filter($allStreams, fn($s) => in_array((int)($s['type'] ?? 0), [1, 3])));
-            $movies       = count(array_filter($allStreams, fn($s) => (int)($s['type'] ?? 0) === 2));
-            $totalStreams  = count($allStreams);
+            $liveChannels  = count(array_filter($allStreams, fn($s) => in_array((int)($s['type'] ?? 0), [1, 3])));
+            $movies        = count(array_filter($allStreams, fn($s) => (int)($s['type'] ?? 0) === 2));
+
+            // Séries via API
+            $seriesResp = $this->api->getSeriesList();
+            $seriesData = $seriesResp['data'] ?? [];
+            $seriesCount = count($seriesData);
+
+            // Streams online/offline via stats do servidor
+            $mainServer    = $this->getMainServerStats();
+            $onlineStreams = (int)($mainServer['streams_live'] ?? 0);
+            $offlineStreams = max(0, $liveChannels - $onlineStreams);
+
+            // Load Balancers via API
+            $servers = $this->api->getServers();
+            $loadBalancers = collect($servers)
+                ->map(fn($s) => (object) $s)
+                ->values()
+                ->all();
 
             // Conexões ativas via API
-            $liveResp   = $this->api->getLiveConnections();
-            $onlineNow  = count($liveResp['data'] ?? []);
-
-            // Stats do servidor principal
-            $mainServer = $this->getMainServerStats();
+            $liveResp  = $this->api->getLiveConnections();
+            $onlineNow = count($liveResp['data'] ?? []);
 
             return [
                 'total_clients'   => $totalClients,
@@ -217,13 +238,13 @@ class DashboardController extends Controller
                 'expired_clients' => $expiredClients,
                 'online_now'      => $onlineNow,
                 'total_resellers' => $totalResellers,
-                'load_balancers'  => [],
-                'total_streams'   => $totalStreams,
+                'load_balancers'  => $loadBalancers,
+                'total_streams'   => count($allStreams),
                 'live_channels'   => $liveChannels,
                 'movies'          => $movies,
-                'series'          => 0,
-                'online_streams'  => 0,
-                'offline_streams' => 0,
+                'series'          => $seriesCount,
+                'online_streams'  => $onlineStreams,
+                'offline_streams' => $offlineStreams,
                 'top_resellers'   => $topResellersData,
                 'last_recharges'  => $lastRecharges,
                 'main_server'     => $mainServer,
@@ -247,17 +268,19 @@ class DashboardController extends Controller
 
             $myTreeIds = $this->getSubResellerIds($userId);
 
-            // Filtrar linhas da árvore
             $myLines = array_filter($allLines, fn($l) => in_array((int)($l['member_id'] ?? 0), $myTreeIds));
 
             $totalClients   = count(array_filter($myLines, fn($l) => (int)($l['is_trial'] ?? 0) === 0));
             $activeClients  = count(array_filter($myLines, fn($l) => (int)($l['is_trial'] ?? 0) === 0 && (int)($l['enabled'] ?? 1) && (int)($l['admin_enabled'] ?? 1) && (int)($l['exp_date'] ?? 0) > $now));
             $expiredClients = count(array_filter($myLines, fn($l) => (int)($l['is_trial'] ?? 0) === 0 && (int)($l['exp_date'] ?? 0) < $now));
             $expiringToday  = count(array_filter($myLines, fn($l) => (int)($l['is_trial'] ?? 0) === 0 && (int)($l['exp_date'] ?? 0) >= $startOfDay && (int)($l['exp_date'] ?? 0) <= $endOfDay));
-            $salesToday     = count(array_filter($myLines, fn($l) => (int)($l['is_trial'] ?? 0) === 0 && (int)($l['created_at'] ?? 0) >= $startOfDay && (int)($l['created_at'] ?? 0) <= $endOfDay));
-            $salesMonth     = count(array_filter($myLines, fn($l) => (int)($l['is_trial'] ?? 0) === 0 && (int)($l['created_at'] ?? 0) >= $startOfMonth && (int)($l['created_at'] ?? 0) <= $endOfMonth));
-            $trialsToday    = count(array_filter($myLines, fn($l) => (int)($l['is_trial'] ?? 0) === 1 && (int)($l['created_at'] ?? 0) >= $startOfDay && (int)($l['created_at'] ?? 0) <= $endOfDay));
-            $trialsMonth    = count(array_filter($myLines, fn($l) => (int)($l['is_trial'] ?? 0) === 1 && (int)($l['created_at'] ?? 0) >= $startOfMonth && (int)($l['created_at'] ?? 0) <= $endOfMonth));
+
+            // Vendas e testes via credit_logs (get_lines NÃO retorna created_at)
+            $creditLogsResp = $this->api->getCreditLogs($userId);
+            $allLogs = $creditLogsResp['data'] ?? [];
+            [$salesToday, $salesMonth, $trialsToday, $trialsMonth] = $this->countSalesFromLogs(
+                $allLogs, $myTreeIds, $startOfDay, $endOfDay, $startOfMonth, $endOfMonth
+            );
 
             // Conexões ativas dos meus clientes
             $liveResp  = $this->api->getLiveConnections();
@@ -267,8 +290,7 @@ class DashboardController extends Controller
 
             // Sub-revendedores diretos
             $myDirectResellers = array_filter($allUsers, fn($u) => (int)($u['owner_id'] ?? 0) === $userId && (int)($u['member_group_id'] ?? 0) === 2);
-            $myResellersIds    = array_column(array_values($myDirectResellers), 'id');
-            $totalResellers    = count($myResellersIds);
+            $totalResellers    = count($myDirectResellers);
 
             $inactiveResellers  = 0;
             $resellersNoCredit  = 0;
@@ -298,9 +320,8 @@ class DashboardController extends Controller
                 $topResellers = array_slice($topResellers, 0, 5);
             }
 
-            // Últimas recargas via API credit_logs
-            $creditLogsResp = $this->api->getCreditLogs($userId);
-            $lastRecharges = collect($creditLogsResp['data'] ?? [])
+            // Últimas recargas feitas por mim para sub-revendedores
+            $lastRecharges = collect($allLogs)
                 ->filter(fn($l) => (int)($l['admin_id'] ?? 0) === $userId
                     && (int)($l['target_id'] ?? 0) !== $userId
                     && (float)($l['amount'] ?? 0) > 0)
@@ -398,5 +419,58 @@ class DashboardController extends Controller
         }
 
         return array_unique($ids);
+    }
+
+    private function getBalanceFromApi(int $xuiId): float
+    {
+        $resp = $this->api->getUser($xuiId);
+        if (($resp['status'] ?? '') === 'STATUS_SUCCESS') {
+            return (float)($resp['data']['credits'] ?? 0);
+        }
+        return 0.0;
+    }
+
+    /**
+     * Conta vendas e trials a partir dos credit_logs.
+     * Vendas oficiais = débitos de crédito (amount < 0) com reason contendo "Criação de linha"
+     * Trials = linhas com is_trial=1 e custo 0 (sem log de crédito), estimados por exp_date
+     *
+     * Abordagem: credit_logs registram cada débito com timestamp.
+     * - Débito com reason "Criação de linha" = venda oficial
+     * - Débito com reason "Teste" ou amount=0 = trial (se existir log)
+     */
+    private function countSalesFromLogs(
+        array $allLogs,
+        array $myTreeIds,
+        int $startOfDay,
+        int $endOfDay,
+        int $startOfMonth,
+        int $endOfMonth
+    ): array {
+        $salesToday = $salesMonth = $trialsToday = $trialsMonth = 0;
+
+        foreach ($allLogs as $log) {
+            $date     = (int)($log['date'] ?? 0);
+            $amount   = (float)($log['amount'] ?? 0);
+            $adminId  = (int)($log['admin_id'] ?? 0);
+            $reason   = strtolower($log['reason'] ?? '');
+
+            if (!in_array($adminId, $myTreeIds)) continue;
+            if ($amount >= 0) continue;
+
+            $isSale  = str_contains($reason, 'cria') && !str_contains($reason, 'teste');
+            $isTrial = str_contains($reason, 'teste') || str_contains($reason, 'trial');
+
+            if ($isSale) {
+                if ($date >= $startOfDay && $date <= $endOfDay) $salesToday++;
+                if ($date >= $startOfMonth && $date <= $endOfMonth) $salesMonth++;
+            }
+            if ($isTrial) {
+                if ($date >= $startOfDay && $date <= $endOfDay) $trialsToday++;
+                if ($date >= $startOfMonth && $date <= $endOfMonth) $trialsMonth++;
+            }
+        }
+
+        return [$salesToday, $salesMonth, $trialsToday, $trialsMonth];
     }
 }

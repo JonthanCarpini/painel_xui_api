@@ -117,7 +117,7 @@
         <div class="bg-white dark:bg-dark-300 rounded-xl p-5 border border-gray-200 dark:border-0 shadow-sm dark:shadow-none hover:border-orange-500 transition-all duration-300">
             <div class="flex items-center justify-between mb-3">
                 <h4 class="text-gray-900 dark:text-white font-bold text-lg">{{ $server->server_name }}</h4>
-                @if($server->isOnline())
+                @if(($server->status ?? 0) == 1)
                     <span class="px-3 py-1 bg-green-100 dark:bg-green-500/10 text-green-700 dark:text-green-400 text-xs font-semibold rounded-full flex items-center gap-1">
                         <span class="w-1.5 h-1.5 bg-green-500 dark:bg-green-400 rounded-full animate-pulse"></span>
                         Online
