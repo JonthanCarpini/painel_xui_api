@@ -98,6 +98,25 @@
                 </div>
 
                 <div class="mb-6">
+                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-400 mb-2">Formato de Sa&iacute;da (Access Output)</label>
+                    <div class="flex flex-wrap gap-3 p-4 bg-gray-50 dark:bg-dark-200 rounded-lg border border-gray-200 dark:border-0">
+                        <label class="flex items-center gap-2 p-2 bg-white dark:bg-dark-300 border border-gray-200 dark:border-dark-100 rounded-lg cursor-pointer hover:bg-gray-50 dark:hover:bg-dark-100 transition-colors">
+                            <input type="checkbox" name="access_output[]" value="1" checked class="w-5 h-5 text-orange-500 bg-gray-100 dark:bg-dark-200 border-gray-300 dark:border-dark-100 rounded focus:ring-orange-500 focus:ring-2">
+                            <span class="text-gray-700 dark:text-white text-sm">HLS (M3U8)</span>
+                        </label>
+                        <label class="flex items-center gap-2 p-2 bg-white dark:bg-dark-300 border border-gray-200 dark:border-dark-100 rounded-lg cursor-pointer hover:bg-gray-50 dark:hover:bg-dark-100 transition-colors">
+                            <input type="checkbox" name="access_output[]" value="2" checked class="w-5 h-5 text-orange-500 bg-gray-100 dark:bg-dark-200 border-gray-300 dark:border-dark-100 rounded focus:ring-orange-500 focus:ring-2">
+                            <span class="text-gray-700 dark:text-white text-sm">MPEGTS (TS)</span>
+                        </label>
+                        <label class="flex items-center gap-2 p-2 bg-white dark:bg-dark-300 border border-gray-200 dark:border-dark-100 rounded-lg cursor-pointer hover:bg-gray-50 dark:hover:bg-dark-100 transition-colors">
+                            <input type="checkbox" name="access_output[]" value="3" class="w-5 h-5 text-orange-500 bg-gray-100 dark:bg-dark-200 border-gray-300 dark:border-dark-100 rounded focus:ring-orange-500 focus:ring-2">
+                            <span class="text-gray-700 dark:text-white text-sm">RTMP</span>
+                        </label>
+                    </div>
+                    <p class="text-xs text-gray-500 mt-1">Formatos de streaming permitidos para este cliente</p>
+                </div>
+
+                <div class="mb-6">
                     <label class="block text-sm font-medium text-gray-700 dark:text-gray-400 mb-3">Selecione os Canais (Buqu&ecirc;s) *</label>
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-3 max-h-64 overflow-y-auto p-4 bg-gray-50 dark:bg-dark-200 rounded-lg border border-gray-200 dark:border-0 custom-scrollbar">
                         @foreach($bouquets as $bouquet)

@@ -103,6 +103,8 @@ class XuiApiService
     {
         $data = $this->normalizeBouquets($data);
         $data = $this->normalizeExpDate($data);
+        $data = $this->normalizeIsTrial($data);
+        $data = $this->normalizeAccessOutput($data);
         return $this->post('create_line', $data);
     }
 
@@ -123,6 +125,8 @@ class XuiApiService
         $data['id'] = $id;
         $data = $this->normalizeBouquets($data);
         $data = $this->normalizeExpDate($data);
+        $data = $this->normalizeIsTrial($data);
+        $data = $this->normalizeAccessOutput($data);
         return $this->post('edit_line', $data);
     }
 
@@ -592,8 +596,9 @@ class XuiApiService
     // -------------------------------------------------------------------------
 
     /**
-     * Normaliza bouquets para o formato aceito pela API: bouquets_selected[]=1&bouquets_selected[]=2
-     * Remove chaves alternativas (bouquet_ids, bouquet) e converte para array indexado.
+     * Normaliza bouquets para o formato aceito pela API: JSON string.
+     * O XUI faz json_decode($rData['bouquets_selected'], true) internamente,
+     * então o valor deve ser uma string JSON como "[1,2,3]".
      */
     private function normalizeBouquets(array $data): array
     {
@@ -611,16 +616,25 @@ class XuiApiService
             unset($data['bouquet']);
         }
 
-        if ($ids !== null && is_array($ids)) {
-            $data['bouquets_selected'] = array_values(array_map('intval', $ids));
+        if ($ids !== null) {
+            if (is_string($ids)) {
+                $decoded = json_decode($ids, true);
+                if (is_array($decoded)) {
+                    $ids = $decoded;
+                }
+            }
+            if (is_array($ids)) {
+                $data['bouquets_selected'] = json_encode(array_values(array_map('intval', $ids)));
+            }
         }
 
         return $data;
     }
 
     /**
-     * Garante que exp_date seja sempre no formato YYYY-MM-DD aceito pelo XUI.
-     * O XUI v1.5.12 rejeita Unix timestamp com STATUS_INVALID_DATE.
+     * Garante que exp_date seja no formato YYYY-MM-DD HH:MM:SS aceito pelo XUI.
+     * O XUI usa new DateTime($val)->format('U') internamente, aceitando qualquer
+     * formato válido do DateTime do PHP. Preservamos hora/minuto/segundo.
      */
     private function normalizeExpDate(array $data): array
     {
@@ -631,10 +645,60 @@ class XuiApiService
         $val = $data['exp_date'];
 
         if (is_numeric($val)) {
-            $data['exp_date'] = date('Y-m-d', (int) $val);
+            $data['exp_date'] = date('Y-m-d H:i:s', (int) $val);
         } elseif (!preg_match('/^\d{4}-\d{2}-\d{2}/', $val)) {
             $ts = strtotime($val);
-            $data['exp_date'] = $ts ? date('Y-m-d', $ts) : $val;
+            $data['exp_date'] = $ts ? date('Y-m-d H:i:s', $ts) : $val;
+        }
+
+        return $data;
+    }
+
+    /**
+     * Remove is_trial, is_restreamer, is_stalker, is_isplock, bypass_ua do payload
+     * quando o valor é falsy. O XUI usa isset() para esses campos — se o campo
+     * existir no POST (mesmo com valor 0), o XUI define como 1.
+     */
+    private function normalizeIsTrial(array $data): array
+    {
+        $boolFields = ['is_trial', 'is_restreamer', 'is_stalker', 'is_isplock', 'bypass_ua'];
+
+        foreach ($boolFields as $field) {
+            if (array_key_exists($field, $data)) {
+                if (empty($data[$field]) || $data[$field] === '0' || $data[$field] === 0) {
+                    unset($data[$field]);
+                } else {
+                    $data[$field] = 1;
+                }
+            }
+        }
+
+        return $data;
+    }
+
+    /**
+     * Converte allowed_outputs para access_output (nome correto do campo na API XUI).
+     * O XUI espera access_output como array PHP: access_output[]=1&access_output[]=2
+     */
+    private function normalizeAccessOutput(array $data): array
+    {
+        $raw = null;
+
+        if (isset($data['access_output'])) {
+            $raw = $data['access_output'];
+        } elseif (isset($data['allowed_outputs'])) {
+            $raw = $data['allowed_outputs'];
+            unset($data['allowed_outputs']);
+        }
+
+        if ($raw !== null) {
+            if (is_string($raw)) {
+                $decoded = json_decode($raw, true);
+                $raw = is_array($decoded) ? $decoded : [$raw];
+            }
+            if (is_array($raw) && !empty($raw)) {
+                $data['access_output'] = array_values(array_map('intval', $raw));
+            }
         }
 
         return $data;

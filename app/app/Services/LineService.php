@@ -66,6 +66,11 @@ class LineService
         if (!empty($bouquetIds)) {
             $payload['bouquets_selected'] = $bouquetIds;
         }
+        if (!empty($data['access_output'])) {
+            $payload['access_output'] = $data['access_output'];
+        } elseif (!empty($data['allowed_outputs'])) {
+            $payload['access_output'] = $data['allowed_outputs'];
+        }
 
         $result = $this->api->createLine($payload);
 

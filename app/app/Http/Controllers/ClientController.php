@@ -28,7 +28,7 @@ class ClientController extends Controller
         $status     = $request->input('status', '');
         $type       = $request->input('type', '');
         $resellerId = $request->input('reseller_id', '');
-        $sortBy     = $request->input('sort_by', 'created_at');
+        $sortBy     = $request->input('sort_by', 'id');
         $sortOrder  = $request->input('sort_order', 'desc');
         $perPage    = (int)$request->input('per_page', 20);
         $quickFilter = $request->input('quick_filter');
@@ -133,6 +133,7 @@ class ClientController extends Controller
             $line['local_notes'] = $detail ? $detail->notes : null;
             $pkg = $packages->get((int)($line['package_id'] ?? 0));
             $line['package_name'] = $pkg ? $pkg->package_name : null;
+            $line['member_username'] = $line['owner_name'] ?? 'N/A';
         }
         unset($line);
 
@@ -213,6 +214,8 @@ class ClientController extends Controller
             'package_id' => 'required|integer', 
             'bouquet_ids' => 'required|array|min:1',
             'max_connections' => 'required|integer|min:1|max:10',
+            'access_output' => 'nullable|array',
+            'access_output.*' => 'integer',
             'email' => 'nullable|email',
             'phone' => 'nullable|string',
             'notes' => 'nullable|string',
@@ -246,6 +249,7 @@ class ClientController extends Controller
                 'package_id'      => $validated['package_id'],
                 'bouquet_ids'     => $validated['bouquet_ids'],
                 'max_connections' => $validated['max_connections'],
+                'access_output'   => $validated['access_output'] ?? [1, 2],
                 'email'           => $validated['email'] ?? null,
                 'phone'           => $phone,
                 'notes'           => $finalNotes,
@@ -310,11 +314,13 @@ class ClientController extends Controller
             $validated = $request->validate([
                 'username' => 'required|string|min:3|max:50',
                 'password' => 'required|string|min:6',
-                'package_id' => 'required|integer', // Removido exists:xui...
+                'package_id' => 'required|integer',
                 'bouquet_ids' => 'required|array|min:1',
                 'duration_value' => 'required|integer|min:1',
                 'duration_unit' => 'required|string|in:hours,days,months,years',
                 'max_connections' => 'required|integer|min:1|max:10',
+                'access_output' => 'nullable|array',
+                'access_output.*' => 'integer',
                 'email' => 'nullable|email',
                 'phone' => 'nullable|string',
                 'notes' => 'nullable|string',
@@ -353,6 +359,7 @@ class ClientController extends Controller
                 'duration_value'  => $validated['duration_value'],
                 'duration_unit'   => $validated['duration_unit'],
                 'max_connections' => $validated['max_connections'],
+                'access_output'   => $validated['access_output'] ?? [1, 2],
                 'email'           => $validated['email'] ?? null,
                 'phone'           => $phone,
                 'notes'           => $finalNotes,

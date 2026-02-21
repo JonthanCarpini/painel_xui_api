@@ -549,6 +549,24 @@ function submitRenewTrust() {
             </div>
 
             <div class="mb-4">
+                <label class="block text-sm font-medium text-gray-700 dark:text-gray-400 mb-2">Formato de Sa&iacute;da</label>
+                <div class="flex flex-wrap gap-3 p-3 bg-gray-50 dark:bg-dark-200 rounded-lg border border-gray-200 dark:border-0">
+                    <label class="flex items-center gap-2 p-2 bg-white dark:bg-dark-300 border border-gray-200 dark:border-dark-100 rounded-lg cursor-pointer hover:bg-gray-50 dark:hover:bg-dark-100 transition-colors">
+                        <input type="checkbox" name="access_output[]" value="1" checked class="w-4 h-4 text-orange-500 bg-gray-100 dark:bg-dark-200 border-gray-300 dark:border-dark-100 rounded focus:ring-orange-500">
+                        <span class="text-gray-700 dark:text-white text-sm">HLS</span>
+                    </label>
+                    <label class="flex items-center gap-2 p-2 bg-white dark:bg-dark-300 border border-gray-200 dark:border-dark-100 rounded-lg cursor-pointer hover:bg-gray-50 dark:hover:bg-dark-100 transition-colors">
+                        <input type="checkbox" name="access_output[]" value="2" checked class="w-4 h-4 text-orange-500 bg-gray-100 dark:bg-dark-200 border-gray-300 dark:border-dark-100 rounded focus:ring-orange-500">
+                        <span class="text-gray-700 dark:text-white text-sm">MPEGTS</span>
+                    </label>
+                    <label class="flex items-center gap-2 p-2 bg-white dark:bg-dark-300 border border-gray-200 dark:border-dark-100 rounded-lg cursor-pointer hover:bg-gray-50 dark:hover:bg-dark-100 transition-colors">
+                        <input type="checkbox" name="access_output[]" value="3" class="w-4 h-4 text-orange-500 bg-gray-100 dark:bg-dark-200 border-gray-300 dark:border-dark-100 rounded focus:ring-orange-500">
+                        <span class="text-gray-700 dark:text-white text-sm">RTMP</span>
+                    </label>
+                </div>
+            </div>
+
+            <div class="mb-4">
                 <label class="block text-sm font-medium text-gray-700 dark:text-gray-400 mb-3">Buqu&ecirc;s *</label>
                 <div id="trialBouquets" class="grid grid-cols-1 sm:grid-cols-2 gap-3 w-full max-h-60 overflow-y-auto p-4 bg-gray-50 dark:bg-dark-200 rounded-lg border border-gray-200 dark:border-0 custom-scrollbar">
                     @foreach($bouquets as $bouquet)

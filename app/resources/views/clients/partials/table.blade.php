@@ -31,8 +31,8 @@
                     </button>
                 </th>
                 <th scope="col" class="px-4 py-3 text-left whitespace-nowrap hidden lg:table-cell">
-                    <button onclick="sortBy('created_at')" class="group text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider hover:text-orange-500 dark:hover:text-white transition-colors flex items-center gap-1">
-                        Criado <i class="bi bi-arrow-down-up opacity-0 group-hover:opacity-100 transition-opacity"></i>
+                    <button onclick="sortBy('id')" class="group text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider hover:text-orange-500 dark:hover:text-white transition-colors flex items-center gap-1">
+                        ID <i class="bi bi-arrow-down-up opacity-0 group-hover:opacity-100 transition-opacity"></i>
                     </button>
                 </th>
                 <th scope="col" class="px-4 py-3 text-left whitespace-nowrap">
@@ -87,7 +87,7 @@
                     @endif
                 </td>
                 <td class="px-4 py-3 whitespace-nowrap hidden lg:table-cell">
-                    <span class="text-sm text-gray-500 dark:text-gray-400">{{ date('d/m/Y H:i', (int)($client['created_at'] ?? 0)) }}</span>
+                    <span class="text-sm text-gray-500 dark:text-gray-400">#{{ $client['id'] ?? '?' }}</span>
                 </td>
                 <td class="px-4 py-3 whitespace-nowrap">
                     @php
