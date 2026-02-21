@@ -213,14 +213,14 @@ class XuiApiService
     }
 
     /**
-     * Adicionar créditos a um revendedor de forma segura.
-     * add_credits NÃO EXISTE no v1.5.12 — este método busca o saldo atual e soma.
-     * Retorna array com 'credits_before', 'credits_after' para log.
+     * Adicionar créditos a um revendedor via adjust_credits.
+     * Usa a API adjust_credits que grava corretamente em users_credits_logs
+     * com amount = movimentação real e reason preenchido.
      *
      * @param int    $userId   ID do revendedor que recebe os créditos
-     * @param float  $amount   Quantidade a adicionar
-     * @param int|null $adminId  ID de quem executou a operação (para o log)
-     * @param string|null $reason  Motivo da operação (para o log)
+     * @param float  $amount   Quantidade a adicionar (positivo)
+     * @param int|null $adminId  (ignorado — adjust_credits usa o admin autenticado)
+     * @param string|null $reason  Motivo da operação
      */
     public function addCredits(int $userId, float $amount, ?int $adminId = null, ?string $reason = null): array
     {
@@ -231,13 +231,8 @@ class XuiApiService
         }
 
         $creditsBefore = (float) ($current['data']['credits'] ?? 0);
+        $result = $this->adjustCredits($userId, $amount, $reason);
         $creditsAfter  = $creditsBefore + $amount;
-
-        $result = $this->editUser($userId, ['credits' => $creditsAfter]);
-
-        if ($this->isSuccess($result)) {
-            $this->writeCreditLog($userId, $amount, $adminId, $reason);
-        }
 
         return array_merge($result, [
             'credits_before' => $creditsBefore,
@@ -246,13 +241,14 @@ class XuiApiService
     }
 
     /**
-     * Subtrair créditos de um revendedor de forma segura.
-     * Retorna array com 'credits_before', 'credits_after' para log.
+     * Subtrair créditos de um revendedor via adjust_credits.
+     * Usa a API adjust_credits que grava corretamente em users_credits_logs
+     * com amount = movimentação real (negativo) e reason preenchido.
      *
      * @param int    $userId   ID do revendedor que perde os créditos
      * @param float  $amount   Quantidade a subtrair (positivo)
-     * @param int|null $adminId  ID de quem executou a operação (para o log)
-     * @param string|null $reason  Motivo da operação (para o log)
+     * @param int|null $adminId  (ignorado — adjust_credits usa o admin autenticado)
+     * @param string|null $reason  Motivo da operação
      */
     public function subtractCredits(int $userId, float $amount, ?int $adminId = null, ?string $reason = null): array
     {
@@ -263,13 +259,8 @@ class XuiApiService
         }
 
         $creditsBefore = (float) ($current['data']['credits'] ?? 0);
+        $result = $this->adjustCredits($userId, -$amount, $reason);
         $creditsAfter  = $creditsBefore - $amount;
-
-        $result = $this->editUser($userId, ['credits' => $creditsAfter]);
-
-        if ($this->isSuccess($result)) {
-            $this->writeCreditLog($userId, -$amount, $adminId, $reason);
-        }
 
         return array_merge($result, [
             'credits_before' => $creditsBefore,
@@ -278,47 +269,25 @@ class XuiApiService
     }
 
     /**
-     * Enriquece o registro mais recente de credit_log do XUI com reason e admin_id.
-     * Busca via API credit_logs, encontra o mais recente sem reason, e atualiza via edit_user
-     * (a API não tem endpoint de escrita para credit_logs, então logamos apenas).
-     * O XUI grava automaticamente o log quando edit_user é chamado.
+     * Ajustar créditos via API adjust_credits.
+     * Este é o ÚNICO endpoint do XUI que grava corretamente em users_credits_logs
+     * com amount = movimentação real e reason preenchido.
+     *
+     * @param int    $userId   ID do usuário (reseller)
+     * @param float  $credits  Valor a adicionar (positivo) ou subtrair (negativo)
+     * @param string|null $reason  Motivo do ajuste
      */
-    private function writeCreditLog(int $targetId, float $amount, ?int $adminId, ?string $reason): void
+    public function adjustCredits(int $userId, float $credits, ?string $reason = null): array
     {
-        if ($reason === null && $adminId === null) {
-            return;
+        $params = [
+            'id'      => $userId,
+            'credits' => $credits,
+        ];
+        if ($reason !== null) {
+            $params['reason'] = $reason;
         }
 
-        try {
-            // Buscar logs recentes via API para confirmar que o XUI gravou
-            $logsResp = $this->getCreditLogs($targetId);
-            $logs     = $logsResp['data'] ?? [];
-
-            $recent = collect($logs)
-                ->filter(fn($l) => empty($l['reason']) || $l['reason'] === null)
-                ->sortByDesc('id')
-                ->first();
-
-            if (!$recent) {
-                Log::warning('XuiApiService: nenhum CreditLog recente encontrado via API', [
-                    'target_id' => $targetId,
-                    'amount'    => $amount,
-                    'reason'    => $reason,
-                ]);
-            } else {
-                Log::info('XuiApiService: CreditLog confirmado via API', [
-                    'log_id'    => $recent['id'] ?? null,
-                    'target_id' => $targetId,
-                    'amount'    => $amount,
-                    'reason'    => $reason,
-                ]);
-            }
-        } catch (\Exception $e) {
-            Log::error('XuiApiService: falha ao verificar CreditLog via API', [
-                'target_id' => $targetId,
-                'error'     => $e->getMessage(),
-            ]);
-        }
+        return $this->post('adjust_credits', $params);
     }
 
     /**

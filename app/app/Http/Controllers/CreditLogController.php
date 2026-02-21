@@ -84,20 +84,18 @@ class CreditLogController extends Controller
      * Busca logs via API credit_logs (tabela users_credits_logs) — fonte principal.
      *
      * Campos retornados pela API credit_logs:
-     *   id, target_id, admin_id, amount (movimentação real: negativo=saída, positivo=entrada),
-     *   date (FROM_UNIXTIME string ex: '2026-02-09 19:13:38'), reason (texto rico).
+     *   id, target_id, admin_id, amount (SALDO FINAL — bug do XUI),
+     *   date (FROM_UNIXTIME string), reason (texto rico quando adjust_credits é usado).
      *
-     * Padrões de reason encontrados:
-     *   "Criação de linha: username (Pacote: nome)" → Cliente
-     *   "Renovação de Linha: username (+duração)" → Cliente
-     *   "Criação de revenda: username" → Revenda
+     * Bug XUI: o campo `amount` armazena o saldo APÓS a operação, não a movimentação.
+     * Movimentação real = amount[n] - amount[n-1] (diferença entre registros consecutivos).
+     *
+     * Padrões de reason (quando preenchido via adjust_credits):
+     *   "Criação de linha: username (pacote: nome)" → Cliente
+     *   "Renovação de linha: username (pacote: nome)" → Cliente
      *   "Transferência para revenda: username" → Revenda
      *   "Recarga de créditos" → Revenda
-     *   "Crédito inicial da revenda: username" → Revenda
      *   "Estorno: falha ao criar linha username" → Cliente
-     *
-     * Saldo anterior/posterior: calculado acumulando amounts retroativamente
-     * a partir do saldo atual do usuário (obtido via get_user).
      */
     private function fetchLogs(Request $request, ?int $resellerId = null, bool $allResellers = false): LengthAwarePaginator
     {
@@ -106,11 +104,8 @@ class CreditLogController extends Controller
             : $this->api->getCreditLogs($resellerId);
         $items = $logsResp['data'] ?? [];
 
-        // Mapa de saldos atuais para calcular retroativamente
-        $creditsMap = $this->buildCreditsMap($resellerId, $allResellers, $items);
-
-        // Calcular saldo anterior/posterior para cada registro
-        $items = $this->calculateBalances($items, $creditsMap);
+        // Calcular saldos e movimentação real (compensa bug XUI: amount = saldo final)
+        $items = $this->calculateBalances($items);
 
         // Filtros do request
         $dateStart   = $request->filled('date_start') ? strtotime($request->date_start . ' 00:00:00') : null;
@@ -127,9 +122,9 @@ class CreditLogController extends Controller
             if ($dateStart && $logDate && $logDate < $dateStart) return false;
             if ($dateEnd   && $logDate && $logDate > $dateEnd)   return false;
 
-            $amount = (float)($log['amount'] ?? 0);
-            if ($nature === 'out' && $amount >= 0) return false;
-            if ($nature === 'in'  && $amount <= 0) return false;
+            $movement = $log['_movement'];
+            if ($nature === 'out' && ($movement === null || $movement >= 0)) return false;
+            if ($nature === 'in'  && ($movement === null || $movement <= 0)) return false;
 
             $isClient = $this->isClientOperation($log);
             if ($type === 'client'   && !$isClient) return false;
@@ -170,34 +165,16 @@ class CreditLogController extends Controller
     }
 
     /**
-     * Constrói mapa target_id => saldo atual.
-     * Para reseller específico: busca via get_user.
-     * Para allResellers: busca via get_users e mapeia todos.
+     * Compensa o bug do XUI: o campo `amount` em users_credits_logs
+     * armazena o SALDO FINAL após a operação, não a movimentação real.
+     *
+     * Estratégia: ordenar por id ASC, calcular movimentação como
+     * diferença entre amount atual e amount anterior.
+     *   saldo_depois  = amount do registro
+     *   saldo_antes   = amount do registro anterior
+     *   movimentação  = saldo_depois - saldo_antes
      */
-    private function buildCreditsMap(?int $resellerId, bool $allResellers, array $items): array
-    {
-        $map = [];
-
-        if ($allResellers) {
-            $usersResp = $this->api->getUsers();
-            foreach (($usersResp['data'] ?? []) as $u) {
-                $map[(int)$u['id']] = (float)($u['credits'] ?? 0);
-            }
-        } elseif ($resellerId !== null) {
-            $resp = $this->api->getUser($resellerId);
-            if (($resp['status'] ?? '') === 'STATUS_SUCCESS') {
-                $map[$resellerId] = (float)($resp['data']['credits'] ?? 0);
-            }
-        }
-
-        return $map;
-    }
-
-    /**
-     * Calcula saldo anterior e posterior para cada registro.
-     * Agrupa por target_id, ordena por id DESC e acumula retroativamente.
-     */
-    private function calculateBalances(array $items, array $creditsMap): array
+    private function calculateBalances(array $items): array
     {
         if (empty($items)) return [];
 
@@ -209,25 +186,26 @@ class CreditLogController extends Controller
 
         $result = [];
         foreach ($byTarget as $tid => $logs) {
-            usort($logs, fn($a, $b) => (int)$b['id'] - (int)$a['id']);
+            // Ordenar por id ASC (mais antigo primeiro)
+            usort($logs, fn($a, $b) => (int)$a['id'] - (int)$b['id']);
 
-            $balance = $creditsMap[$tid] ?? null;
+            $prevAmount = null;
+            foreach ($logs as &$log) {
+                $currentAmount = (float)($log['amount'] ?? 0);
+                $log['_credits_after'] = $currentAmount;
 
-            if ($balance === null) {
-                foreach ($logs as &$log) {
-                    $log['_credits_after']  = null;
+                if ($prevAmount !== null) {
+                    $log['_movement']       = $currentAmount - $prevAmount;
+                    $log['_credits_before'] = $prevAmount;
+                } else {
+                    // Primeiro registro: não temos o anterior
+                    $log['_movement']       = null;
                     $log['_credits_before'] = null;
                 }
-                unset($log);
-            } else {
-                foreach ($logs as &$log) {
-                    $amount = (float)($log['amount'] ?? 0);
-                    $log['_credits_after']  = $balance;
-                    $log['_credits_before'] = $balance - $amount;
-                    $balance = $log['_credits_before'];
-                }
-                unset($log);
+
+                $prevAmount = $currentAmount;
             }
+            unset($log);
 
             $result = array_merge($result, $logs);
         }
@@ -237,7 +215,7 @@ class CreditLogController extends Controller
 
     private function transformLog(array $log): array
     {
-        $amount   = (float)($log['amount'] ?? 0);
+        $movement = $log['_movement'];
         $dateTs   = strtotime($log['date'] ?? '');
         $isClient = $this->isClientOperation($log);
 
@@ -245,17 +223,17 @@ class CreditLogController extends Controller
         $log['credits_before'] = $log['_credits_before'];
         $log['credits_after']  = $log['_credits_after'];
 
-        // Natureza: amount < 0 = saída, amount > 0 = entrada
-        if ($amount < 0) {
+        // Natureza baseada na movimentação calculada
+        if ($movement !== null && $movement < 0) {
             $log['nature']       = 'out';
             $log['nature_label'] = 'Saída';
             $log['nature_class'] = 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400';
-            $log['amount_formatted'] = number_format(abs($amount), 2);
-        } elseif ($amount > 0) {
+            $log['amount_formatted'] = number_format(abs($movement), 2);
+        } elseif ($movement !== null && $movement > 0) {
             $log['nature']       = 'in';
             $log['nature_label'] = 'Entrada';
             $log['nature_class'] = 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400';
-            $log['amount_formatted'] = number_format($amount, 2);
+            $log['amount_formatted'] = number_format($movement, 2);
         } else {
             $log['nature']       = 'neutral';
             $log['nature_label'] = '-';
