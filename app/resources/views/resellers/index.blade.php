@@ -23,6 +23,7 @@
                     <th class="px-4 md:px-6 py-3 md:py-4 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider whitespace-nowrap">Usu&aacute;rio</th>
                     <th class="px-4 md:px-6 py-3 md:py-4 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider whitespace-nowrap hidden sm:table-cell">E-mail</th>
                     <th class="px-4 md:px-6 py-3 md:py-4 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider whitespace-nowrap">Cr&eacute;ditos</th>
+                    <th class="px-4 md:px-6 py-3 md:py-4 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider whitespace-nowrap">Clientes</th>
                     <th class="px-4 md:px-6 py-3 md:py-4 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider whitespace-nowrap">Status</th>
                     <th class="px-4 md:px-6 py-3 md:py-4 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider whitespace-nowrap">A&ccedil;&otilde;es</th>
                 </tr>
@@ -38,6 +39,12 @@
                     </td>
                     <td class="px-4 md:px-6 py-4 whitespace-nowrap">
                         <span class="text-lg font-bold text-orange-600 dark:text-orange-500">{{ number_format((float)($reseller['credits'] ?? 0), 2, ',', '.') }}</span>
+                    </td>
+                    <td class="px-4 md:px-6 py-4 whitespace-nowrap">
+                        <span class="inline-flex items-center gap-1.5 text-sm font-semibold text-gray-700 dark:text-gray-300">
+                            <i class="bi bi-people-fill text-blue-500"></i>
+                            {{ $clientCounts[(int)$reseller['id']] ?? 0 }}
+                        </span>
                     </td>
                     <td class="px-4 md:px-6 py-4 whitespace-nowrap">
                         @if(($reseller['status'] ?? 0) == 1)

@@ -46,7 +46,7 @@
                 if ($index % 5 == 0) $rotation = '-rotate-2';
             @endphp
 
-            <div class="relative group {{ $rotation }} hover:rotate-0 transition-transform duration-300 ease-in-out h-full">
+            <div class="relative group {{ $rotation }} hover:rotate-0 transition-transform duration-300 ease-in-out h-full cursor-pointer" onclick="openNoticeModal({{ $notice->id }})">
                 <!-- Sombra suave para dar profundidade -->
                 <div class="absolute inset-0 bg-black/5 dark:bg-black/50 rounded-lg transform translate-y-2 translate-x-2 blur-sm -z-10"></div>
                 
@@ -70,9 +70,35 @@
                         </span>
                     </div>
                     
-                    <!-- Conteúdo -->
-                    <div class="prose prose-sm dark:prose-invert max-w-none flex-grow font-medium opacity-90 whitespace-pre-wrap leading-relaxed">
+                    <!-- Conteúdo (limitado a 4 linhas) -->
+                    <div class="prose prose-sm dark:prose-invert max-w-none flex-grow font-medium opacity-90 whitespace-pre-wrap leading-relaxed line-clamp-4">
                         {{ $notice->message }}
+                    </div>
+
+                    @if(strlen($notice->message) > 150)
+                    <div class="mt-2 text-xs font-semibold opacity-60 flex items-center gap-1">
+                        <i class="bi bi-eye"></i> Clique para ler mais
+                    </div>
+                    @endif
+                </div>
+            </div>
+
+            <!-- Modal do Aviso -->
+            <div id="notice-modal-{{ $notice->id }}" class="hidden fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 backdrop-blur-sm" onclick="if(event.target===this) closeNoticeModal({{ $notice->id }})">
+                <div class="{{ $baseClasses }} rounded-xl border shadow-xl max-w-lg w-full max-h-[80vh] flex flex-col relative overflow-hidden" style="{{ $customStyle }}">
+                    <div class="p-6 border-b border-black/10 dark:border-white/10 flex justify-between items-start shrink-0">
+                        <div>
+                            <h2 class="font-bold text-xl leading-tight">{{ $notice->title }}</h2>
+                            <span class="text-xs opacity-70 mt-1 block font-mono">{{ $notice->created_at->format('d/m/Y H:i') }}</span>
+                        </div>
+                        <button onclick="closeNoticeModal({{ $notice->id }})" class="opacity-60 hover:opacity-100 transition-opacity p-1">
+                            <i class="bi bi-x-lg text-lg"></i>
+                        </button>
+                    </div>
+                    <div class="p-6 overflow-y-auto custom-scrollbar">
+                        <div class="prose prose-sm dark:prose-invert max-w-none font-medium opacity-90 whitespace-pre-wrap leading-relaxed">
+                            {{ $notice->message }}
+                        </div>
                     </div>
                 </div>
             </div>
@@ -91,4 +117,27 @@
         </p>
     </div>
 @endif
+
+@push('scripts')
+<script>
+function openNoticeModal(id) {
+    document.getElementById('notice-modal-' + id).classList.remove('hidden');
+    document.body.style.overflow = 'hidden';
+}
+function closeNoticeModal(id) {
+    document.getElementById('notice-modal-' + id).classList.add('hidden');
+    document.body.style.overflow = '';
+}
+document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape') {
+        document.querySelectorAll('[id^="notice-modal-"]').forEach(function(modal) {
+            if (!modal.classList.contains('hidden')) {
+                modal.classList.add('hidden');
+                document.body.style.overflow = '';
+            }
+        });
+    }
+});
+</script>
+@endpush
 @endsection

@@ -26,7 +26,19 @@ class ResellerController extends Controller
             return (int)($u['owner_id'] ?? 0) === (int)$user->xui_id;
         });
 
-        return view('resellers.index', ['resellers' => array_values($resellers)]);
+        // Contar clientes (linhas oficiais) por revendedor
+        $clientCounts = [];
+        foreach ($all as $u) {
+            $ownerId = (int)($u['owner_id'] ?? 0);
+            if ($ownerId > 0 && (int)($u['member_group_id'] ?? 0) !== 2) {
+                $clientCounts[$ownerId] = ($clientCounts[$ownerId] ?? 0) + 1;
+            }
+        }
+
+        return view('resellers.index', [
+            'resellers'    => array_values($resellers),
+            'clientCounts' => $clientCounts,
+        ]);
     }
 
     public function create()
