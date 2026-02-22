@@ -87,13 +87,15 @@ class VodRequestController extends Controller
         $request->validate([
             'tmdb_id' => 'required|integer',
             'type' => 'required|in:movie,series',
+            'title' => 'nullable|string|max:255',
         ]);
 
         $tmdbId = (int) $request->input('tmdb_id');
         $type = $request->input('type');
+        $title = $request->input('title', '');
 
         try {
-            $existing = $this->tmdb->checkExistsInXui($tmdbId, $type);
+            $existing = $this->tmdb->checkExistsInXui($tmdbId, $type, $title);
         } catch (\Exception $e) {
             \Log::error('VodRequest: checkExistsInXui failed', ['tmdb_id' => $tmdbId, 'type' => $type, 'error' => $e->getMessage()]);
             $existing = null;

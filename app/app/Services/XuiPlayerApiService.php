@@ -93,33 +93,86 @@ class XuiPlayerApiService
     // -------------------------------------------------------------------------
 
     /**
-     * Verifica se um filme (VOD) com determinado tmdb_id existe no XUI.
-     * Retorna array com dados do stream ou null.
+     * Verifica se um filme (VOD) existe no XUI.
+     * Busca por tmdb_id primeiro; se não encontrar, busca por nome (similaridade).
      */
-    public function findMovieByTmdbId(int $tmdbId): ?array
+    public function findMovie(int $tmdbId, string $title = ''): ?array
     {
         $streams = $this->getVodStreams();
+
+        // 1. Busca exata por tmdb_id
         foreach ($streams as $s) {
-            if ((int)($s['tmdb_id'] ?? 0) === $tmdbId) {
+            if (!empty($s['tmdb_id']) && (int)$s['tmdb_id'] === $tmdbId) {
                 return $s;
             }
         }
+
+        // 2. Fallback: busca por nome (normalizado)
+        if (!empty($title)) {
+            $normalizedTitle = $this->normalizeTitle($title);
+            foreach ($streams as $s) {
+                $streamName = $s['name'] ?? $s['stream_display_name'] ?? '';
+                if (!empty($streamName) && $this->normalizeTitle($streamName) === $normalizedTitle) {
+                    return $s;
+                }
+            }
+        }
+
         return null;
     }
 
     /**
-     * Verifica se uma série com determinado tmdb_id existe no XUI.
-     * Retorna array com dados da série ou null.
+     * Verifica se uma série existe no XUI.
+     * Busca por tmdb_id primeiro; se não encontrar, busca por nome (similaridade).
      */
-    public function findSeriesByTmdbId(int $tmdbId): ?array
+    public function findSeries(int $tmdbId, string $title = ''): ?array
     {
         $series = $this->getSeries();
+
+        // 1. Busca exata por tmdb_id
         foreach ($series as $s) {
-            if ((int)($s['tmdb_id'] ?? 0) === $tmdbId) {
+            if (!empty($s['tmdb_id']) && (int)$s['tmdb_id'] === $tmdbId) {
                 return $s;
             }
         }
+
+        // 2. Fallback: busca por nome (normalizado)
+        if (!empty($title)) {
+            $normalizedTitle = $this->normalizeTitle($title);
+            foreach ($series as $s) {
+                $serieName = $s['name'] ?? $s['title'] ?? '';
+                if (!empty($serieName) && $this->normalizeTitle($serieName) === $normalizedTitle) {
+                    return $s;
+                }
+            }
+        }
+
         return null;
+    }
+
+    /**
+     * Mantém compatibilidade com chamadas antigas.
+     */
+    public function findMovieByTmdbId(int $tmdbId): ?array
+    {
+        return $this->findMovie($tmdbId);
+    }
+
+    public function findSeriesByTmdbId(int $tmdbId): ?array
+    {
+        return $this->findSeries($tmdbId);
+    }
+
+    /**
+     * Normaliza título para comparação: lowercase, sem acentos, sem caracteres especiais.
+     */
+    protected function normalizeTitle(string $title): string
+    {
+        $title = mb_strtolower(trim($title));
+        $title = iconv('UTF-8', 'ASCII//TRANSLIT//IGNORE', $title);
+        $title = preg_replace('/[^a-z0-9\s]/', '', $title);
+        $title = preg_replace('/\s+/', ' ', $title);
+        return trim($title);
     }
 
     /**

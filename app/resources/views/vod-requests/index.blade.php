@@ -419,7 +419,7 @@ function vodSearch() {
                 if (this.type === 'series') {
                     // Busca profunda: verificar existência + temporadas
                     const [checkResp, seasonsResp] = await Promise.all([
-                        fetch(`{{ route('vod-requests.check') }}?tmdb_id=${item.tmdb_id}&type=${this.type}`),
+                        fetch(`{{ route('vod-requests.check') }}?tmdb_id=${item.tmdb_id}&type=${this.type}&title=${encodeURIComponent(item.title)}`),
                         fetch(`{{ route('vod-requests.check-seasons') }}?tmdb_id=${item.tmdb_id}`)
                     ]);
 
@@ -433,7 +433,7 @@ function vodSearch() {
                         this.seasonsData = await seasonsResp.json();
                     }
                 } else {
-                    const resp = await fetch(`{{ route('vod-requests.check') }}?tmdb_id=${item.tmdb_id}&type=${this.type}`);
+                    const resp = await fetch(`{{ route('vod-requests.check') }}?tmdb_id=${item.tmdb_id}&type=${this.type}&title=${encodeURIComponent(item.title)}`);
                     if (!resp.ok) {
                         this.checkError = 'Erro ao verificar no servidor (HTTP ' + resp.status + ')';
                         return;

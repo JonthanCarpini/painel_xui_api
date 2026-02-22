@@ -92,13 +92,13 @@ class TmdbService
         }
     }
 
-    public function checkExistsInXui(int $tmdbId, string $type): ?array
+    public function checkExistsInXui(int $tmdbId, string $type, string $title = ''): ?array
     {
         if ($type === 'movie') {
-            return $this->playerApi->findMovieByTmdbId($tmdbId);
+            return $this->playerApi->findMovie($tmdbId, $title);
         }
 
-        return $this->playerApi->findSeriesByTmdbId($tmdbId);
+        return $this->playerApi->findSeries($tmdbId, $title);
     }
 
     public function getSeriesSeasons(int $tmdbId): ?array
