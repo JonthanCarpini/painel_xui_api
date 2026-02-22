@@ -192,7 +192,7 @@ class TmdbService
 
         $idList = implode(',', $ids);
         $resp = $this->xuiApi->runQuery(
-            "SELECT id, category_name FROM stream_categories WHERE id IN ({$idList})"
+            "SELECT id, category_name FROM streams_categories WHERE id IN ({$idList})"
         );
 
         $names = array_map(fn($r) => $r['category_name'] ?? '', $resp['data'] ?? []);

@@ -41,6 +41,13 @@
             </div>
 
             <!-- Alerts -->
+            @if(session('error'))
+            <div class="mb-6 bg-yellow-500/10 border border-yellow-500/50 rounded-lg p-4 flex items-start gap-3">
+                <i class="bi bi-exclamation-triangle-fill text-yellow-500 text-xl"></i>
+                <p class="text-yellow-400 text-sm">{{ session('error') }}</p>
+            </div>
+            @endif
+
             @if($errors->any())
             <div class="mb-6 bg-red-500/10 border border-red-500/50 rounded-lg p-4 flex items-start gap-3">
                 <i class="bi bi-exclamation-triangle-fill text-red-500 text-xl"></i>
