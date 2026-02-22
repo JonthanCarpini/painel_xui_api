@@ -107,13 +107,16 @@ class XuiPlayerApiService
             }
         }
 
-        // 2. Fallback: busca por nome (normalizado)
+        // 2. Fallback: busca por nome (normalizado, contém)
         if (!empty($title)) {
             $normalizedTitle = $this->normalizeTitle($title);
-            foreach ($streams as $s) {
-                $streamName = $s['name'] ?? $s['stream_display_name'] ?? '';
-                if (!empty($streamName) && $this->normalizeTitle($streamName) === $normalizedTitle) {
-                    return $s;
+            if (!empty($normalizedTitle)) {
+                foreach ($streams as $s) {
+                    $streamName = $s['name'] ?? $s['stream_display_name'] ?? '';
+                    $normalizedStream = $this->normalizeTitle($streamName);
+                    if (!empty($normalizedStream) && (str_contains($normalizedStream, $normalizedTitle) || str_contains($normalizedTitle, $normalizedStream))) {
+                        return $s;
+                    }
                 }
             }
         }
@@ -136,13 +139,16 @@ class XuiPlayerApiService
             }
         }
 
-        // 2. Fallback: busca por nome (normalizado)
+        // 2. Fallback: busca por nome (normalizado, contém)
         if (!empty($title)) {
             $normalizedTitle = $this->normalizeTitle($title);
-            foreach ($series as $s) {
-                $serieName = $s['name'] ?? $s['title'] ?? '';
-                if (!empty($serieName) && $this->normalizeTitle($serieName) === $normalizedTitle) {
-                    return $s;
+            if (!empty($normalizedTitle)) {
+                foreach ($series as $s) {
+                    $serieName = $s['name'] ?? $s['title'] ?? '';
+                    $normalizedSerie = $this->normalizeTitle($serieName);
+                    if (!empty($normalizedSerie) && (str_contains($normalizedSerie, $normalizedTitle) || str_contains($normalizedTitle, $normalizedSerie))) {
+                        return $s;
+                    }
                 }
             }
         }

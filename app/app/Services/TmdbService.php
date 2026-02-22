@@ -12,8 +12,10 @@ class TmdbService
     protected string $baseUrl = 'https://api.themoviedb.org/3';
     protected string $language = 'pt-BR';
 
-    public function __construct(protected XuiPlayerApiService $playerApi)
-    {
+    public function __construct(
+        protected XuiPlayerApiService $playerApi,
+        protected XuiApiService $xuiApi
+    ) {
         $this->apiKey = AppSetting::get('tmdb_api_key');
     }
 
@@ -95,10 +97,19 @@ class TmdbService
     public function checkExistsInXui(int $tmdbId, string $type, string $title = ''): ?array
     {
         if ($type === 'movie') {
-            return $this->playerApi->findMovie($tmdbId, $title);
+            $resp = $this->xuiApi->runQuery(
+                "SELECT id, stream_display_name AS name, tmdb_id, category_id, stream_icon, added, year, rating "
+                . "FROM streams WHERE tmdb_id = '{$tmdbId}' AND type = 2 LIMIT 1"
+            );
+            return $resp['data'][0] ?? null;
         }
 
-        return $this->playerApi->findSeries($tmdbId, $title);
+        // Séries
+        $resp = $this->xuiApi->runQuery(
+            "SELECT id, title AS name, tmdb_id, category_id, cover, last_modified, year, rating "
+            . "FROM series WHERE tmdb_id = '{$tmdbId}' LIMIT 1"
+        );
+        return $resp['data'][0] ?? null;
     }
 
     public function getSeriesSeasons(int $tmdbId): ?array
@@ -143,22 +154,50 @@ class TmdbService
 
     public function checkSeriesSeasonsInXui(int $tmdbId): array
     {
-        $series = $this->playerApi->findSeriesByTmdbId($tmdbId);
+        // Buscar série pelo tmdb_id via API Admin
+        $resp = $this->xuiApi->runQuery(
+            "SELECT id FROM series WHERE tmdb_id = '{$tmdbId}' LIMIT 1"
+        );
+        $series = $resp['data'][0] ?? null;
 
         if (!$series) {
             return [];
         }
 
-        $seriesId = (int)($series['series_id'] ?? $series['id'] ?? 0);
-        if (!$seriesId) {
-            return [];
-        }
+        $seriesId = (int)$series['id'];
 
-        return $this->playerApi->getAvailableSeasons($seriesId);
+        // Buscar temporadas disponíveis via episódios
+        $epResp = $this->xuiApi->runQuery(
+            "SELECT DISTINCT season_num FROM series_episodes WHERE series_id = {$seriesId} ORDER BY season_num ASC"
+        );
+
+        return array_map(fn($r) => (int)$r['season_num'], $epResp['data'] ?? []);
     }
 
     public function getCategoryName(?string $categoryIdJson): string
     {
-        return $this->playerApi->resolveCategoryName($categoryIdJson);
+        if (empty($categoryIdJson)) {
+            return 'Sem categoria';
+        }
+
+        $ids = json_decode($categoryIdJson, true);
+        if (!is_array($ids)) {
+            $ids = [(int)$categoryIdJson];
+        }
+        $ids = array_filter(array_map('intval', $ids));
+
+        if (empty($ids)) {
+            return 'Sem categoria';
+        }
+
+        $idList = implode(',', $ids);
+        $resp = $this->xuiApi->runQuery(
+            "SELECT id, category_name FROM stream_categories WHERE id IN ({$idList})"
+        );
+
+        $names = array_map(fn($r) => $r['category_name'] ?? '', $resp['data'] ?? []);
+        $names = array_filter($names);
+
+        return !empty($names) ? implode(', ', $names) : 'Sem categoria';
     }
 }
