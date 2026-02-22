@@ -139,36 +139,37 @@ class TicketController extends Controller
     public function show($id)
     {
         $user = Auth::user();
-        
-        // Buscar ticket via API (usando get_tickets com filtro ou buscando na lista)
-        // A API XUI padrão não tem get_ticket individual robusto, então buscamos na lista ou endpoint específico se existir
-        // O XuiApiService->getTicket tenta o endpoint get_ticket
+
         $response = $this->api->getTicket((int)$id);
-        
+
         if (($response['status'] ?? '') !== 'STATUS_SUCCESS' || !isset($response['data'])) {
             return redirect()->route('tickets.index')->with('error', 'Ticket não encontrado.');
         }
-        
+
         $ticketData = $response['data'];
-        
-        // Converter para objeto para compatibilidade com a view (opcional, ou ajustar a view)
-        // Vamos ajustar a view para aceitar array ou converter aqui
+
+        // Converter replies (arrays) para collection de objetos
+        $replies = collect($ticketData['replies'] ?? [])->map(fn($r) => (object)$r);
+        unset($ticketData['replies']);
+
         $ticket = (object)$ticketData;
-        
-        // Carregar replies (se não vierem no get_ticket, buscar via get_ticket_replies se existir ou filtrar)
-        // Normalmente get_ticket retorna replies. Se não, precisamos adaptar.
-        // O Ticket model tinha replies(). A API retorna 'replies' dentro do ticket?
-        // Assumindo que sim. Se não, a view vai quebrar.
-        
+        $ticket->replies = $replies;
+
+        // Buscar categoria do banco local via TicketExtra
+        $extra = TicketExtra::where('ticket_id', (int)$id)->first();
+        $ticket->category = $extra ? TicketCategory::find($extra->category_id) : null;
+
         // Validar permissão
         if (!$user->isAdmin() && (int)$ticket->member_id !== (int)$user->xui_id) {
             abort(403);
         }
 
-        // Marcar como lido
-        // A API não tem endpoint explicito para marcar como lido, isso geralmente é automático ou feito via update_ticket
-        // Se não houver endpoint, não podemos atualizar o status de leitura no banco XUI.
-        // Vamos ignorar a marcação de lido por enquanto ou tentar um workaround se necessário.
+        // Marcar como lido no XUI
+        if ($user->isAdmin()) {
+            $this->api->runQuery("UPDATE tickets SET admin_read = 1 WHERE id = {$id}");
+        } else {
+            $this->api->runQuery("UPDATE tickets SET user_read = 1 WHERE id = {$id}");
+        }
 
         return view('tickets.show', compact('ticket'));
     }

@@ -86,7 +86,7 @@
                         <!-- Nome (se não for eu e for admin vendo) -->
                         @if(!$isMe && Auth::user()->isAdmin() && !$isAdminMsg)
                         <div class="text-[10px] font-bold text-orange-600 dark:text-orange-500 mb-0.5 ml-2">
-                            {{ $ticket->user->username ?? 'Revendedor' }}
+                            {{ $ticket->member_username ?? 'Revendedor' }}
                         </div>
                         @endif
 

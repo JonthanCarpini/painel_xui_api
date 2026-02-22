@@ -106,7 +106,8 @@ class ChannelTestController extends Controller
             $onDemand = 0;
 
             $ssResp = $this->api->runQuery(
-                "SELECT monitor_pid, pid, stream_status, on_demand, UNIX_TIMESTAMP() - pid_start AS uptime_seconds "
+                "SELECT monitor_pid, pid, stream_status, on_demand, stream_started, "
+                . "UNIX_TIMESTAMP() - stream_started AS uptime_seconds "
                 . "FROM streams_servers WHERE stream_id = {$streamId} LIMIT 1"
             );
             $ssData = $ssResp['data'][0] ?? null;
