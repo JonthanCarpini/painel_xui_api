@@ -161,7 +161,7 @@
                 <div class="grid grid-cols-2 gap-3 text-sm">
                     <div>
                         <span class="text-gray-500 dark:text-gray-400">Nome:</span>
-                        <p class="text-gray-900 dark:text-white font-medium">{{ $vodRequest->type === 'movie' ? $existsInXui->stream_display_name : $existsInXui->title }}</p>
+                        <p class="text-gray-900 dark:text-white font-medium">{{ $vodRequest->type === 'movie' ? ($existsInXui['stream_display_name'] ?? $existsInXui['name'] ?? 'N/A') : ($existsInXui['title'] ?? $existsInXui['name'] ?? 'N/A') }}</p>
                     </div>
                     <div>
                         <span class="text-gray-500 dark:text-gray-400">Categoria:</span>
@@ -200,11 +200,6 @@
                         </div>
                         <div>
                             <span class="text-sm font-medium text-gray-900 dark:text-white">{{ $r->user->username ?? 'Usuário #' . $r->user_id }}</span>
-                            @if($r->user && $r->user->isAdmin())
-                            <span class="text-xs text-orange-500 ml-1">(Admin)</span>
-                            @elseif($r->user && $r->user->isReseller())
-                            <span class="text-xs text-blue-500 ml-1">(Revenda)</span>
-                            @endif
                         </div>
                     </div>
                     <div class="flex items-center gap-3">

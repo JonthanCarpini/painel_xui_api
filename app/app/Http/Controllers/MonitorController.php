@@ -34,10 +34,12 @@ class MonitorController extends Controller
             }));
         }
 
-        // Calcular duração em segundos para cada conexão
+        // Calcular duração e mapear campos da API para nomes esperados pela view
         $now = time();
         foreach ($connections as &$c) {
-            $c['duration'] = $now - (int)($c['date_start'] ?? $now);
+            $c['duration']    = $now - (int)($c['date_start'] ?? $now);
+            $c['ip']          = $c['user_ip'] ?? $c['ip'] ?? null;
+            $c['stream_name'] = $c['stream_display_name'] ?? $c['stream_name'] ?? null;
         }
         unset($c);
 

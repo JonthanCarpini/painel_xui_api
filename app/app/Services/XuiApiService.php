@@ -455,7 +455,7 @@ class XuiApiService
         return ['status' => ($resp['status'] ?? '') === 'STATUS_SUCCESS' ? 'STATUS_SUCCESS' : 'STATUS_FAILURE'];
     }
 
-    private function runQuery(string $query): array
+    public function runQuery(string $query): array
     {
         return $this->get('mysql_query', ['query' => $query]);
     }

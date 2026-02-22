@@ -98,15 +98,38 @@ class ChannelTestController extends Controller
                 return response()->json(['error' => 'Stream não encontrada via API XUI'], 404);
             }
 
-            // 2. Status via stream_errors — se não há erros recentes, está Online
-            $errorsResp  = $this->api->getStreamErrors($streamId);
-            $recentError = collect($errorsResp['data'] ?? [])->first();
-            $status      = 'Online';
-            $uptime      = 'Indisponível';
-            $serverId    = $streamData['server_id'] ?? null;
+            $serverId = $streamData['server_id'] ?? null;
 
-            if ($recentError) {
-                $status = 'Com Erros';
+            // 2. Status real via mysql_query na tabela streams_servers
+            $status = 'Offline';
+            $uptime = 'Indisponível';
+            $onDemand = 0;
+
+            $ssResp = $this->api->runQuery(
+                "SELECT monitor_pid, pid, stream_status, on_demand, UNIX_TIMESTAMP() - pid_start AS uptime_seconds "
+                . "FROM streams_servers WHERE stream_id = {$streamId} LIMIT 1"
+            );
+            $ssData = $ssResp['data'][0] ?? null;
+
+            if ($ssData) {
+                $monitorPid   = (int)($ssData['monitor_pid'] ?? 0);
+                $pid          = (int)($ssData['pid'] ?? 0);
+                $streamStatus = (int)($ssData['stream_status'] ?? -1);
+                $onDemand     = (int)($ssData['on_demand'] ?? 0);
+
+                if ($monitorPid > 0 && $pid > 0 && $streamStatus === 0) {
+                    $status = 'Online';
+                    $uptimeSec = (int)($ssData['uptime_seconds'] ?? 0);
+                    if ($uptimeSec > 0) {
+                        $h = floor($uptimeSec / 3600);
+                        $m = floor(($uptimeSec % 3600) / 60);
+                        $uptime = ($h > 0 ? "{$h}h " : '') . "{$m}m";
+                    }
+                } elseif ($monitorPid > 0 && $pid <= 0 && $streamStatus === 1) {
+                    $status = 'Com Erros';
+                } elseif ($onDemand) {
+                    $status = 'Sob Demanda';
+                }
             }
 
             // 3. Audiência via live_connections — contar conexões no stream_id
@@ -118,7 +141,7 @@ class ChannelTestController extends Controller
             return response()->json([
                 'status'      => $status,
                 'uptime'      => $uptime,
-                'on_demand'   => 0,
+                'on_demand'   => $onDemand,
                 'clients'     => $onlineClients,
                 'server_id'   => $serverId,
                 'stream_name' => $streamData['stream_display_name'] ?? $streamData['name'] ?? '',
@@ -249,7 +272,7 @@ class ChannelTestController extends Controller
                        "URL Reprodução: " . ($request->stream_url ?? 'Não informada');
 
             // Enviar para API
-            $this->api->createTicket($ticketTitle, $content, $user->id);
+            $this->api->createTicket($ticketTitle, $content, (int)$user->xui_id);
 
             return response()->json(['success' => true, 'message' => 'Problema reportado com sucesso! Um ticket foi aberto.']);
 

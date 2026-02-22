@@ -142,12 +142,12 @@ class DashboardController extends Controller
                 $trialsData[]    = $trials;
                 $rechargesData[] = $recharges;
 
-                // Novos revendedores por dia (date_registered em get_users)
+                // Novos revendedores por dia (date_registered é string datetime, não timestamp)
                 $resellers = 0;
                 foreach ($allUsers as $u) {
                     if ((int)($u['member_group_id'] ?? 0) !== 2) continue;
-                    $dr = (int)($u['date_registered'] ?? 0);
-                    if ($dr < $start || $dr > $end) continue;
+                    $dr = strtotime($u['date_registered'] ?? '');
+                    if (!$dr || $dr < $start || $dr > $end) continue;
                     if (!$isAdmin && (int)($u['owner_id'] ?? 0) !== $userId) continue;
                     $resellers++;
                 }
