@@ -60,7 +60,7 @@ class AppServiceProvider extends ServiceProvider
                                 }
                             } else {
                                 // Usuário vê SEUS tickets onde user_read = 0
-                                if ((int)($ticket['member_id'] ?? 0) === $xuiUser->id && (int)($ticket['user_read'] ?? 1) === 0) {
+                                if ((int)($ticket['member_id'] ?? 0) === (int)$xuiUser->xui_id && (int)($ticket['user_read'] ?? 1) === 0) {
                                     $isUnread = true;
                                 }
                             }

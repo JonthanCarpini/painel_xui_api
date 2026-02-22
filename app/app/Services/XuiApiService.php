@@ -425,14 +425,19 @@ class XuiApiService
         $safeTitle   = addslashes($subject);
         $safeContent = addslashes($content);
         $now = time();
-        $insertResp = $this->runQuery("INSERT INTO tickets (member_id, title, status, admin_read, user_read) VALUES ({$memberId}, '{$safeTitle}', 1, 0, 0)");
-        if (($insertResp['status'] ?? '') !== 'STATUS_SUCCESS') {
+
+        // mysql_query não retorna insert_id para INSERTs, então buscamos via MAX(id)
+        $this->runQuery("INSERT INTO tickets (member_id, title, status, admin_read, user_read) VALUES ({$memberId}, '{$safeTitle}', 1, 0, 0)");
+
+        $maxResp  = $this->runQuery("SELECT MAX(id) AS max_id FROM tickets WHERE member_id = {$memberId}");
+        $ticketId = (int)($maxResp['data'][0]['max_id'] ?? 0);
+
+        if (!$ticketId) {
             return ['status' => 'STATUS_FAILURE'];
         }
-        $ticketId = $insertResp['insert_id'] ?? 0;
-        if ($ticketId) {
-            $this->runQuery("INSERT INTO tickets_replies (ticket_id, admin_reply, message, date) VALUES ({$ticketId}, 0, '{$safeContent}', {$now})");
-        }
+
+        $this->runQuery("INSERT INTO tickets_replies (ticket_id, admin_reply, message, date) VALUES ({$ticketId}, 0, '{$safeContent}', {$now})");
+
         return ['status' => 'STATUS_SUCCESS', 'data' => ['id' => $ticketId]];
     }
 

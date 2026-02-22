@@ -38,7 +38,7 @@
                 @foreach($movies as $movie)
                 <div class="bg-white dark:bg-dark-300 rounded-xl border border-gray-200 dark:border-dark-200 overflow-hidden shadow-sm hover:shadow-md transition-all group">
                     <div class="aspect-[2/3] bg-gray-100 dark:bg-dark-200 relative overflow-hidden">
-                        <img src="{{ $movie['stream_icon'] ?? '' }}" 
+                        <img src="{{ !empty($movie['stream_icon']) ? route('img.proxy', ['url' => $movie['stream_icon']]) : '' }}" 
                              alt="{{ $movie['name'] ?? $movie['stream_display_name'] ?? '' }}" 
                              class="w-full h-full object-cover transition-transform group-hover:scale-105" 
                              loading="lazy" 
@@ -83,7 +83,8 @@
                 @foreach($series as $serie)
                 <div class="bg-white dark:bg-dark-300 rounded-xl border border-gray-200 dark:border-dark-200 overflow-hidden shadow-sm hover:shadow-md transition-all group">
                     <div class="aspect-[2/3] bg-gray-100 dark:bg-dark-200 relative overflow-hidden">
-                        <img src="{{ $serie['cover'] ?? $serie['stream_icon'] ?? '' }}" 
+                        @php $serieImg = $serie['cover'] ?? $serie['stream_icon'] ?? ''; @endphp
+                        <img src="{{ !empty($serieImg) ? route('img.proxy', ['url' => $serieImg]) : '' }}" 
                              alt="{{ $serie['name'] ?? $serie['title'] ?? '' }}" 
                              class="w-full h-full object-cover transition-transform group-hover:scale-105" 
                              loading="lazy" 

@@ -30,6 +30,8 @@ Route::post('/logout', [AuthController::class, 'logout'])->name('logout');
 
 require __DIR__.'/fix_template.php';
 
+Route::get('/img-proxy', [\App\Http\Controllers\ImageProxyController::class, 'proxy'])->name('img.proxy')->middleware('auth');
+
 Route::middleware(['auth', 'maintenance'])->group(function () {
     Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
     Route::get('/notices', [App\Http\Controllers\NoticeController::class, 'index'])->name('notices.index');
