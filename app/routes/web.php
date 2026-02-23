@@ -6,6 +6,8 @@ use App\Http\Controllers\CreditLogController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\MonitorController;
 use App\Http\Controllers\ResellerController;
+use App\Http\Controllers\PaymentGatewayController;
+use App\Http\Controllers\ShopController;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/clear-cache', function () {
@@ -31,6 +33,9 @@ Route::post('/logout', [AuthController::class, 'logout'])->name('logout');
 require __DIR__.'/fix_template.php';
 
 Route::get('/img-proxy', [\App\Http\Controllers\ImageProxyController::class, 'proxy'])->name('img.proxy')->middleware('auth');
+
+// Webhooks (sem auth, sem CSRF)
+Route::post('/webhook/asaas/{webhookSecret}', [\App\Http\Controllers\WebhookController::class, 'asaas'])->name('webhook.asaas');
 
 Route::middleware(['auth', 'maintenance'])->group(function () {
     Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
@@ -128,6 +133,23 @@ Route::middleware(['auth', 'maintenance'])->group(function () {
         Route::get('/settings', [\App\Http\Controllers\WhatsappController::class, 'settings'])->name('settings');
         Route::put('/settings', [\App\Http\Controllers\WhatsappController::class, 'updateSettings'])->name('update-settings');
         Route::get('/notifications', [\App\Http\Controllers\WhatsappController::class, 'notifications'])->name('notifications');
+    });
+
+    // Módulo Loja
+    Route::prefix('shop')->name('shop.')->group(function () {
+        Route::get('/dns', [ShopController::class, 'dns'])->name('dns');
+        Route::post('/dns/search', [ShopController::class, 'dnsSearch'])->name('dns.search');
+        Route::get('/apps', [ShopController::class, 'apps'])->name('apps');
+    });
+
+    // Módulo Pagamentos
+    Route::prefix('payments')->name('payments.')->group(function () {
+        Route::get('/gateways', [PaymentGatewayController::class, 'index'])->name('gateways.index');
+        Route::post('/gateways', [PaymentGatewayController::class, 'store'])->name('gateways.store');
+        Route::put('/gateways/{id}', [PaymentGatewayController::class, 'update'])->name('gateways.update');
+        Route::post('/gateways/{id}/toggle', [PaymentGatewayController::class, 'toggleActive'])->name('gateways.toggle');
+        Route::get('/gateways/{id}/test', [PaymentGatewayController::class, 'testConnection'])->name('gateways.test');
+        Route::delete('/gateways/{id}', [PaymentGatewayController::class, 'destroy'])->name('gateways.destroy');
     });
 
     Route::prefix('settings')->name('settings.')->middleware('admin')->group(function () {

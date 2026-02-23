@@ -100,6 +100,55 @@
                 </div>
             </div>
 
+            <!-- Módulos -->
+            <div class="bg-white dark:bg-dark-300 rounded-xl border border-gray-200 dark:border-dark-200 p-4 md:p-6 shadow-sm dark:shadow-none">
+                <h2 class="text-lg font-bold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
+                    <i class="bi bi-puzzle text-orange-500"></i>
+                    M&oacute;dulos
+                </h2>
+                <p class="text-sm text-gray-500 dark:text-gray-400 mb-4">Ative ou desative m&oacute;dulos globalmente para todos os revendedores.</p>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div class="p-4 bg-gray-50 dark:bg-dark-200 rounded-lg border border-gray-200 dark:border-dark-100">
+                        <label class="flex items-center justify-between cursor-pointer">
+                            <div class="flex items-center gap-3">
+                                <div class="w-10 h-10 rounded-lg bg-orange-100 dark:bg-orange-500/20 flex items-center justify-center">
+                                    <i class="bi bi-shop text-orange-600 dark:text-orange-400 text-xl"></i>
+                                </div>
+                                <div>
+                                    <p class="font-bold text-gray-900 dark:text-white">Loja</p>
+                                    <p class="text-xs text-gray-500 dark:text-gray-400">Comprar DNS e Ativar Apps</p>
+                                </div>
+                            </div>
+                            <div class="relative">
+                                <input type="hidden" name="module_shop_enabled" value="0">
+                                <input type="checkbox" name="module_shop_enabled" value="1" {{ ($moduleShopEnabled ?? false) ? 'checked' : '' }} class="sr-only peer">
+                                <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-orange-300 dark:peer-focus:ring-orange-800 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-orange-500"></div>
+                            </div>
+                        </label>
+                    </div>
+
+                    <div class="p-4 bg-gray-50 dark:bg-dark-200 rounded-lg border border-gray-200 dark:border-dark-100">
+                        <label class="flex items-center justify-between cursor-pointer">
+                            <div class="flex items-center gap-3">
+                                <div class="w-10 h-10 rounded-lg bg-green-100 dark:bg-green-500/20 flex items-center justify-center">
+                                    <i class="bi bi-credit-card text-green-600 dark:text-green-400 text-xl"></i>
+                                </div>
+                                <div>
+                                    <p class="font-bold text-gray-900 dark:text-white">Pagamentos</p>
+                                    <p class="text-xs text-gray-500 dark:text-gray-400">Gateway PIX e Auto-renova&ccedil;&atilde;o</p>
+                                </div>
+                            </div>
+                            <div class="relative">
+                                <input type="hidden" name="module_payments_enabled" value="0">
+                                <input type="checkbox" name="module_payments_enabled" value="1" {{ ($modulePaymentsEnabled ?? false) ? 'checked' : '' }} class="sr-only peer">
+                                <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-green-300 dark:peer-focus:ring-green-800 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-green-500"></div>
+                            </div>
+                        </label>
+                    </div>
+                </div>
+            </div>
+
             <!-- Integrações -->
             <div class="bg-white dark:bg-dark-300 rounded-xl border border-gray-200 dark:border-dark-200 p-4 md:p-6 shadow-sm dark:shadow-none">
                 <h2 class="text-lg font-bold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
@@ -114,6 +163,36 @@
                         <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
                             Necess&aacute;ria para busca de filmes e s&eacute;ries na p&aacute;gina de Pedidos VOD.
                             Obtenha sua chave em <a href="https://www.themoviedb.org/settings/api" target="_blank" class="text-orange-500 hover:underline">themoviedb.org</a>.
+                        </p>
+                    </div>
+
+                    <div class="border-t border-gray-200 dark:border-dark-200 pt-4 mt-4">
+                        <h3 class="text-sm font-bold text-gray-900 dark:text-white mb-3 flex items-center gap-2">
+                            <i class="bi bi-globe text-blue-500"></i>
+                            Namecheap (Registro de Dom&iacute;nios)
+                        </h3>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 dark:text-gray-400 mb-2">API User</label>
+                                <input type="text" name="namecheap_api_user" value="{{ $namecheapApiUser ?? '' }}" class="w-full px-4 py-2 bg-gray-50 dark:bg-dark-200 border border-gray-300 dark:border-dark-100 rounded-lg text-gray-900 dark:text-white focus:border-orange-500 focus:outline-none transition-colors font-mono text-sm" placeholder="Seu usu&aacute;rio Namecheap">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 dark:text-gray-400 mb-2">API Key</label>
+                                <input type="password" name="namecheap_api_key" value="{{ $namecheapApiKey ?? '' }}" class="w-full px-4 py-2 bg-gray-50 dark:bg-dark-200 border border-gray-300 dark:border-dark-100 rounded-lg text-gray-900 dark:text-white focus:border-orange-500 focus:outline-none transition-colors font-mono text-sm" placeholder="Sua API Key Namecheap">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 dark:text-gray-400 mb-2">IP do Servidor (Client IP)</label>
+                                <input type="text" name="namecheap_client_ip" value="{{ $namecheapClientIp ?? '' }}" class="w-full px-4 py-2 bg-gray-50 dark:bg-dark-200 border border-gray-300 dark:border-dark-100 rounded-lg text-gray-900 dark:text-white focus:border-orange-500 focus:outline-none transition-colors font-mono text-sm" placeholder="IP liberado na Namecheap">
+                            </div>
+                            <div class="flex items-end">
+                                <label class="flex items-center gap-2 cursor-pointer">
+                                    <input type="checkbox" name="namecheap_sandbox" value="1" {{ ($namecheapSandbox ?? false) ? 'checked' : '' }} class="w-4 h-4 text-orange-500 bg-gray-100 border-gray-300 rounded focus:ring-orange-500 dark:bg-dark-200 dark:border-dark-100">
+                                    <span class="text-sm text-gray-700 dark:text-gray-400">Modo Sandbox (testes)</span>
+                                </label>
+                            </div>
+                        </div>
+                        <p class="text-xs text-gray-500 dark:text-gray-400 mt-2">
+                            Obtenha suas credenciais em <a href="https://www.namecheap.com/support/api/intro/" target="_blank" class="text-orange-500 hover:underline">namecheap.com/api</a>. O IP deve estar liberado na whitelist da API.
                         </p>
                     </div>
                 </div>

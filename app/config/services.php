@@ -40,4 +40,8 @@ return [
         'api_key' => env('EVOLUTION_API_KEY', ''),
     ],
 
+    'asaas' => [
+        'base_url' => env('ASAAS_BASE_URL', 'https://api.asaas.com/v3'),
+    ],
+
 ];

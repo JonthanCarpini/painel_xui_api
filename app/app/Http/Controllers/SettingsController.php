@@ -75,6 +75,10 @@ class SettingsController extends Controller
             'ghostReseller'         => $ghostReseller,
             'packages'              => $packages,
             'trustPackageId'        => $trustPackageId,
+            'namecheapApiUser'      => AppSetting::get('namecheap_api_user', ''),
+            'namecheapApiKey'       => AppSetting::get('namecheap_api_key', ''),
+            'namecheapClientIp'     => AppSetting::get('namecheap_client_ip', ''),
+            'namecheapSandbox'      => AppSetting::get('namecheap_sandbox', '0') === '1',
         ]);
     }
 
@@ -105,6 +109,12 @@ class SettingsController extends Controller
             'ghost_reseller_password' => 'nullable|string|max:255',
             'ghost_rotation_time' => 'nullable|date_format:H:i',
             'trust_renew_package_id' => 'nullable|integer',
+            'module_shop_enabled' => 'nullable',
+            'module_payments_enabled' => 'nullable',
+            'namecheap_api_user' => 'nullable|string|max:255',
+            'namecheap_api_key' => 'nullable|string|max:500',
+            'namecheap_client_ip' => 'nullable|string|max:45',
+            'namecheap_sandbox' => 'nullable',
         ]);
 
         try {
@@ -146,9 +156,26 @@ class SettingsController extends Controller
                 AppSetting::set('tmdb_api_key', $request->input('tmdb_api_key') ?? '');
             }
 
+            // 2.1 Salvar configurações de módulos
+            AppSetting::set('module_shop_enabled', $request->input('module_shop_enabled', '0'));
+            AppSetting::set('module_payments_enabled', $request->input('module_payments_enabled', '0'));
+
+            // 2.2 Salvar configurações Namecheap
+            if ($request->has('namecheap_api_user')) {
+                AppSetting::set('namecheap_api_user', $request->input('namecheap_api_user') ?? '');
+                AppSetting::set('namecheap_api_key', $request->input('namecheap_api_key') ?? '');
+                AppSetting::set('namecheap_client_ip', $request->input('namecheap_client_ip') ?? '');
+                AppSetting::set('namecheap_sandbox', $request->input('namecheap_sandbox', '0'));
+            }
+
             // 3. Processar Configurações do XUI (exceto tmdb_api_key que agora é local)
             $xuiSettings = collect($validated)
-                ->except(['ghost_reseller_username', 'ghost_reseller_password', 'ghost_rotation_time', 'trust_renew_package_id', 'tmdb_api_key'])
+                ->except([
+                    'ghost_reseller_username', 'ghost_reseller_password', 'ghost_rotation_time',
+                    'trust_renew_package_id', 'tmdb_api_key',
+                    'module_shop_enabled', 'module_payments_enabled',
+                    'namecheap_api_user', 'namecheap_api_key', 'namecheap_client_ip', 'namecheap_sandbox',
+                ])
                 ->toArray();
 
             if (!empty($xuiSettings)) {

@@ -3,6 +3,7 @@
 namespace App\Providers;
 
 use App\Auth\XuiApiUserProvider;
+use App\Models\AppSetting;
 use App\Models\Notice;
 use App\Models\PanelUser;
 use App\Models\Ticket;
@@ -88,8 +89,13 @@ class AppServiceProvider extends ServiceProvider
                 }
             }
             
+            $moduleShopEnabled = AppSetting::get('module_shop_enabled', '0') === '1';
+            $modulePaymentsEnabled = AppSetting::get('module_payments_enabled', '0') === '1';
+
             $view->with('unreadNoticesCount', $unreadNoticesCount)
-                 ->with('unreadTicketsCount', $unreadTicketsCount);
+                 ->with('unreadTicketsCount', $unreadTicketsCount)
+                 ->with('moduleShopEnabled', $moduleShopEnabled)
+                 ->with('modulePaymentsEnabled', $modulePaymentsEnabled);
         });
     }
 }

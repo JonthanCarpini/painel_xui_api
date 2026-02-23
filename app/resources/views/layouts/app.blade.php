@@ -225,6 +225,32 @@
                     </a>
                 </div>
 
+                <!-- Módulo Loja -->
+                @if($moduleShopEnabled ?? false)
+                <div>
+                    <p class="text-gray-500 dark:text-gray-500 text-xs font-semibold uppercase tracking-wider mb-2 px-3">Loja</p>
+                    <a href="{{ route('shop.dns') }}" class="flex items-center gap-3 px-3 py-2 rounded-lg {{ request()->routeIs('shop.dns') ? 'bg-gradient-to-r from-orange-500 to-orange-600 text-white shadow-md shadow-orange-500/20' : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-dark-200 hover:text-gray-900 dark:hover:text-white' }} transition-all duration-200">
+                        <i class="bi bi-globe text-lg"></i>
+                        <span class="font-medium">Comprar DNS</span>
+                    </a>
+                    <a href="{{ route('shop.apps') }}" class="flex items-center gap-3 px-3 py-2 rounded-lg {{ request()->routeIs('shop.apps') ? 'bg-gradient-to-r from-orange-500 to-orange-600 text-white shadow-md shadow-orange-500/20' : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-dark-200 hover:text-gray-900 dark:hover:text-white' }} transition-all duration-200">
+                        <i class="bi bi-phone text-lg"></i>
+                        <span class="font-medium">Ativar Aplicativos</span>
+                    </a>
+                </div>
+                @endif
+
+                <!-- Módulo Pagamentos -->
+                @if($modulePaymentsEnabled ?? false)
+                <div>
+                    <p class="text-gray-500 dark:text-gray-500 text-xs font-semibold uppercase tracking-wider mb-2 px-3">Pagamentos</p>
+                    <a href="{{ route('payments.gateways.index') }}" class="flex items-center gap-3 px-3 py-2 rounded-lg {{ request()->routeIs('payments.*') ? 'bg-gradient-to-r from-orange-500 to-orange-600 text-white shadow-md shadow-orange-500/20' : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-dark-200 hover:text-gray-900 dark:hover:text-white' }} transition-all duration-200">
+                        <i class="bi bi-credit-card text-lg"></i>
+                        <span class="font-medium">Gateway de Pagamento</span>
+                    </a>
+                </div>
+                @endif
+
                 <!-- Financeiro & Logs -->
                 <div>
                     <p class="text-gray-500 dark:text-gray-500 text-xs font-semibold uppercase tracking-wider mb-2 px-3">Financeiro & Logs</p>
