@@ -49,11 +49,6 @@ class ShopPaymentGateway extends Model
             $decrypted = Crypt::decryptString($value);
             return json_decode($decrypted, true) ?: [];
         } catch (\Exception $e) {
-            \Illuminate\Support\Facades\Log::error('ShopPaymentGateway: falha ao descriptografar credenciais', [
-                'error' => $e->getMessage(),
-                'value_len' => strlen($value),
-                'app_key_set' => !empty(config('app.key')),
-            ]);
             return [];
         }
     }

@@ -55,6 +55,46 @@ class WebhookController extends Controller
         return response()->json(['status' => 'ok']);
     }
 
+    public function mercadopago(Request $request, string $webhookSecret)
+    {
+        $gateway = PaymentGateway::where('webhook_secret', $webhookSecret)
+            ->where('provider', 'mercadopago')
+            ->where('active', true)
+            ->first();
+
+        if (!$gateway) {
+            return response()->json(['error' => 'Gateway not found'], 404);
+        }
+
+        Log::info('Webhook Mercado Pago recebido', [
+            'reseller_id' => $gateway->reseller_id,
+            'payload' => $request->all(),
+        ]);
+
+        // TODO: implementar processamento de pagamento Mercado Pago
+        return response()->json(['status' => 'ok']);
+    }
+
+    public function fastdepix(Request $request, string $webhookSecret)
+    {
+        $gateway = PaymentGateway::where('webhook_secret', $webhookSecret)
+            ->where('provider', 'fastdepix')
+            ->where('active', true)
+            ->first();
+
+        if (!$gateway) {
+            return response()->json(['error' => 'Gateway not found'], 404);
+        }
+
+        Log::info('Webhook FastDePix recebido', [
+            'reseller_id' => $gateway->reseller_id,
+            'payload' => $request->all(),
+        ]);
+
+        // TODO: implementar processamento de pagamento FastDePix
+        return response()->json(['status' => 'ok']);
+    }
+
     public function shopWebhook(Request $request, string $webhookSecret)
     {
         $gateway = ShopPaymentGateway::where('webhook_secret', $webhookSecret)

@@ -243,8 +243,17 @@
                             <div class="space-y-2 text-xs text-gray-500 dark:text-gray-400">
                                 <p>Configurado <i class="bi bi-check-circle text-green-500"></i></p>
                                 @if($shopGw->webhook_secret)
-                                    <div class="flex items-center gap-1">
-                                        <span class="truncate">Webhook: ...{{ substr($shopGw->webhook_secret, -8) }}</span>
+                                    <div>
+                                        <label class="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">URL do Webhook</label>
+                                        <div class="flex items-center gap-1">
+                                            <input type="text" readonly value="{{ route('webhook.shop', $shopGw->webhook_secret) }}"
+                                                class="flex-1 px-2 py-1.5 bg-gray-100 dark:bg-dark-100 border border-gray-300 dark:border-dark-100 rounded text-gray-600 dark:text-gray-400 text-xs font-mono truncate"
+                                                id="shop-webhook-{{ $shopGw->id }}">
+                                            <button type="button" onclick="copyShopWebhook({{ $shopGw->id }})" class="px-2 py-1.5 bg-gray-200 dark:bg-dark-100 text-gray-500 rounded hover:bg-gray-300 dark:hover:bg-dark-200 transition-colors" title="Copiar">
+                                                <i class="bi bi-clipboard text-xs"></i>
+                                            </button>
+                                        </div>
+                                        <p class="text-xs text-gray-400 dark:text-gray-500 mt-1">Configure no painel do {{ $provLabel }}.</p>
                                     </div>
                                 @endif
                             </div>
@@ -902,6 +911,18 @@
         }).then(r => r.json()).then(data => {
             if (data.success) location.reload();
             else alert(data.error || 'Erro.');
+        });
+    }
+
+    function copyShopWebhook(id) {
+        const input = document.getElementById('shop-webhook-' + id);
+        if (!input) return;
+        input.select();
+        navigator.clipboard.writeText(input.value).then(() => {
+            const btn = input.nextElementSibling;
+            const orig = btn.innerHTML;
+            btn.innerHTML = '<i class="bi bi-check text-xs"></i>';
+            setTimeout(() => { btn.innerHTML = orig; }, 2000);
         });
     }
 

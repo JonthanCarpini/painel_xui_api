@@ -111,7 +111,7 @@
                     <div>
                         <label class="block text-sm font-medium text-gray-700 dark:text-gray-400 mb-1">URL do Webhook</label>
                         <div class="flex items-center gap-2">
-                            <input type="text" readonly value="{{ route('webhook.asaas', $gateway->webhook_secret) }}"
+                            <input type="text" readonly value="{{ url('/webhook/' . $providerKey . '/' . $gateway->webhook_secret) }}"
                                 class="flex-1 px-3 py-2 bg-gray-100 dark:bg-dark-100 border border-gray-300 dark:border-dark-100 rounded-lg text-gray-600 dark:text-gray-400 text-xs font-mono cursor-text"
                                 id="webhook-url-{{ $gateway->id }}">
                             <button type="button" onclick="copyWebhook('{{ $gateway->id }}')" class="px-3 py-2 bg-gray-200 dark:bg-dark-200 text-gray-600 dark:text-gray-400 rounded-lg hover:bg-gray-300 dark:hover:bg-dark-100 transition-colors text-sm">

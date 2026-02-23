@@ -36,6 +36,8 @@ Route::get('/img-proxy', [\App\Http\Controllers\ImageProxyController::class, 'pr
 
 // Webhooks (sem auth, sem CSRF)
 Route::post('/webhook/asaas/{webhookSecret}', [\App\Http\Controllers\WebhookController::class, 'asaas'])->name('webhook.asaas');
+Route::post('/webhook/mercadopago/{webhookSecret}', [\App\Http\Controllers\WebhookController::class, 'mercadopago'])->name('webhook.mercadopago');
+Route::post('/webhook/fastdepix/{webhookSecret}', [\App\Http\Controllers\WebhookController::class, 'fastdepix'])->name('webhook.fastdepix');
 Route::post('/webhook/shop/{webhookSecret}', [\App\Http\Controllers\WebhookController::class, 'shopWebhook'])->name('webhook.shop');
 
 Route::middleware(['auth', 'maintenance'])->group(function () {
