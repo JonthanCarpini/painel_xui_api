@@ -22,7 +22,7 @@
 
     <div class="flex flex-col sm:flex-row gap-3">
         <div class="flex-1">
-            <input type="text" id="domain-search" placeholder="Digite o dom&iacute;nio desejado (ex: meupainel)" 
+            <input type="text" id="domain-search" placeholder="Digite apenas o nome (ex: meupainel)" 
                 class="w-full px-4 py-3 bg-gray-50 dark:bg-dark-200 border border-gray-300 dark:border-dark-100 rounded-lg text-gray-900 dark:text-white focus:border-orange-500 focus:outline-none transition-colors text-lg"
                 onkeydown="if(event.key==='Enter') searchDomain()">
         </div>
@@ -32,7 +32,7 @@
         </button>
     </div>
     <p class="text-xs text-gray-500 dark:text-gray-400 mt-2">
-        Digite apenas o nome (sem extens&atilde;o) para verificar v&aacute;rias extens&otilde;es, ou o dom&iacute;nio completo (ex: meupainel.com).
+        Digite apenas o nome (sem extens&atilde;o) para verificar as extens&otilde;es: <strong>.{{ implode('</strong>, <strong>.', $extensions ?? ['online','site','website','xyz']) }}</strong>
     </p>
 </div>
 
@@ -53,8 +53,7 @@
                     Resultados da Pesquisa
                 </h3>
             </div>
-            <div id="results-list" class="divide-y divide-gray-200 dark:divide-dark-200">
-            </div>
+            <div id="results-list" class="divide-y divide-gray-200 dark:divide-dark-200"></div>
         </div>
     </div>
 
@@ -66,6 +65,9 @@
     </div>
 </div>
 
+<!-- Resultado do Registro -->
+<div id="register-result" class="hidden mt-6"></div>
+
 <!-- Info -->
 <div class="mt-6 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-900/30 rounded-xl p-5">
     <div class="flex items-start gap-3">
@@ -74,9 +76,59 @@
             <h4 class="font-bold text-blue-700 dark:text-blue-400 mb-1">Sobre o registro de dom&iacute;nios</h4>
             <ul class="text-sm text-blue-600 dark:text-blue-300 space-y-1">
                 <li>- Os dom&iacute;nios s&atilde;o registrados via <strong>Namecheap</strong>.</li>
-                <li>- Ap&oacute;s o registro, o DNS ser&aacute; configurado automaticamente.</li>
-                <li>- O pagamento ser&aacute; feito via seu gateway de pagamento configurado.</li>
+                <li>- Extens&otilde;es dispon&iacute;veis: <strong>.online</strong>, <strong>.site</strong>, <strong>.website</strong>, <strong>.xyz</strong></li>
+                <li>- Ap&oacute;s o registro, o dom&iacute;nio fica vinculado &agrave; sua conta Namecheap.</li>
+                <li>- O valor &eacute; cobrado diretamente do saldo da conta Namecheap do administrador.</li>
             </ul>
+        </div>
+    </div>
+</div>
+
+<!-- Modal de Confirmação de Registro -->
+<div id="register-modal" class="fixed inset-0 z-50 hidden items-center justify-center bg-black/50 backdrop-blur-sm">
+    <div class="bg-white dark:bg-dark-300 rounded-2xl border border-gray-200 dark:border-dark-200 shadow-2xl w-full max-w-md mx-4 overflow-hidden">
+        <div class="p-6 border-b border-gray-200 dark:border-dark-200">
+            <h3 class="text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2">
+                <i class="bi bi-cart-check text-green-500"></i>
+                Confirmar Registro
+            </h3>
+        </div>
+        <div class="p-6">
+            <div class="bg-gray-50 dark:bg-dark-200 rounded-lg p-4 mb-4">
+                <p class="text-sm text-gray-500 dark:text-gray-400 mb-1">Dom&iacute;nio</p>
+                <p class="text-xl font-bold text-gray-900 dark:text-white" id="modal-domain"></p>
+            </div>
+            <div class="grid grid-cols-2 gap-3 mb-4">
+                <div class="bg-gray-50 dark:bg-dark-200 rounded-lg p-3">
+                    <p class="text-xs text-gray-500 dark:text-gray-400 mb-1">Per&iacute;odo</p>
+                    <select id="modal-years" class="w-full bg-transparent text-gray-900 dark:text-white font-bold text-sm focus:outline-none">
+                        <option value="1">1 ano</option>
+                        <option value="2">2 anos</option>
+                        <option value="3">3 anos</option>
+                        <option value="5">5 anos</option>
+                    </select>
+                </div>
+                <div class="bg-gray-50 dark:bg-dark-200 rounded-lg p-3">
+                    <p class="text-xs text-gray-500 dark:text-gray-400 mb-1">Status</p>
+                    <p class="font-bold text-green-600 dark:text-green-400 text-sm flex items-center gap-1">
+                        <i class="bi bi-check-circle-fill"></i> Dispon&iacute;vel
+                    </p>
+                </div>
+            </div>
+            <div class="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-900/30 rounded-lg p-3 mb-4">
+                <p class="text-xs text-yellow-700 dark:text-yellow-400 flex items-start gap-2">
+                    <i class="bi bi-exclamation-triangle-fill mt-0.5"></i>
+                    <span>O valor ser&aacute; cobrado do saldo Namecheap do administrador. Ap&oacute;s confirmar, o registro &eacute; imediato e n&atilde;o pode ser desfeito.</span>
+                </p>
+            </div>
+        </div>
+        <div class="p-6 pt-0 flex gap-3">
+            <button onclick="closeRegisterModal()" class="flex-1 px-4 py-2.5 bg-gray-200 dark:bg-dark-200 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-300 dark:hover:bg-dark-100 transition-colors font-medium text-sm">
+                Cancelar
+            </button>
+            <button onclick="confirmRegister()" id="btn-confirm-register" class="flex-1 px-4 py-2.5 bg-gradient-to-r from-green-500 to-green-600 text-white rounded-lg hover:shadow-lg hover:shadow-green-500/20 transition-all font-medium text-sm flex items-center justify-center gap-2">
+                <i class="bi bi-check-circle"></i> Registrar Agora
+            </button>
         </div>
     </div>
 </div>
@@ -84,9 +136,11 @@
 
 @push('scripts')
 <script>
+    let selectedDomain = '';
+
     function searchDomain() {
         const input = document.getElementById('domain-search');
-        const domain = input.value.trim();
+        const domain = input.value.trim().replace(/[^a-zA-Z0-9\-\.]/g, '');
         if (!domain) return;
 
         const resultsDiv = document.getElementById('search-results');
@@ -99,6 +153,7 @@
         loadingDiv.classList.remove('hidden');
         contentDiv.classList.add('hidden');
         errorDiv.classList.add('hidden');
+        document.getElementById('register-result').classList.add('hidden');
         btn.disabled = true;
         btn.innerHTML = '<i class="bi bi-hourglass-split"></i> Pesquisando...';
 
@@ -155,11 +210,11 @@
                 row.appendChild(left);
 
                 if (item.available) {
-                    const btn = document.createElement('button');
-                    btn.className = 'px-4 py-2 bg-green-500 hover:bg-green-600 text-white rounded-lg transition-colors text-sm font-medium';
-                    btn.innerHTML = '<i class="bi bi-cart-plus"></i> Registrar';
-                    btn.onclick = () => alert('Funcionalidade de registro em desenvolvimento. Em breve!');
-                    row.appendChild(btn);
+                    const regBtn = document.createElement('button');
+                    regBtn.className = 'px-4 py-2 bg-gradient-to-r from-green-500 to-green-600 hover:shadow-lg hover:shadow-green-500/20 text-white rounded-lg transition-all text-sm font-medium flex items-center gap-2';
+                    regBtn.innerHTML = '<i class="bi bi-cart-plus"></i> Registrar';
+                    regBtn.onclick = () => openRegisterModal(item.domain);
+                    row.appendChild(regBtn);
                 }
 
                 list.appendChild(row);
@@ -173,5 +228,87 @@
             btn.innerHTML = '<i class="bi bi-search"></i> Pesquisar';
         });
     }
+
+    function openRegisterModal(domain) {
+        selectedDomain = domain;
+        document.getElementById('modal-domain').textContent = domain;
+        document.getElementById('modal-years').value = '1';
+        const modal = document.getElementById('register-modal');
+        modal.classList.remove('hidden');
+        modal.classList.add('flex');
+    }
+
+    function closeRegisterModal() {
+        const modal = document.getElementById('register-modal');
+        modal.classList.add('hidden');
+        modal.classList.remove('flex');
+        selectedDomain = '';
+    }
+
+    function confirmRegister() {
+        if (!selectedDomain) return;
+
+        const years = document.getElementById('modal-years').value;
+        const btn = document.getElementById('btn-confirm-register');
+        const resultDiv = document.getElementById('register-result');
+
+        btn.disabled = true;
+        btn.innerHTML = '<i class="bi bi-hourglass-split animate-spin"></i> Registrando...';
+
+        fetch('{{ route("shop.dns.register") }}', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content,
+            },
+            body: JSON.stringify({ domain: selectedDomain, years: parseInt(years) })
+        })
+        .then(r => r.json())
+        .then(data => {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="bi bi-check-circle"></i> Registrar Agora';
+            closeRegisterModal();
+
+            resultDiv.classList.remove('hidden');
+
+            if (data.success) {
+                resultDiv.innerHTML = `
+                    <div class="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-900/30 rounded-xl p-5">
+                        <div class="flex items-start gap-3">
+                            <i class="bi bi-check-circle-fill text-green-500 text-2xl mt-0.5"></i>
+                            <div>
+                                <h4 class="font-bold text-green-700 dark:text-green-400 mb-1">${data.message}</h4>
+                                <div class="text-sm text-green-600 dark:text-green-300 space-y-1">
+                                    ${data.data.order_id ? '<p><strong>Order ID:</strong> ' + data.data.order_id + '</p>' : ''}
+                                    ${data.data.charged_amount ? '<p><strong>Valor cobrado:</strong> $' + data.data.charged_amount + '</p>' : ''}
+                                </div>
+                            </div>
+                        </div>
+                    </div>`;
+            } else {
+                resultDiv.innerHTML = `
+                    <div class="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-900/30 rounded-xl p-5 flex items-center gap-3">
+                        <i class="bi bi-exclamation-circle-fill text-red-500 text-xl"></i>
+                        <span class="text-red-700 dark:text-red-400 font-medium">${data.error || 'Erro ao registrar dom\u00ednio.'}</span>
+                    </div>`;
+            }
+        })
+        .catch(() => {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="bi bi-check-circle"></i> Registrar Agora';
+            closeRegisterModal();
+
+            resultDiv.classList.remove('hidden');
+            resultDiv.innerHTML = `
+                <div class="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-900/30 rounded-xl p-5 flex items-center gap-3">
+                    <i class="bi bi-exclamation-circle-fill text-red-500 text-xl"></i>
+                    <span class="text-red-700 dark:text-red-400 font-medium">Erro de conex\u00e3o. Tente novamente.</span>
+                </div>`;
+        });
+    }
+
+    document.getElementById('register-modal').addEventListener('click', function(e) {
+        if (e.target === this) closeRegisterModal();
+    });
 </script>
 @endpush

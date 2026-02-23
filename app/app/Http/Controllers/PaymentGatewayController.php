@@ -106,6 +106,12 @@ class PaymentGatewayController extends Controller
                 ->withErrors(['error' => 'Configure as credenciais antes de ativar o gateway.']);
         }
 
+        if (!$gateway->active) {
+            PaymentGateway::forReseller($user->id)
+                ->where('id', '!=', $gateway->id)
+                ->update(['active' => false]);
+        }
+
         $gateway->active = !$gateway->active;
         $gateway->save();
 

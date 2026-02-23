@@ -139,6 +139,7 @@ Route::middleware(['auth', 'maintenance'])->group(function () {
     Route::prefix('shop')->name('shop.')->group(function () {
         Route::get('/dns', [ShopController::class, 'dns'])->name('dns');
         Route::post('/dns/search', [ShopController::class, 'dnsSearch'])->name('dns.search');
+        Route::post('/dns/register', [ShopController::class, 'dnsRegister'])->name('dns.register');
         Route::get('/apps', [ShopController::class, 'apps'])->name('apps');
     });
 

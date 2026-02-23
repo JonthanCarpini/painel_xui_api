@@ -30,7 +30,7 @@
 <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
     @foreach($providers as $providerKey => $providerLabel)
     @php $gateway = $gatewaysByProvider[$providerKey] ?? null; @endphp
-    <div class="bg-white dark:bg-dark-300 rounded-xl border border-gray-200 dark:border-dark-200 shadow-sm dark:shadow-none overflow-hidden">
+    <div class="bg-white dark:bg-dark-300 rounded-xl border {{ $gateway && $gateway->active ? 'border-green-400 dark:border-green-500/50 ring-2 ring-green-200 dark:ring-green-500/20' : 'border-gray-200 dark:border-dark-200' }} shadow-sm dark:shadow-none overflow-hidden">
         <!-- Header -->
         <div class="p-5 border-b border-gray-200 dark:border-dark-200 flex items-center justify-between">
             <div class="flex items-center gap-3">
@@ -53,23 +53,27 @@
                 </div>
             </div>
 
-            @if($gateway)
-                <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold {{ $gateway->active ? 'bg-green-100 dark:bg-green-500/20 text-green-700 dark:text-green-400' : 'bg-gray-100 dark:bg-gray-500/20 text-gray-600 dark:text-gray-400' }}">
-                    <span class="w-2 h-2 rounded-full {{ $gateway->active ? 'bg-green-500' : 'bg-gray-400' }}"></span>
-                    {{ $gateway->active ? 'Ativo' : 'Inativo' }}
-                </span>
-            @else
-                <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-gray-100 dark:bg-gray-500/20 text-gray-600 dark:text-gray-400">
-                    <span class="w-2 h-2 rounded-full bg-gray-400"></span>
-                    N&atilde;o configurado
-                </span>
-            @endif
+            <div class="flex items-center gap-2">
+                <button type="button" onclick="showInstructions('{{ $providerKey }}')" class="p-2 text-gray-400 hover:text-orange-500 transition-colors" title="Instru&ccedil;&otilde;es">
+                    <i class="bi bi-question-circle text-lg"></i>
+                </button>
+                @if($gateway)
+                    <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold {{ $gateway->active ? 'bg-green-100 dark:bg-green-500/20 text-green-700 dark:text-green-400' : 'bg-gray-100 dark:bg-gray-500/20 text-gray-600 dark:text-gray-400' }}">
+                        <span class="w-2 h-2 rounded-full {{ $gateway->active ? 'bg-green-500 animate-pulse' : 'bg-gray-400' }}"></span>
+                        {{ $gateway->active ? 'Ativo' : 'Inativo' }}
+                    </span>
+                @else
+                    <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-gray-100 dark:bg-gray-500/20 text-gray-600 dark:text-gray-400">
+                        <span class="w-2 h-2 rounded-full bg-gray-400"></span>
+                        N&atilde;o configurado
+                    </span>
+                @endif
+            </div>
         </div>
 
         <!-- Body -->
         <div class="p-5">
             @if($gateway)
-                <!-- Gateway já configurado -->
                 <form action="{{ route('payments.gateways.update', $gateway->id) }}" method="POST" class="space-y-4">
                     @csrf
                     @method('PUT')
@@ -145,11 +149,9 @@
                     </form>
                 </div>
 
-                <!-- Test Result -->
                 <div id="test-result-{{ $gateway->id }}" class="hidden mt-3 p-3 rounded-lg text-sm"></div>
 
             @else
-                <!-- Gateway não configurado -->
                 <form action="{{ route('payments.gateways.store') }}" method="POST" class="space-y-4">
                     @csrf
                     <input type="hidden" name="provider" value="{{ $providerKey }}">
@@ -160,14 +162,12 @@
                             <input type="password" name="access_token" required
                                 class="w-full px-3 py-2 bg-gray-50 dark:bg-dark-200 border border-gray-300 dark:border-dark-100 rounded-lg text-gray-900 dark:text-white text-sm focus:border-orange-500 focus:outline-none transition-colors font-mono"
                                 placeholder="$aact_prod_...">
-                            <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">Obtenha em <a href="https://www.asaas.com/apiKeys" target="_blank" class="text-orange-500 hover:underline">asaas.com/apiKeys</a></p>
                         </div>
                         <div>
                             <label class="block text-sm font-medium text-gray-700 dark:text-gray-400 mb-1">Address Key (Chave PIX)</label>
                             <input type="text" name="address_key" required
                                 class="w-full px-3 py-2 bg-gray-50 dark:bg-dark-200 border border-gray-300 dark:border-dark-100 rounded-lg text-gray-900 dark:text-white text-sm focus:border-orange-500 focus:outline-none transition-colors font-mono"
                                 placeholder="uuid-da-chave-pix">
-                            <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">UUID da chave PIX cadastrada no Asaas.</p>
                         </div>
                     @elseif($providerKey === 'mercadopago')
                         <div>
@@ -175,7 +175,6 @@
                             <input type="password" name="access_token" required
                                 class="w-full px-3 py-2 bg-gray-50 dark:bg-dark-200 border border-gray-300 dark:border-dark-100 rounded-lg text-gray-900 dark:text-white text-sm focus:border-orange-500 focus:outline-none transition-colors font-mono"
                                 placeholder="APP_USR-...">
-                            <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">Obtenha em <a href="https://www.mercadopago.com.br/developers/panel/app" target="_blank" class="text-orange-500 hover:underline">mercadopago.com.br/developers</a></p>
                         </div>
                     @elseif($providerKey === 'fastdepix')
                         <div>
@@ -205,21 +204,181 @@
             <ul class="text-sm text-blue-600 dark:text-blue-300 space-y-1">
                 <li>1. Configure as credenciais do seu gateway de pagamento.</li>
                 <li>2. Copie a URL do Webhook e configure no painel do gateway.</li>
-                <li>3. Ative o gateway para come&ccedil;ar a receber pagamentos PIX.</li>
-                <li>4. Quando um cliente pagar, o sistema renovar&aacute; automaticamente a linha.</li>
+                <li>3. Clique em <strong>Ativar</strong> no gateway que deseja usar.</li>
+                <li>4. Apenas <strong>um gateway</strong> pode estar ativo por vez.</li>
+                <li>5. Quando um cliente pagar via PIX, o sistema renovar&aacute; automaticamente a linha.</li>
             </ul>
         </div>
+    </div>
+</div>
+
+<!-- Modal de Instruções -->
+<div id="instructions-modal" class="fixed inset-0 z-50 hidden items-center justify-center bg-black/50 backdrop-blur-sm">
+    <div class="bg-white dark:bg-dark-300 rounded-2xl border border-gray-200 dark:border-dark-200 shadow-2xl w-full max-w-lg mx-4 overflow-hidden max-h-[90vh] flex flex-col">
+        <div class="p-6 border-b border-gray-200 dark:border-dark-200 flex items-center justify-between shrink-0">
+            <h3 class="text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2" id="instructions-title">
+                <i class="bi bi-book text-orange-500"></i>
+                Instru&ccedil;&otilde;es
+            </h3>
+            <button onclick="closeInstructions()" class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 transition-colors">
+                <i class="bi bi-x-lg text-xl"></i>
+            </button>
+        </div>
+        <div class="p-6 overflow-y-auto" id="instructions-body"></div>
     </div>
 </div>
 @endsection
 
 @push('scripts')
 <script>
+    const instructions = {
+        asaas: {
+            title: '<i class="bi bi-bank text-blue-500"></i> Instru\u00e7\u00f5es - Asaas',
+            body: `
+                <div class="space-y-4">
+                    <div>
+                        <h4 class="font-bold text-gray-900 dark:text-white mb-2">1. Criar conta no Asaas</h4>
+                        <p class="text-sm text-gray-600 dark:text-gray-400">Acesse <a href="https://www.asaas.com" target="_blank" class="text-orange-500 hover:underline font-medium">asaas.com</a> e crie sua conta. Complete a verifica\u00e7\u00e3o de identidade para liberar o PIX.</p>
+                    </div>
+                    <div>
+                        <h4 class="font-bold text-gray-900 dark:text-white mb-2">2. Gerar Access Token (API Key)</h4>
+                        <ul class="text-sm text-gray-600 dark:text-gray-400 space-y-1 ml-4 list-disc">
+                            <li>Acesse <strong>Configura\u00e7\u00f5es &gt; Integra\u00e7\u00f5es &gt; API</strong></li>
+                            <li>Ou diretamente em <a href="https://www.asaas.com/apiKeys" target="_blank" class="text-orange-500 hover:underline">asaas.com/apiKeys</a></li>
+                            <li>Clique em <strong>"Gerar nova chave de API"</strong></li>
+                            <li>Copie o token gerado (come\u00e7a com <code class="bg-gray-100 dark:bg-dark-200 px-1 rounded">$aact_prod_</code>)</li>
+                        </ul>
+                    </div>
+                    <div>
+                        <h4 class="font-bold text-gray-900 dark:text-white mb-2">3. Obter Address Key (Chave PIX)</h4>
+                        <ul class="text-sm text-gray-600 dark:text-gray-400 space-y-1 ml-4 list-disc">
+                            <li>Acesse <strong>Cobran\u00e7as &gt; Receber via Pix</strong></li>
+                            <li>Cadastre uma chave PIX (CPF, e-mail, celular ou aleat\u00f3ria)</li>
+                            <li>O <strong>Address Key</strong> \u00e9 o UUID da chave cadastrada</li>
+                            <li>Voc\u00ea pode obter via API: <code class="bg-gray-100 dark:bg-dark-200 px-1 rounded text-xs">GET /pix/addressKeys</code></li>
+                        </ul>
+                    </div>
+                    <div>
+                        <h4 class="font-bold text-gray-900 dark:text-white mb-2">4. Configurar Webhook</h4>
+                        <ul class="text-sm text-gray-600 dark:text-gray-400 space-y-1 ml-4 list-disc">
+                            <li>Acesse <strong>Configura\u00e7\u00f5es &gt; Integra\u00e7\u00f5es &gt; Webhooks</strong></li>
+                            <li>Clique em <strong>"Adicionar webhook"</strong></li>
+                            <li>Cole a <strong>URL do Webhook</strong> exibida no card acima</li>
+                            <li>Selecione os eventos: <strong>PAYMENT_RECEIVED</strong> e <strong>PAYMENT_CONFIRMED</strong></li>
+                            <li>Salve a configura\u00e7\u00e3o</li>
+                        </ul>
+                    </div>
+                    <div class="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-900/30 rounded-lg p-3">
+                        <p class="text-sm text-green-700 dark:text-green-400 flex items-start gap-2">
+                            <i class="bi bi-check-circle-fill mt-0.5"></i>
+                            <span>Ap\u00f3s configurar, clique em <strong>"Testar"</strong> para verificar se a conex\u00e3o est\u00e1 funcionando.</span>
+                        </p>
+                    </div>
+                </div>
+            `
+        },
+        mercadopago: {
+            title: '<i class="bi bi-cash-coin text-sky-500"></i> Instru\u00e7\u00f5es - Mercado Pago',
+            body: `
+                <div class="space-y-4">
+                    <div>
+                        <h4 class="font-bold text-gray-900 dark:text-white mb-2">1. Criar conta no Mercado Pago</h4>
+                        <p class="text-sm text-gray-600 dark:text-gray-400">Acesse <a href="https://www.mercadopago.com.br" target="_blank" class="text-orange-500 hover:underline font-medium">mercadopago.com.br</a> e crie sua conta.</p>
+                    </div>
+                    <div>
+                        <h4 class="font-bold text-gray-900 dark:text-white mb-2">2. Criar aplica\u00e7\u00e3o</h4>
+                        <ul class="text-sm text-gray-600 dark:text-gray-400 space-y-1 ml-4 list-disc">
+                            <li>Acesse <a href="https://www.mercadopago.com.br/developers/panel/app" target="_blank" class="text-orange-500 hover:underline">mercadopago.com.br/developers</a></li>
+                            <li>Clique em <strong>"Criar aplica\u00e7\u00e3o"</strong></li>
+                            <li>Selecione <strong>"Pagamentos online"</strong> e <strong>"CheckoutAPI"</strong></li>
+                        </ul>
+                    </div>
+                    <div>
+                        <h4 class="font-bold text-gray-900 dark:text-white mb-2">3. Obter Access Token</h4>
+                        <ul class="text-sm text-gray-600 dark:text-gray-400 space-y-1 ml-4 list-disc">
+                            <li>Na aplica\u00e7\u00e3o criada, v\u00e1 em <strong>"Credenciais de produ\u00e7\u00e3o"</strong></li>
+                            <li>Copie o <strong>Access Token</strong> (come\u00e7a com <code class="bg-gray-100 dark:bg-dark-200 px-1 rounded">APP_USR-</code>)</li>
+                        </ul>
+                    </div>
+                    <div>
+                        <h4 class="font-bold text-gray-900 dark:text-white mb-2">4. Configurar Webhook (IPN)</h4>
+                        <ul class="text-sm text-gray-600 dark:text-gray-400 space-y-1 ml-4 list-disc">
+                            <li>Na aplica\u00e7\u00e3o, v\u00e1 em <strong>"Webhooks"</strong></li>
+                            <li>Cole a <strong>URL do Webhook</strong> exibida no card acima</li>
+                            <li>Selecione o evento: <strong>Pagamentos</strong></li>
+                        </ul>
+                    </div>
+                    <div class="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-900/30 rounded-lg p-3">
+                        <p class="text-sm text-yellow-700 dark:text-yellow-400 flex items-start gap-2">
+                            <i class="bi bi-exclamation-triangle-fill mt-0.5"></i>
+                            <span>Use sempre as credenciais de <strong>produ\u00e7\u00e3o</strong>, n\u00e3o as de teste.</span>
+                        </p>
+                    </div>
+                </div>
+            `
+        },
+        fastdepix: {
+            title: '<i class="bi bi-lightning text-purple-500"></i> Instru\u00e7\u00f5es - FastDePix',
+            body: `
+                <div class="space-y-4">
+                    <div>
+                        <h4 class="font-bold text-gray-900 dark:text-white mb-2">1. Criar conta no FastDePix</h4>
+                        <p class="text-sm text-gray-600 dark:text-gray-400">Acesse o painel do FastDePix e crie sua conta de integra\u00e7\u00e3o.</p>
+                    </div>
+                    <div>
+                        <h4 class="font-bold text-gray-900 dark:text-white mb-2">2. Obter Token de API</h4>
+                        <ul class="text-sm text-gray-600 dark:text-gray-400 space-y-1 ml-4 list-disc">
+                            <li>No painel, acesse <strong>Configura\u00e7\u00f5es &gt; API</strong></li>
+                            <li>Gere um novo token de acesso</li>
+                            <li>Copie o token gerado</li>
+                        </ul>
+                    </div>
+                    <div>
+                        <h4 class="font-bold text-gray-900 dark:text-white mb-2">3. Configurar Webhook</h4>
+                        <ul class="text-sm text-gray-600 dark:text-gray-400 space-y-1 ml-4 list-disc">
+                            <li>No painel, acesse <strong>Configura\u00e7\u00f5es &gt; Webhooks</strong></li>
+                            <li>Cole a <strong>URL do Webhook</strong> exibida no card acima</li>
+                            <li>Selecione os eventos de pagamento</li>
+                        </ul>
+                    </div>
+                    <div class="bg-purple-50 dark:bg-purple-900/20 border border-purple-200 dark:border-purple-900/30 rounded-lg p-3">
+                        <p class="text-sm text-purple-700 dark:text-purple-400 flex items-start gap-2">
+                            <i class="bi bi-info-circle-fill mt-0.5"></i>
+                            <span>O FastDePix processa pagamentos PIX de forma instant\u00e2nea.</span>
+                        </p>
+                    </div>
+                </div>
+            `
+        }
+    };
+
+    function showInstructions(provider) {
+        const data = instructions[provider];
+        if (!data) return;
+
+        document.getElementById('instructions-title').innerHTML = data.title;
+        document.getElementById('instructions-body').innerHTML = data.body;
+
+        const modal = document.getElementById('instructions-modal');
+        modal.classList.remove('hidden');
+        modal.classList.add('flex');
+    }
+
+    function closeInstructions() {
+        const modal = document.getElementById('instructions-modal');
+        modal.classList.add('hidden');
+        modal.classList.remove('flex');
+    }
+
+    document.getElementById('instructions-modal').addEventListener('click', function(e) {
+        if (e.target === this) closeInstructions();
+    });
+
     function copyWebhook(id) {
         const input = document.getElementById('webhook-url-' + id);
         navigator.clipboard.writeText(input.value).then(() => {
             const btn = input.nextElementSibling;
-            btn.innerHTML = '<i class="bi bi-check"></i>';
+            btn.innerHTML = '<i class="bi bi-check text-green-500"></i>';
             setTimeout(() => btn.innerHTML = '<i class="bi bi-clipboard"></i>', 2000);
         });
     }
@@ -227,7 +386,7 @@
     function testGateway(id) {
         const resultDiv = document.getElementById('test-result-' + id);
         resultDiv.className = 'mt-3 p-3 rounded-lg text-sm bg-gray-100 dark:bg-dark-200 text-gray-600 dark:text-gray-400';
-        resultDiv.innerHTML = '<i class="bi bi-hourglass-split"></i> Testando conex&atilde;o...';
+        resultDiv.innerHTML = '<i class="bi bi-hourglass-split"></i> Testando conex\u00e3o...';
         resultDiv.classList.remove('hidden');
 
         fetch('/payments/gateways/' + id + '/test')
@@ -235,7 +394,7 @@
             .then(data => {
                 if (data.success) {
                     resultDiv.className = 'mt-3 p-3 rounded-lg text-sm bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-400 border border-green-200 dark:border-green-900/30';
-                    resultDiv.innerHTML = '<i class="bi bi-check-circle-fill"></i> Conex&atilde;o bem-sucedida!';
+                    resultDiv.innerHTML = '<i class="bi bi-check-circle-fill"></i> Conex\u00e3o bem-sucedida!';
                 } else {
                     resultDiv.className = 'mt-3 p-3 rounded-lg text-sm bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-400 border border-red-200 dark:border-red-900/30';
                     resultDiv.innerHTML = '<i class="bi bi-x-circle-fill"></i> ' + (data.error || 'Erro desconhecido');
@@ -243,7 +402,7 @@
             })
             .catch(() => {
                 resultDiv.className = 'mt-3 p-3 rounded-lg text-sm bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-400 border border-red-200 dark:border-red-900/30';
-                resultDiv.innerHTML = '<i class="bi bi-x-circle-fill"></i> Erro de conex&atilde;o.';
+                resultDiv.innerHTML = '<i class="bi bi-x-circle-fill"></i> Erro de conex\u00e3o.';
             });
     }
 </script>
