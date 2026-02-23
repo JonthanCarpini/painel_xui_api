@@ -91,6 +91,13 @@
                                 class="w-full px-3 py-2 bg-gray-50 dark:bg-dark-200 border border-gray-300 dark:border-dark-100 rounded-lg text-gray-900 dark:text-white text-sm focus:border-orange-500 focus:outline-none transition-colors font-mono"
                                 placeholder="uuid-da-chave-pix">
                         </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-400 mb-1">Token de Autentica&ccedil;&atilde;o do Webhook <span class="text-xs text-gray-400">(opcional)</span></label>
+                            <input type="password" name="webhook_auth_token" value="{{ $gateway->getCredential('webhook_auth_token') }}"
+                                class="w-full px-3 py-2 bg-gray-50 dark:bg-dark-200 border border-gray-300 dark:border-dark-100 rounded-lg text-gray-900 dark:text-white text-sm focus:border-orange-500 focus:outline-none transition-colors font-mono"
+                                placeholder="whsec_...">
+                            <p class="text-xs text-gray-400 dark:text-gray-500 mt-1">Configure no Asaas em Webhooks &gt; Token de autentica&ccedil;&atilde;o. O header <code class="bg-gray-100 dark:bg-dark-200 px-1 rounded">asaas-access-token</code> ser&aacute; validado.</p>
+                        </div>
                     @elseif($providerKey === 'mercadopago')
                         <div>
                             <label class="block text-sm font-medium text-gray-700 dark:text-gray-400 mb-1">Access Token</label>
@@ -168,6 +175,13 @@
                             <input type="text" name="address_key" required
                                 class="w-full px-3 py-2 bg-gray-50 dark:bg-dark-200 border border-gray-300 dark:border-dark-100 rounded-lg text-gray-900 dark:text-white text-sm focus:border-orange-500 focus:outline-none transition-colors font-mono"
                                 placeholder="uuid-da-chave-pix">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-400 mb-1">Token de Autentica&ccedil;&atilde;o do Webhook <span class="text-xs text-gray-400">(opcional)</span></label>
+                            <input type="password" name="webhook_auth_token"
+                                class="w-full px-3 py-2 bg-gray-50 dark:bg-dark-200 border border-gray-300 dark:border-dark-100 rounded-lg text-gray-900 dark:text-white text-sm focus:border-orange-500 focus:outline-none transition-colors font-mono"
+                                placeholder="whsec_...">
+                            <p class="text-xs text-gray-400 dark:text-gray-500 mt-1">Configure no Asaas em Webhooks &gt; Token de autentica&ccedil;&atilde;o.</p>
                         </div>
                     @elseif($providerKey === 'mercadopago')
                         <div>

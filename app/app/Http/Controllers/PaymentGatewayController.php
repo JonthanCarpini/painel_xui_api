@@ -160,11 +160,16 @@ class PaymentGatewayController extends Controller
                 $request->validate([
                     'access_token' => 'required|string',
                     'address_key' => 'required|string',
+                    'webhook_auth_token' => 'nullable|string',
                 ]);
-                return [
+                $creds = [
                     'access_token' => $request->input('access_token'),
                     'address_key' => $request->input('address_key'),
                 ];
+                if ($request->filled('webhook_auth_token')) {
+                    $creds['webhook_auth_token'] = $request->input('webhook_auth_token');
+                }
+                return $creds;
 
             case PaymentGateway::PROVIDER_MERCADOPAGO:
                 $request->validate([

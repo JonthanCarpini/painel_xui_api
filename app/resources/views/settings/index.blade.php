@@ -833,7 +833,10 @@
                 <div><label class="block text-sm font-medium text-gray-700 dark:text-gray-400 mb-1">Access Token</label>
                 <input type="password" name="sgm_access_token" required class="w-full px-3 py-2 bg-gray-50 dark:bg-dark-200 border border-gray-300 dark:border-dark-100 rounded-lg text-gray-900 dark:text-white text-sm font-mono" placeholder="$aact_prod_..."></div>
                 <div><label class="block text-sm font-medium text-gray-700 dark:text-gray-400 mb-1">Address Key (Chave PIX)</label>
-                <input type="text" name="sgm_address_key" required class="w-full px-3 py-2 bg-gray-50 dark:bg-dark-200 border border-gray-300 dark:border-dark-100 rounded-lg text-gray-900 dark:text-white text-sm font-mono" placeholder="uuid-da-chave-pix"></div>`;
+                <input type="text" name="sgm_address_key" required class="w-full px-3 py-2 bg-gray-50 dark:bg-dark-200 border border-gray-300 dark:border-dark-100 rounded-lg text-gray-900 dark:text-white text-sm font-mono" placeholder="uuid-da-chave-pix"></div>
+                <div><label class="block text-sm font-medium text-gray-700 dark:text-gray-400 mb-1">Token de Autentica\u00e7\u00e3o do Webhook <span class="text-xs text-gray-400">(opcional)</span></label>
+                <input type="password" name="sgm_webhook_auth_token" class="w-full px-3 py-2 bg-gray-50 dark:bg-dark-200 border border-gray-300 dark:border-dark-100 rounded-lg text-gray-900 dark:text-white text-sm font-mono" placeholder="whsec_...">
+                <p class="text-xs text-gray-400 dark:text-gray-500 mt-1">Configure no Asaas em Webhooks > Token de autentica\u00e7\u00e3o.</p></div>`;
         } else if (provider === 'mercadopago') {
             fieldsHtml = `
                 <div><label class="block text-sm font-medium text-gray-700 dark:text-gray-400 mb-1">Access Token</label>
@@ -864,6 +867,8 @@
         if (provider === 'asaas') {
             credentials.access_token = document.querySelector('[name="sgm_access_token"]').value;
             credentials.address_key = document.querySelector('[name="sgm_address_key"]').value;
+            const authToken = document.querySelector('[name="sgm_webhook_auth_token"]');
+            if (authToken && authToken.value) credentials.webhook_auth_token = authToken.value;
         } else if (provider === 'mercadopago') {
             credentials.access_token = document.querySelector('[name="sgm_access_token"]').value;
         } else if (provider === 'fastdepix') {

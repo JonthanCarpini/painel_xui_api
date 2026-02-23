@@ -19,6 +19,17 @@ class WebhookController extends Controller
         $this->asaas = $asaas;
     }
 
+    protected function validateAsaasAuthToken(Request $request, $gateway): bool
+    {
+        $authToken = $gateway->getCredential('webhook_auth_token');
+        if (empty($authToken)) {
+            return true;
+        }
+
+        $headerToken = $request->header('asaas-access-token');
+        return $headerToken === $authToken;
+    }
+
     public function asaas(Request $request, string $webhookSecret)
     {
         $gateway = PaymentGateway::where('webhook_secret', $webhookSecret)
@@ -29,6 +40,11 @@ class WebhookController extends Controller
         if (!$gateway) {
             Log::warning('Webhook Asaas: gateway não encontrado', ['secret' => $webhookSecret]);
             return response()->json(['error' => 'Gateway not found'], 404);
+        }
+
+        if (!$this->validateAsaasAuthToken($request, $gateway)) {
+            Log::warning('Webhook Asaas: token de autenticação inválido', ['reseller_id' => $gateway->reseller_id]);
+            return response()->json(['error' => 'Unauthorized'], 401);
         }
 
         $payload = $request->all();
@@ -104,6 +120,11 @@ class WebhookController extends Controller
         if (!$gateway) {
             Log::warning('Webhook Shop: gateway não encontrado', ['secret' => $webhookSecret]);
             return response()->json(['error' => 'Gateway not found'], 404);
+        }
+
+        if ($gateway->provider === 'asaas' && !$this->validateAsaasAuthToken($request, $gateway)) {
+            Log::warning('Webhook Shop: token de autenticação inválido');
+            return response()->json(['error' => 'Unauthorized'], 401);
         }
 
         $payload = $request->all();
