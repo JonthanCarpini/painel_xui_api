@@ -6,6 +6,7 @@ use App\Models\AppSetting;
 use App\Models\ClientApplication;
 use App\Models\DnsServer;
 use App\Models\Notice;
+use App\Models\ShopPaymentGateway;
 use App\Models\TestChannel;
 use App\Services\ChannelService;
 use App\Services\PackageService;
@@ -79,6 +80,8 @@ class SettingsController extends Controller
             'namecheapApiKey'       => AppSetting::get('namecheap_api_key', ''),
             'namecheapClientIp'     => AppSetting::get('namecheap_client_ip', ''),
             'namecheapSandbox'      => AppSetting::get('namecheap_sandbox', '0') === '1',
+            'shopMarkupPercent'     => (int) AppSetting::get('shop_markup_percent', '30'),
+            'shopGateways'          => ShopPaymentGateway::all()->keyBy('provider'),
         ]);
     }
 
@@ -115,6 +118,7 @@ class SettingsController extends Controller
             'namecheap_api_key' => 'nullable|string|max:500',
             'namecheap_client_ip' => 'nullable|string|max:45',
             'namecheap_sandbox' => 'nullable',
+            'shop_markup_percent' => 'nullable|integer|min:0|max:500',
         ]);
 
         try {
@@ -160,12 +164,15 @@ class SettingsController extends Controller
             AppSetting::set('module_shop_enabled', $request->input('module_shop_enabled', '0'));
             AppSetting::set('module_payments_enabled', $request->input('module_payments_enabled', '0'));
 
-            // 2.2 Salvar configurações Namecheap
+            // 2.2 Salvar configurações Namecheap e Shop
             if ($request->has('namecheap_api_user')) {
                 AppSetting::set('namecheap_api_user', $request->input('namecheap_api_user') ?? '');
                 AppSetting::set('namecheap_api_key', $request->input('namecheap_api_key') ?? '');
                 AppSetting::set('namecheap_client_ip', $request->input('namecheap_client_ip') ?? '');
                 AppSetting::set('namecheap_sandbox', $request->input('namecheap_sandbox', '0'));
+            }
+            if ($request->has('shop_markup_percent')) {
+                AppSetting::set('shop_markup_percent', $request->input('shop_markup_percent', '30'));
             }
 
             // 3. Processar Configurações do XUI (exceto tmdb_api_key que agora é local)
@@ -175,6 +182,7 @@ class SettingsController extends Controller
                     'trust_renew_package_id', 'tmdb_api_key',
                     'module_shop_enabled', 'module_payments_enabled',
                     'namecheap_api_user', 'namecheap_api_key', 'namecheap_client_ip', 'namecheap_sandbox',
+                    'shop_markup_percent',
                 ])
                 ->toArray();
 

@@ -36,6 +36,7 @@ Route::get('/img-proxy', [\App\Http\Controllers\ImageProxyController::class, 'pr
 
 // Webhooks (sem auth, sem CSRF)
 Route::post('/webhook/asaas/{webhookSecret}', [\App\Http\Controllers\WebhookController::class, 'asaas'])->name('webhook.asaas');
+Route::post('/webhook/shop/{webhookSecret}', [\App\Http\Controllers\WebhookController::class, 'shopWebhook'])->name('webhook.shop');
 
 Route::middleware(['auth', 'maintenance'])->group(function () {
     Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
@@ -139,7 +140,12 @@ Route::middleware(['auth', 'maintenance'])->group(function () {
     Route::prefix('shop')->name('shop.')->group(function () {
         Route::get('/dns', [ShopController::class, 'dns'])->name('dns');
         Route::post('/dns/search', [ShopController::class, 'dnsSearch'])->name('dns.search');
-        Route::post('/dns/register', [ShopController::class, 'dnsRegister'])->name('dns.register');
+        Route::post('/dns/purchase', [ShopController::class, 'dnsPurchase'])->name('dns.purchase');
+        Route::get('/dns/order/{orderRef}/status', [ShopController::class, 'dnsOrderStatus'])->name('dns.order.status');
+        Route::get('/my-domains', [ShopController::class, 'myDomains'])->name('my-domains');
+        Route::post('/my-domains/custom', [ShopController::class, 'addCustomDomain'])->name('my-domains.add-custom');
+        Route::post('/my-domains/{id}/activate', [ShopController::class, 'activateDomain'])->name('my-domains.activate');
+        Route::delete('/my-domains/{id}', [ShopController::class, 'removeDomain'])->name('my-domains.remove');
         Route::get('/apps', [ShopController::class, 'apps'])->name('apps');
     });
 
@@ -182,6 +188,12 @@ Route::middleware(['auth', 'maintenance'])->group(function () {
         Route::delete('/notices/{id}', [\App\Http\Controllers\SettingsController::class, 'destroyNotice'])->name('notices.destroy');
 
         Route::put('/message', [\App\Http\Controllers\SettingsController::class, 'updateClientMessage'])->name('message.update');
+
+        // Shop Gateway (AJAX)
+        Route::post('/shop-gateway', [\App\Http\Controllers\ShopGatewayController::class, 'store'])->name('shop-gateway.store');
+        Route::put('/shop-gateway/{id}', [\App\Http\Controllers\ShopGatewayController::class, 'update'])->name('shop-gateway.update');
+        Route::post('/shop-gateway/{id}/toggle', [\App\Http\Controllers\ShopGatewayController::class, 'toggleActive'])->name('shop-gateway.toggle');
+        Route::delete('/shop-gateway/{id}', [\App\Http\Controllers\ShopGatewayController::class, 'destroy'])->name('shop-gateway.destroy');
 
         // Rotas para Categorias de Tickets
         Route::get('/ticket-categories', [\App\Http\Controllers\TicketCategoryController::class, 'index'])->name('ticket-categories.index');

@@ -194,7 +194,78 @@
                         <p class="text-xs text-gray-500 dark:text-gray-400 mt-2">
                             Obtenha suas credenciais em <a href="https://www.namecheap.com/support/api/intro/" target="_blank" class="text-orange-500 hover:underline">namecheap.com/api</a>. O IP deve estar liberado na whitelist da API.
                         </p>
+
+                        <div class="mt-4 pt-4 border-t border-gray-200 dark:border-dark-200">
+                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-400 mb-2">Percentual de Acr&eacute;scimo (%)</label>
+                            <div class="flex items-center gap-3">
+                                <input type="number" name="shop_markup_percent" value="{{ $shopMarkupPercent ?? 30 }}" min="0" max="500" step="1" class="w-32 px-4 py-2 bg-gray-50 dark:bg-dark-200 border border-gray-300 dark:border-dark-100 rounded-lg text-gray-900 dark:text-white focus:border-orange-500 focus:outline-none transition-colors text-sm" placeholder="30">
+                                <span class="text-sm text-gray-500 dark:text-gray-400">% sobre o valor convertido USD &rarr; BRL</span>
+                            </div>
+                            <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                                Ex: Se o dom&iacute;nio custa $1.00 e o d&oacute;lar est&aacute; R$5,50, com 30% o revendedor pagar&aacute; R$7,15.
+                            </p>
+                        </div>
                     </div>
+                </div>
+            </div>
+
+            <!-- Gateway de Pagamento do Shop -->
+            <div class="bg-white dark:bg-dark-300 rounded-xl border border-gray-200 dark:border-dark-200 p-4 md:p-6 shadow-sm dark:shadow-none">
+                <h2 class="text-lg font-bold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
+                    <i class="bi bi-shop text-orange-500"></i>
+                    Gateway de Pagamento da Loja
+                </h2>
+                <p class="text-sm text-gray-500 dark:text-gray-400 mb-4">Configure o gateway que receber&aacute; os pagamentos dos revendedores ao comprarem dom&iacute;nios.</p>
+
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    @foreach(\App\Models\ShopPaymentGateway::PROVIDERS as $provKey => $provLabel)
+                    @php $shopGw = $shopGateways[$provKey] ?? null; @endphp
+                    <div class="p-4 bg-gray-50 dark:bg-dark-200 rounded-lg border {{ $shopGw && $shopGw->active ? 'border-green-400 dark:border-green-500/50' : 'border-gray-200 dark:border-dark-100' }}">
+                        <div class="flex items-center justify-between mb-3">
+                            <div class="flex items-center gap-2">
+                                @if($provKey === 'asaas')
+                                    <i class="bi bi-bank text-blue-500 text-lg"></i>
+                                @elseif($provKey === 'mercadopago')
+                                    <i class="bi bi-cash-coin text-sky-500 text-lg"></i>
+                                @else
+                                    <i class="bi bi-lightning text-purple-500 text-lg"></i>
+                                @endif
+                                <span class="font-bold text-gray-900 dark:text-white text-sm">{{ $provLabel }}</span>
+                            </div>
+                            @if($shopGw)
+                                <span class="text-xs px-2 py-0.5 rounded-full {{ $shopGw->active ? 'bg-green-100 dark:bg-green-500/20 text-green-700 dark:text-green-400' : 'bg-gray-100 dark:bg-gray-500/20 text-gray-500' }}">
+                                    {{ $shopGw->active ? 'Ativo' : 'Inativo' }}
+                                </span>
+                            @endif
+                        </div>
+
+                        @if($shopGw)
+                            <div class="space-y-2 text-xs text-gray-500 dark:text-gray-400">
+                                <p>Configurado <i class="bi bi-check-circle text-green-500"></i></p>
+                                @if($shopGw->webhook_secret)
+                                    <div class="flex items-center gap-1">
+                                        <span class="truncate">Webhook: ...{{ substr($shopGw->webhook_secret, -8) }}</span>
+                                    </div>
+                                @endif
+                            </div>
+                            <div class="flex gap-2 mt-3">
+                                <button type="button" onclick="openShopGatewayModal('{{ $provKey }}', true, {{ $shopGw->id }})" class="flex-1 px-3 py-1.5 bg-orange-500 hover:bg-orange-600 text-white rounded-lg text-xs font-medium transition-colors">
+                                    <i class="bi bi-pencil"></i> Editar
+                                </button>
+                                <button type="button" onclick="toggleShopGateway({{ $shopGw->id }})" class="px-3 py-1.5 {{ $shopGw->active ? 'bg-yellow-500 hover:bg-yellow-600' : 'bg-green-500 hover:bg-green-600' }} text-white rounded-lg text-xs font-medium transition-colors">
+                                    <i class="bi {{ $shopGw->active ? 'bi-pause-circle' : 'bi-play-circle' }}"></i>
+                                </button>
+                                <button type="button" onclick="deleteShopGateway({{ $shopGw->id }})" class="px-3 py-1.5 bg-red-500 hover:bg-red-600 text-white rounded-lg text-xs font-medium transition-colors">
+                                    <i class="bi bi-trash"></i>
+                                </button>
+                            </div>
+                        @else
+                            <button type="button" onclick="openShopGatewayModal('{{ $provKey }}', false)" class="w-full mt-2 px-3 py-2 bg-gradient-to-r from-orange-500 to-orange-600 text-white rounded-lg text-xs font-medium hover:shadow-lg hover:shadow-orange-500/20 transition-all">
+                                <i class="bi bi-plus-circle"></i> Configurar
+                            </button>
+                        @endif
+                    </div>
+                    @endforeach
                 </div>
             </div>
 
@@ -732,6 +803,121 @@
         form.scrollIntoView({ behavior: 'smooth' });
     }
 
+    // === Shop Gateway Functions ===
+    function openShopGatewayModal(provider, isEdit = false, gatewayId = null) {
+        const modal = document.getElementById('shop-gateway-modal');
+        const title = document.getElementById('sgm-title');
+        const form = document.getElementById('sgm-form');
+        const providerInput = document.getElementById('sgm-provider');
+        const idInput = document.getElementById('sgm-id');
+        const fieldsContainer = document.getElementById('sgm-fields');
+
+        providerInput.value = provider;
+        idInput.value = gatewayId || '';
+
+        const labels = { asaas: 'Asaas', mercadopago: 'Mercado Pago', fastdepix: 'FastDePix' };
+        title.textContent = (isEdit ? 'Editar ' : 'Configurar ') + (labels[provider] || provider);
+
+        let fieldsHtml = '';
+        if (provider === 'asaas') {
+            fieldsHtml = `
+                <div><label class="block text-sm font-medium text-gray-700 dark:text-gray-400 mb-1">Access Token</label>
+                <input type="password" name="sgm_access_token" required class="w-full px-3 py-2 bg-gray-50 dark:bg-dark-200 border border-gray-300 dark:border-dark-100 rounded-lg text-gray-900 dark:text-white text-sm font-mono" placeholder="$aact_prod_..."></div>
+                <div><label class="block text-sm font-medium text-gray-700 dark:text-gray-400 mb-1">Address Key (Chave PIX)</label>
+                <input type="text" name="sgm_address_key" required class="w-full px-3 py-2 bg-gray-50 dark:bg-dark-200 border border-gray-300 dark:border-dark-100 rounded-lg text-gray-900 dark:text-white text-sm font-mono" placeholder="uuid-da-chave-pix"></div>`;
+        } else if (provider === 'mercadopago') {
+            fieldsHtml = `
+                <div><label class="block text-sm font-medium text-gray-700 dark:text-gray-400 mb-1">Access Token</label>
+                <input type="password" name="sgm_access_token" required class="w-full px-3 py-2 bg-gray-50 dark:bg-dark-200 border border-gray-300 dark:border-dark-100 rounded-lg text-gray-900 dark:text-white text-sm font-mono" placeholder="APP_USR-..."></div>`;
+        } else if (provider === 'fastdepix') {
+            fieldsHtml = `
+                <div><label class="block text-sm font-medium text-gray-700 dark:text-gray-400 mb-1">Token</label>
+                <input type="password" name="sgm_token" required class="w-full px-3 py-2 bg-gray-50 dark:bg-dark-200 border border-gray-300 dark:border-dark-100 rounded-lg text-gray-900 dark:text-white text-sm font-mono" placeholder="Token FastDePix"></div>`;
+        }
+        fieldsContainer.innerHTML = fieldsHtml;
+
+        modal.classList.remove('hidden');
+        modal.classList.add('flex');
+    }
+
+    function closeShopGatewayModal() {
+        const modal = document.getElementById('shop-gateway-modal');
+        modal.classList.add('hidden');
+        modal.classList.remove('flex');
+    }
+
+    function submitShopGateway() {
+        const provider = document.getElementById('sgm-provider').value;
+        const gatewayId = document.getElementById('sgm-id').value;
+        const btn = document.getElementById('sgm-submit-btn');
+
+        let credentials = {};
+        if (provider === 'asaas') {
+            credentials.access_token = document.querySelector('[name="sgm_access_token"]').value;
+            credentials.address_key = document.querySelector('[name="sgm_address_key"]').value;
+        } else if (provider === 'mercadopago') {
+            credentials.access_token = document.querySelector('[name="sgm_access_token"]').value;
+        } else if (provider === 'fastdepix') {
+            credentials.token = document.querySelector('[name="sgm_token"]').value;
+        }
+
+        btn.disabled = true;
+        btn.innerHTML = '<i class="bi bi-hourglass-split"></i> Salvando...';
+
+        const url = gatewayId ? '/settings/shop-gateway/' + gatewayId : '/settings/shop-gateway';
+        const method = gatewayId ? 'PUT' : 'POST';
+
+        fetch(url, {
+            method: method,
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content,
+            },
+            body: JSON.stringify({ provider, credentials })
+        })
+        .then(r => r.json())
+        .then(data => {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="bi bi-check-circle"></i> Salvar';
+            if (data.success) {
+                closeShopGatewayModal();
+                location.reload();
+            } else {
+                alert(data.error || 'Erro ao salvar gateway.');
+            }
+        })
+        .catch(() => {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="bi bi-check-circle"></i> Salvar';
+            alert('Erro de conex\u00e3o.');
+        });
+    }
+
+    function toggleShopGateway(id) {
+        fetch('/settings/shop-gateway/' + id + '/toggle', {
+            method: 'POST',
+            headers: {
+                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content,
+            }
+        }).then(r => r.json()).then(data => {
+            if (data.success) location.reload();
+            else alert(data.error || 'Erro.');
+        });
+    }
+
+    function deleteShopGateway(id) {
+        if (!confirm('Tem certeza que deseja remover este gateway?')) return;
+        fetch('/settings/shop-gateway/' + id, {
+            method: 'DELETE',
+            headers: {
+                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content,
+            }
+        }).then(r => r.json()).then(data => {
+            if (data.success) location.reload();
+            else alert(data.error || 'Erro.');
+        });
+    }
+
     function editNotice(notice) {
         document.querySelector('input[name="title"]').value = notice.title;
         document.querySelector('textarea[name="message"]').value = notice.message;
@@ -782,4 +968,34 @@
     }
 </script>
 @endpush
+
+<!-- Modal Shop Gateway -->
+<div id="shop-gateway-modal" class="fixed inset-0 z-50 hidden items-center justify-center bg-black/50 backdrop-blur-sm">
+    <div class="bg-white dark:bg-dark-300 rounded-2xl border border-gray-200 dark:border-dark-200 shadow-2xl w-full max-w-md mx-4 overflow-hidden">
+        <div class="p-6 border-b border-gray-200 dark:border-dark-200 flex items-center justify-between">
+            <h3 class="text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2" id="sgm-title">
+                <i class="bi bi-shop text-orange-500"></i>
+                Configurar Gateway
+            </h3>
+            <button onclick="closeShopGatewayModal()" class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200">
+                <i class="bi bi-x-lg text-xl"></i>
+            </button>
+        </div>
+        <div class="p-6">
+            <form id="sgm-form" onsubmit="event.preventDefault(); submitShopGateway();">
+                <input type="hidden" id="sgm-provider" value="">
+                <input type="hidden" id="sgm-id" value="">
+                <div id="sgm-fields" class="space-y-4"></div>
+                <div class="flex gap-3 mt-6">
+                    <button type="button" onclick="closeShopGatewayModal()" class="flex-1 px-4 py-2.5 bg-gray-200 dark:bg-dark-200 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-300 dark:hover:bg-dark-100 transition-colors font-medium text-sm">
+                        Cancelar
+                    </button>
+                    <button type="submit" id="sgm-submit-btn" class="flex-1 px-4 py-2.5 bg-gradient-to-r from-orange-500 to-orange-600 text-white rounded-lg hover:shadow-lg hover:shadow-orange-500/20 transition-all font-medium text-sm flex items-center justify-center gap-2">
+                        <i class="bi bi-check-circle"></i> Salvar
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
 @endsection
