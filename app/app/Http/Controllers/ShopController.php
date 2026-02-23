@@ -8,6 +8,7 @@ use App\Models\ResellerDomain;
 use App\Models\ShopPaymentGateway;
 use App\Services\AsaasService;
 use App\Services\CurrencyService;
+use App\Services\XuiApiService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Http;
@@ -17,14 +18,17 @@ use Illuminate\Support\Str;
 class ShopController extends Controller
 {
     const EXTENSIONS = ['online', 'site', 'website', 'xyz'];
+    const DEFAULT_PRICES_USD = ['online' => 1.98, 'site' => 1.98, 'website' => 1.98, 'xyz' => 1.00];
 
     protected CurrencyService $currency;
     protected AsaasService $asaas;
+    protected XuiApiService $xuiApi;
 
-    public function __construct(CurrencyService $currency, AsaasService $asaas)
+    public function __construct(CurrencyService $currency, AsaasService $asaas, XuiApiService $xuiApi)
     {
         $this->currency = $currency;
         $this->asaas = $asaas;
+        $this->xuiApi = $xuiApi;
     }
 
     public function dns()
@@ -109,12 +113,9 @@ class ShopController extends Controller
             ]);
         }
 
-        $priceResult = $this->getDomainPrice($domain, $years);
-        if (!$priceResult['success']) {
-            return response()->json($priceResult);
-        }
-
-        $priceUsd = $priceResult['price_usd'];
+        $parts = explode('.', $domain, 2);
+        $tld = $parts[1] ?? '';
+        $priceUsd = self::DEFAULT_PRICES_USD[$tld] ?? 9.98;
         $markup = (int) AppSetting::get('shop_markup_percent', '30');
         $conversion = $this->currency->convertUsdToBrl($priceUsd * $years, $markup);
 
@@ -239,6 +240,121 @@ class ShopController extends Controller
         return redirect()->route('shop.my-domains')->with('success', 'Domínio removido.');
     }
 
+    public function configureDns($id)
+    {
+        $user = Auth::user();
+        $domain = ResellerDomain::forReseller($user->id)->findOrFail($id);
+        $domainName = $domain->domain;
+
+        $errors = [];
+        $successes = [];
+
+        // 1. Obter IP do servidor Main do XUI
+        $mainIp = $this->getMainServerIp();
+        if (!$mainIp) {
+            return redirect()->route('shop.my-domains')
+                ->withErrors(['error' => 'Servidor Main do XUI não encontrado.']);
+        }
+
+        // 2. Alterar registro A via Namecheap (apenas para domínios comprados)
+        if ($domain->type === ResellerDomain::TYPE_PURCHASED) {
+            $dnsResult = $this->setNamecheapDnsRecord($domainName, $mainIp);
+            if ($dnsResult['success']) {
+                $successes[] = "Registro A de {$domainName} apontado para {$mainIp}.";
+            } else {
+                $errors[] = "Erro DNS Namecheap: " . ($dnsResult['error'] ?? 'desconhecido');
+            }
+        }
+
+        // 3. Autorizar domínio no XUI (allowed_user_cps)
+        $authResult = $this->authorizedomainInXui($domainName);
+        if ($authResult['success']) {
+            $successes[] = "Domínio autorizado no XUI.";
+        } else {
+            $errors[] = "Erro XUI: " . ($authResult['error'] ?? 'desconhecido');
+        }
+
+        // 4. Atualizar reseller_dns do revendedor no XUI
+        $xuiId = $user->xui_id ?? $user->id;
+        $dnsUpdateResult = $this->xuiApi->editUser((int) $xuiId, [
+            'reseller_dns' => $domainName,
+        ]);
+        if (($dnsUpdateResult['status'] ?? '') === 'STATUS_SUCCESS') {
+            $successes[] = "DNS do revendedor atualizado para {$domainName}.";
+        } else {
+            $errors[] = "Erro ao atualizar DNS do revendedor no XUI.";
+        }
+
+        // 5. Marcar domínio como configurado
+        $domain->update(['dns_configured' => true]);
+
+        if (!empty($errors)) {
+            return redirect()->route('shop.my-domains')
+                ->with('success', implode(' ', $successes))
+                ->withErrors(['error' => implode(' | ', $errors)]);
+        }
+
+        return redirect()->route('shop.my-domains')
+            ->with('success', implode(' ', $successes));
+    }
+
+    protected function getMainServerIp(): ?string
+    {
+        $servers = $this->xuiApi->getServers();
+        foreach ($servers as $server) {
+            if (!empty($server['is_main'])) {
+                return $server['server_ip'] ?? $server['domain_name'] ?? null;
+            }
+        }
+        return null;
+    }
+
+    protected function setNamecheapDnsRecord(string $domainName, string $ip): array
+    {
+        $parts = explode('.', $domainName, 2);
+        $sld = $parts[0] ?? '';
+        $tld = $parts[1] ?? '';
+
+        $result = $this->namecheapRequest('namecheap.domains.dns.setHosts', [
+            'SLD' => $sld,
+            'TLD' => $tld,
+            'HostName1' => '@',
+            'RecordType1' => 'A',
+            'Address1' => $ip,
+            'TTL1' => '1800',
+            'HostName2' => 'www',
+            'RecordType2' => 'CNAME',
+            'Address2' => $domainName,
+            'TTL2' => '1800',
+        ]);
+
+        return $result;
+    }
+
+    protected function authorizedomainInXui(string $domainName): array
+    {
+        $settingsResp = $this->xuiApi->getSettings();
+        $currentCps = $settingsResp['data']['allowed_user_cps'] ?? '';
+
+        $cpsList = array_filter(array_map('trim', explode(',', $currentCps)));
+
+        if (!in_array($domainName, $cpsList)) {
+            $cpsList[] = $domainName;
+        }
+
+        $newCps = implode(',', $cpsList);
+
+        $updateResult = $this->xuiApi->updateSettings([
+            'allowed_user_cps' => $newCps,
+        ]);
+
+        if (($updateResult['status'] ?? '') === 'STATUS_SUCCESS') {
+            return ['success' => true];
+        }
+
+        return ['success' => false, 'error' => $updateResult['message'] ?? 'Falha ao atualizar settings XUI'];
+    }
+
     public function apps()
     {
         if (AppSetting::get('module_shop_enabled', '0') !== '1') {
@@ -341,8 +457,7 @@ class ShopController extends Controller
         ]);
 
         if (!$result['success']) {
-            $defaultPrices = ['online' => 1.98, 'site' => 1.98, 'website' => 1.98, 'xyz' => 1.00];
-            $price = $defaultPrices[$tld] ?? 9.98;
+            $price = self::DEFAULT_PRICES_USD[$tld] ?? 9.98;
             return ['success' => true, 'price_usd' => $price];
         }
 
@@ -383,8 +498,7 @@ class ShopController extends Controller
 
             $parts = explode('.', $item['domain'], 2);
             $tld = $parts[1] ?? '';
-            $defaultPrices = ['online' => 1.98, 'site' => 1.98, 'website' => 1.98, 'xyz' => 1.00];
-            $priceUsd = $defaultPrices[$tld] ?? 9.98;
+            $priceUsd = self::DEFAULT_PRICES_USD[$tld] ?? 9.98;
 
             $conversion = $this->currency->convertUsdToBrl($priceUsd, $markup);
             $item['price_usd'] = $priceUsd;

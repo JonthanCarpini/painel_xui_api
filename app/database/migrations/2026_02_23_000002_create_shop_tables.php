@@ -15,6 +15,7 @@ return new class extends Migration
             $table->string('domain');
             $table->enum('type', ['purchased', 'custom'])->default('purchased');
             $table->boolean('is_active')->default(false);
+            $table->boolean('dns_configured')->default(false);
             $table->string('namecheap_order_id')->nullable();
             $table->decimal('paid_amount_brl', 10, 2)->nullable();
             $table->integer('years')->default(1);

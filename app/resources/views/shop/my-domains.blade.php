@@ -120,6 +120,19 @@
             </div>
 
             <div class="flex items-center gap-2">
+                <form action="{{ route('shop.my-domains.configure-dns', $domain->id) }}" method="POST" onsubmit="this.querySelector('button').disabled=true; this.querySelector('button').innerHTML='<i class=\'bi bi-hourglass-split\'></i> Configurando...';">
+                    @csrf
+                    @if($domain->dns_configured)
+                        <button type="submit" class="px-3 py-1.5 bg-blue-100 dark:bg-blue-500/20 text-blue-700 dark:text-blue-400 border border-blue-200 dark:border-blue-500/30 rounded-lg text-xs font-medium transition-colors hover:bg-blue-200 dark:hover:bg-blue-500/30" title="DNS j&aacute; configurado. Clique para reconfigurar.">
+                            <i class="bi bi-gear-fill"></i> DNS Configurado
+                        </button>
+                    @else
+                        <button type="submit" class="px-3 py-1.5 bg-orange-500 hover:bg-orange-600 text-white rounded-lg text-xs font-medium transition-colors" title="Configurar registro A e autorizar no XUI">
+                            <i class="bi bi-gear"></i> Configurar DNS
+                        </button>
+                    @endif
+                </form>
+
                 @if(!$domain->is_active)
                     <form action="{{ route('shop.my-domains.activate', $domain->id) }}" method="POST">
                         @csrf

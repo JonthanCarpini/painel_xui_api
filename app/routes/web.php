@@ -145,6 +145,7 @@ Route::middleware(['auth', 'maintenance'])->group(function () {
         Route::get('/my-domains', [ShopController::class, 'myDomains'])->name('my-domains');
         Route::post('/my-domains/custom', [ShopController::class, 'addCustomDomain'])->name('my-domains.add-custom');
         Route::post('/my-domains/{id}/activate', [ShopController::class, 'activateDomain'])->name('my-domains.activate');
+        Route::post('/my-domains/{id}/configure-dns', [ShopController::class, 'configureDns'])->name('my-domains.configure-dns');
         Route::delete('/my-domains/{id}', [ShopController::class, 'removeDomain'])->name('my-domains.remove');
         Route::get('/apps', [ShopController::class, 'apps'])->name('apps');
     });
@@ -194,6 +195,9 @@ Route::middleware(['auth', 'maintenance'])->group(function () {
         Route::put('/shop-gateway/{id}', [\App\Http\Controllers\ShopGatewayController::class, 'update'])->name('shop-gateway.update');
         Route::post('/shop-gateway/{id}/toggle', [\App\Http\Controllers\ShopGatewayController::class, 'toggleActive'])->name('shop-gateway.toggle');
         Route::delete('/shop-gateway/{id}', [\App\Http\Controllers\ShopGatewayController::class, 'destroy'])->name('shop-gateway.destroy');
+
+        // Módulo Namecheap
+        Route::get('/namecheap', [\App\Http\Controllers\Admin\NamecheapController::class, 'index'])->name('namecheap.index');
 
         // Rotas para Categorias de Tickets
         Route::get('/ticket-categories', [\App\Http\Controllers\TicketCategoryController::class, 'index'])->name('ticket-categories.index');

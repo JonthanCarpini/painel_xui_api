@@ -49,11 +49,7 @@
         </button>
     </div>
     <p class="text-xs text-gray-500 dark:text-gray-400 mt-2">
-        Extens&otilde;es: <strong>.{{ implode('</strong>, <strong>.', $extensions ?? ['online','site','website','xyz']) }}</strong>
-        @if(!$isAdmin)
-            &mdash; Cota&ccedil;&atilde;o atual: <strong>R$ {{ number_format($exchangeRate, 2, ',', '.') }}</strong>/USD
-            @if($markupPercent > 0) + {{ $markupPercent }}% acr&eacute;scimo @endif
-        @endif
+        Digite apenas o nome sem extens&atilde;o. Verificaremos as extens&otilde;es dispon&iacute;veis automaticamente.
     </p>
 </div>
 

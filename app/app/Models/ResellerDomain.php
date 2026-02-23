@@ -14,6 +14,7 @@ class ResellerDomain extends Model
         'domain',
         'type',
         'is_active',
+        'dns_configured',
         'namecheap_order_id',
         'paid_amount_brl',
         'years',
@@ -22,6 +23,7 @@ class ResellerDomain extends Model
 
     protected $casts = [
         'is_active' => 'boolean',
+        'dns_configured' => 'boolean',
         'paid_amount_brl' => 'float',
         'expires_at' => 'datetime',
     ];
