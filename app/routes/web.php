@@ -147,6 +147,7 @@ Route::middleware(['auth', 'maintenance'])->group(function () {
         Route::post('/my-domains/{id}/activate', [ShopController::class, 'activateDomain'])->name('my-domains.activate');
         Route::post('/my-domains/{id}/configure-dns', [ShopController::class, 'configureDns'])->name('my-domains.configure-dns');
         Route::delete('/my-domains/{id}', [ShopController::class, 'removeDomain'])->name('my-domains.remove');
+        Route::delete('/dns/order/{id}', [ShopController::class, 'cancelOrder'])->name('dns.order.cancel');
         Route::get('/apps', [ShopController::class, 'apps'])->name('apps');
     });
 

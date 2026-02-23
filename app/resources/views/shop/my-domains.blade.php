@@ -39,18 +39,109 @@
     </h3>
     <div class="space-y-2">
         @foreach($pendingOrders as $order)
-        <div class="flex items-center justify-between bg-white dark:bg-dark-300 rounded-lg p-3 border border-yellow-200 dark:border-yellow-900/30">
+        <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 bg-white dark:bg-dark-300 rounded-lg p-4 border border-yellow-200 dark:border-yellow-900/30">
             <div>
                 <p class="font-bold text-gray-900 dark:text-white">{{ $order->domain }}</p>
                 <p class="text-xs text-gray-500 dark:text-gray-400">Ref: {{ $order->order_ref }} &mdash; R$ {{ number_format($order->price_brl, 2, ',', '.') }}</p>
             </div>
-            <span class="px-3 py-1 bg-yellow-100 dark:bg-yellow-500/20 text-yellow-700 dark:text-yellow-400 rounded-full text-xs font-semibold">
-                Aguardando PIX
-            </span>
+            <div class="flex items-center gap-2">
+                @if($order->pix_payload || $order->pix_encoded_image)
+                <button type="button" onclick="showQrCode('{{ $order->id }}')" class="px-3 py-1.5 bg-green-500 hover:bg-green-600 text-white rounded-lg text-xs font-medium transition-colors flex items-center gap-1">
+                    <i class="bi bi-qr-code"></i> Ver QR Code
+                </button>
+                @endif
+                <form action="{{ route('shop.dns.order.cancel', $order->id) }}" method="POST" onsubmit="return confirm('Tem certeza que deseja cancelar este pedido?');">
+                    @csrf
+                    @method('DELETE')
+                    <button type="submit" class="px-3 py-1.5 bg-red-500 hover:bg-red-600 text-white rounded-lg text-xs font-medium transition-colors flex items-center gap-1">
+                        <i class="bi bi-trash"></i> Excluir
+                    </button>
+                </form>
+            </div>
+        </div>
+
+        <!-- QR Code hidden data -->
+        <div id="qr-data-{{ $order->id }}" class="hidden"
+            data-domain="{{ $order->domain }}"
+            data-price="{{ number_format($order->price_brl, 2, ',', '.') }}"
+            data-payload="{{ $order->pix_payload }}"
+            data-image="{{ $order->pix_encoded_image }}">
         </div>
         @endforeach
     </div>
 </div>
+
+<!-- Modal QR Code PIX -->
+<div id="qr-modal" class="fixed inset-0 z-50 hidden items-center justify-center bg-black/50 backdrop-blur-sm">
+    <div class="bg-white dark:bg-dark-300 rounded-2xl border border-gray-200 dark:border-dark-200 shadow-2xl w-full max-w-sm mx-4 overflow-hidden">
+        <div class="p-5 border-b border-gray-200 dark:border-dark-200 flex items-center justify-between">
+            <h3 class="text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2">
+                <i class="bi bi-qr-code text-green-500"></i>
+                Pagamento PIX
+            </h3>
+            <button onclick="closeQrModal()" class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200">
+                <i class="bi bi-x-lg text-xl"></i>
+            </button>
+        </div>
+        <div class="p-6 text-center">
+            <p class="font-bold text-gray-900 dark:text-white mb-1" id="qr-domain"></p>
+            <p class="text-green-600 dark:text-green-400 text-xl font-bold mb-4" id="qr-price"></p>
+            <div id="qr-image-container" class="mb-4 flex justify-center">
+                <img id="qr-image" src="" alt="QR Code PIX" class="w-48 h-48 rounded-lg border border-gray-200 dark:border-dark-200">
+            </div>
+            <div class="mb-4">
+                <label class="block text-xs text-gray-500 dark:text-gray-400 mb-1">PIX Copia e Cola</label>
+                <div class="flex gap-2">
+                    <input type="text" id="qr-payload" readonly class="flex-1 px-3 py-2 bg-gray-50 dark:bg-dark-200 border border-gray-300 dark:border-dark-100 rounded-lg text-gray-900 dark:text-white text-xs font-mono truncate">
+                    <button onclick="copyPayload()" class="px-3 py-2 bg-orange-500 hover:bg-orange-600 text-white rounded-lg text-xs font-medium transition-colors">
+                        <i class="bi bi-clipboard"></i>
+                    </button>
+                </div>
+            </div>
+            <p class="text-xs text-gray-400 dark:text-gray-500">Escaneie o QR Code ou copie o c&oacute;digo PIX para pagar.</p>
+        </div>
+    </div>
+</div>
+
+<script>
+function showQrCode(orderId) {
+    const data = document.getElementById('qr-data-' + orderId);
+    if (!data) return;
+
+    document.getElementById('qr-domain').textContent = data.dataset.domain;
+    document.getElementById('qr-price').textContent = 'R$ ' + data.dataset.price;
+    document.getElementById('qr-payload').value = data.dataset.payload || '';
+
+    const img = document.getElementById('qr-image');
+    const imgContainer = document.getElementById('qr-image-container');
+    if (data.dataset.image) {
+        img.src = 'data:image/png;base64,' + data.dataset.image;
+        imgContainer.classList.remove('hidden');
+    } else {
+        imgContainer.classList.add('hidden');
+    }
+
+    const modal = document.getElementById('qr-modal');
+    modal.classList.remove('hidden');
+    modal.classList.add('flex');
+}
+
+function closeQrModal() {
+    const modal = document.getElementById('qr-modal');
+    modal.classList.add('hidden');
+    modal.classList.remove('flex');
+}
+
+function copyPayload() {
+    const input = document.getElementById('qr-payload');
+    input.select();
+    navigator.clipboard.writeText(input.value).then(() => {
+        const btn = input.nextElementSibling;
+        btn.innerHTML = '<i class="bi bi-check"></i>';
+        setTimeout(() => { btn.innerHTML = '<i class="bi bi-clipboard"></i>'; }, 2000);
+    });
+}
+</script>
 @endif
 
 <!-- Adicionar Domínio Particular -->

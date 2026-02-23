@@ -240,6 +240,22 @@ class ShopController extends Controller
         return redirect()->route('shop.my-domains')->with('success', 'Domínio removido.');
     }
 
+    public function cancelOrder($id)
+    {
+        $user = Auth::user();
+        $order = DomainOrder::forReseller($user->id)->findOrFail($id);
+
+        if ($order->status !== DomainOrder::STATUS_PENDING) {
+            return redirect()->route('shop.my-domains')
+                ->withErrors(['error' => 'Apenas pedidos pendentes podem ser cancelados.']);
+        }
+
+        $order->delete();
+
+        return redirect()->route('shop.my-domains')
+            ->with('success', "Pedido do domínio {$order->domain} removido.");
+    }
+
     public function configureDns($id)
     {
         $user = Auth::user();
