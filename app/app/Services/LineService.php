@@ -176,8 +176,8 @@ class LineService
         $dns = $this->resolveServerDns($memberId);
 
         return [
-            'm3u_url' => "http://{$dns}:80/get.php?username={$username}&password={$password}&type=m3u_plus&output=ts",
-            'hls_url' => "http://{$dns}:80/get.php?username={$username}&password={$password}&type=m3u_plus&output=m3u8",
+            'm3u_url' => "http://{$dns}/playlist/{$username}/{$password}/m3u_plus",
+            'hls_url' => "http://{$dns}/playlist/{$username}/{$password}/m3u_plus?output=hls",
             'dns'     => $dns,
         ];
     }
