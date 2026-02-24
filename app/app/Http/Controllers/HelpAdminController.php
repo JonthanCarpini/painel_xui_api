@@ -40,7 +40,7 @@ class HelpAdminController extends Controller
 
         HelpCategory::create($validated);
 
-        return redirect()->route('help.admin.categories')
+        return redirect()->route('settings.help.categories')
             ->with('success', 'Categoria criada com sucesso.');
     }
 
@@ -58,7 +58,7 @@ class HelpAdminController extends Controller
 
         $category->update($validated);
 
-        return redirect()->route('help.admin.categories')
+        return redirect()->route('settings.help.categories')
             ->with('success', 'Categoria atualizada com sucesso.');
     }
 
@@ -66,7 +66,7 @@ class HelpAdminController extends Controller
     {
         $category->delete();
 
-        return redirect()->route('help.admin.categories')
+        return redirect()->route('settings.help.categories')
             ->with('success', 'Categoria removida com sucesso.');
     }
 
@@ -128,7 +128,7 @@ class HelpAdminController extends Controller
             $this->syncMedia($post, $request->input('media', []));
         });
 
-        return redirect()->route('help.admin.posts')
+        return redirect()->route('settings.help.posts')
             ->with('success', 'Post criado com sucesso.');
     }
 
@@ -166,7 +166,7 @@ class HelpAdminController extends Controller
             $this->syncMedia($post, $request->input('media', []));
         });
 
-        return redirect()->route('help.admin.posts')
+        return redirect()->route('settings.help.posts')
             ->with('success', 'Post atualizado com sucesso.');
     }
 
@@ -174,7 +174,7 @@ class HelpAdminController extends Controller
     {
         $post->delete();
 
-        return redirect()->route('help.admin.posts')
+        return redirect()->route('settings.help.posts')
             ->with('success', 'Post removido com sucesso.');
     }
 
