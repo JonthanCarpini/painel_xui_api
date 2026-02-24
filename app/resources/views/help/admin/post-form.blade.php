@@ -26,7 +26,7 @@
             <h1 class="text-2xl font-bold text-gray-900 dark:text-white">{{ $post ? 'Editar Post' : 'Novo Post' }}</h1>
             <p class="text-gray-500 dark:text-gray-400 mt-1">{{ $post ? 'Atualize o conteúdo do artigo.' : 'Crie um novo artigo de ajuda.' }}</p>
         </div>
-        <a href="{{ route('help.admin.posts') }}" class="px-4 py-2 bg-gray-200 dark:bg-dark-200 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-300 dark:hover:bg-dark-100 transition-colors text-sm font-medium">
+        <a href="{{ route('settings.help.posts') }}" class="px-4 py-2 bg-gray-200 dark:bg-dark-200 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-300 dark:hover:bg-dark-100 transition-colors text-sm font-medium">
             <i class="bi bi-arrow-left me-1"></i> Voltar
         </a>
     </div>
@@ -40,7 +40,7 @@
 
     {{-- Formulário --}}
     <form method="POST"
-          action="{{ $post ? route('help.admin.posts.update', $post) : route('help.admin.posts.store') }}"
+          action="{{ $post ? route('settings.help.posts.update', $post) : route('settings.help.posts.store') }}"
           id="postForm">
         @csrf
         @if($post) @method('PUT') @endif
@@ -153,7 +153,7 @@
 
             {{-- Submit --}}
             <div class="flex justify-end gap-3">
-                <a href="{{ route('help.admin.posts') }}" class="px-6 py-2.5 bg-gray-200 dark:bg-dark-200 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-300 dark:hover:bg-dark-100 transition-colors font-medium">
+                <a href="{{ route('settings.help.posts') }}" class="px-6 py-2.5 bg-gray-200 dark:bg-dark-200 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-300 dark:hover:bg-dark-100 transition-colors font-medium">
                     Cancelar
                 </a>
                 <button type="submit" class="px-6 py-2.5 bg-gradient-to-r from-orange-500 to-orange-600 text-white rounded-lg hover:shadow-lg transition-all font-medium">

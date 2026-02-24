@@ -11,10 +11,10 @@
             <p class="text-gray-500 dark:text-gray-400 mt-1">Gerencie os artigos e instruções para revendedores.</p>
         </div>
         <div class="flex gap-2">
-            <a href="{{ route('help.admin.categories') }}" class="px-4 py-2 bg-gray-200 dark:bg-dark-200 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-300 dark:hover:bg-dark-100 transition-colors text-sm font-medium">
+            <a href="{{ route('settings.help.categories') }}" class="px-4 py-2 bg-gray-200 dark:bg-dark-200 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-300 dark:hover:bg-dark-100 transition-colors text-sm font-medium">
                 <i class="bi bi-folder me-1"></i> Categorias
             </a>
-            <a href="{{ route('help.admin.posts.create') }}" class="px-4 py-2 bg-gradient-to-r from-orange-500 to-orange-600 text-white rounded-lg hover:shadow-lg transition-all text-sm font-medium">
+            <a href="{{ route('settings.help.posts.create') }}" class="px-4 py-2 bg-gradient-to-r from-orange-500 to-orange-600 text-white rounded-lg hover:shadow-lg transition-all text-sm font-medium">
                 <i class="bi bi-plus-lg me-1"></i> Novo Post
             </a>
         </div>
@@ -47,7 +47,7 @@
                 <i class="bi bi-search me-1"></i> Filtrar
             </button>
             @if(request()->hasAny(['search', 'category_id']))
-                <a href="{{ route('help.admin.posts') }}" class="px-4 py-2 bg-gray-200 dark:bg-dark-200 text-gray-600 dark:text-gray-400 rounded-lg text-sm font-medium hover:bg-gray-300 transition-colors">Limpar</a>
+                <a href="{{ route('settings.help.posts') }}" class="px-4 py-2 bg-gray-200 dark:bg-dark-200 text-gray-600 dark:text-gray-400 rounded-lg text-sm font-medium hover:bg-gray-300 transition-colors">Limpar</a>
             @endif
         </form>
     </div>
@@ -88,10 +88,10 @@
                     </td>
                     <td class="px-4 py-3 text-right">
                         <div class="flex items-center justify-end gap-2">
-                            <a href="{{ route('help.admin.posts.edit', $post) }}" class="px-3 py-1.5 bg-blue-100 dark:bg-blue-500/20 text-blue-600 dark:text-blue-400 rounded-lg text-xs font-medium hover:bg-blue-200 dark:hover:bg-blue-500/30 transition-colors">
+                            <a href="{{ route('settings.help.posts.edit', $post) }}" class="px-3 py-1.5 bg-blue-100 dark:bg-blue-500/20 text-blue-600 dark:text-blue-400 rounded-lg text-xs font-medium hover:bg-blue-200 dark:hover:bg-blue-500/30 transition-colors">
                                 <i class="bi bi-pencil"></i> Editar
                             </a>
-                            <form action="{{ route('help.admin.posts.destroy', $post) }}" method="POST" onsubmit="return confirm('Remover este post?')">
+                            <form action="{{ route('settings.help.posts.destroy', $post) }}" method="POST" onsubmit="return confirm('Remover este post?')">
                                 @csrf @method('DELETE')
                                 <button type="submit" class="px-3 py-1.5 bg-red-100 dark:bg-red-500/20 text-red-600 dark:text-red-400 rounded-lg text-xs font-medium hover:bg-red-200 dark:hover:bg-red-500/30 transition-colors">
                                     <i class="bi bi-trash"></i>
@@ -105,7 +105,7 @@
                     <td colspan="5" class="px-4 py-12 text-center">
                         <i class="bi bi-file-earmark-plus text-4xl text-gray-300 dark:text-gray-600"></i>
                         <p class="text-gray-500 dark:text-gray-400 mt-2">Nenhum post criado ainda.</p>
-                        <a href="{{ route('help.admin.posts.create') }}" class="inline-block mt-3 px-4 py-2 bg-orange-500 text-white rounded-lg text-sm font-medium hover:bg-orange-600 transition-colors">
+                        <a href="{{ route('settings.help.posts.create') }}" class="inline-block mt-3 px-4 py-2 bg-orange-500 text-white rounded-lg text-sm font-medium hover:bg-orange-600 transition-colors">
                             <i class="bi bi-plus-lg me-1"></i> Criar primeiro post
                         </a>
                     </td>

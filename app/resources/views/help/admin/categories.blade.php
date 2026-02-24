@@ -10,7 +10,7 @@
             <h1 class="text-2xl font-bold text-gray-900 dark:text-white">Categorias da Central de Ajuda</h1>
             <p class="text-gray-500 dark:text-gray-400 mt-1">Gerencie as categorias dos artigos de ajuda.</p>
         </div>
-        <a href="{{ route('help.admin.posts') }}" class="px-4 py-2 bg-gray-200 dark:bg-dark-200 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-300 dark:hover:bg-dark-100 transition-colors text-sm font-medium">
+        <a href="{{ route('settings.help.posts') }}" class="px-4 py-2 bg-gray-200 dark:bg-dark-200 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-300 dark:hover:bg-dark-100 transition-colors text-sm font-medium">
             <i class="bi bi-file-text me-1"></i> Ver Posts
         </a>
     </div>
@@ -30,7 +30,7 @@
     {{-- Form Nova Categoria --}}
     <div class="bg-white dark:bg-dark-300 rounded-xl border border-gray-200 dark:border-dark-200 p-6">
         <h2 class="text-lg font-semibold text-gray-900 dark:text-white mb-4">Nova Categoria</h2>
-        <form action="{{ route('help.admin.categories.store') }}" method="POST" class="grid grid-cols-1 md:grid-cols-5 gap-4 items-end">
+        <form action="{{ route('settings.help.categories.store') }}" method="POST" class="grid grid-cols-1 md:grid-cols-5 gap-4 items-end">
             @csrf
             <div class="md:col-span-2">
                 <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Nome</label>
@@ -78,7 +78,7 @@
                     <button @click="editing = true" class="px-3 py-1.5 bg-blue-100 dark:bg-blue-500/20 text-blue-600 dark:text-blue-400 rounded-lg text-xs font-medium hover:bg-blue-200 dark:hover:bg-blue-500/30 transition-colors">
                         <i class="bi bi-pencil"></i> Editar
                     </button>
-                    <form action="{{ route('help.admin.categories.destroy', $cat) }}" method="POST" onsubmit="return confirm('Remover esta categoria e todos os seus posts?')">
+                    <form action="{{ route('settings.help.categories.destroy', $cat) }}" method="POST" onsubmit="return confirm('Remover esta categoria e todos os seus posts?')">
                         @csrf @method('DELETE')
                         <button type="submit" class="px-3 py-1.5 bg-red-100 dark:bg-red-500/20 text-red-600 dark:text-red-400 rounded-lg text-xs font-medium hover:bg-red-200 dark:hover:bg-red-500/30 transition-colors">
                             <i class="bi bi-trash"></i>
@@ -89,7 +89,7 @@
 
             {{-- Modo edição --}}
             <div x-show="editing" x-cloak>
-                <form action="{{ route('help.admin.categories.update', $cat) }}" method="POST" class="grid grid-cols-1 md:grid-cols-6 gap-3 items-end">
+                <form action="{{ route('settings.help.categories.update', $cat) }}" method="POST" class="grid grid-cols-1 md:grid-cols-6 gap-3 items-end">
                     @csrf @method('PUT')
                     <div class="md:col-span-2">
                         <label class="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Nome</label>
