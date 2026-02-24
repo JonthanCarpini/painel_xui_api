@@ -33,21 +33,52 @@ function postForm() {
 }
 
 document.addEventListener('DOMContentLoaded', function () {
+    var toolbarOptions = [
+        [{ 'header': [1, 2, 3, false] }],
+        ['bold', 'italic', 'underline', 'strike'],
+        [{ 'color': [] }, { 'background': [] }],
+        [{ 'list': 'ordered'}, { 'list': 'bullet' }],
+        [{ 'indent': '-1'}, { 'indent': '+1' }],
+        ['blockquote', 'code-block'],
+        ['link', 'image', 'video'],
+        [{ 'align': [] }],
+        ['clean']
+    ];
+
     var quill = new Quill('#quillEditor', {
         theme: 'snow',
         placeholder: 'Escreva as instruções aqui...',
         modules: {
-            toolbar: [
-                [{ 'header': [1, 2, 3, false] }],
-                ['bold', 'italic', 'underline', 'strike'],
-                [{ 'color': [] }, { 'background': [] }],
-                [{ 'list': 'ordered'}, { 'list': 'bullet' }],
-                [{ 'indent': '-1'}, { 'indent': '+1' }],
-                ['blockquote', 'code-block'],
-                ['link', 'image'],
-                [{ 'align': [] }],
-                ['clean']
-            ]
+            toolbar: {
+                container: toolbarOptions,
+                handlers: {
+                    'image': function() {
+                        var url = prompt('Cole a URL da imagem:');
+                        if (url) {
+                            var range = this.quill.getSelection(true);
+                            this.quill.insertEmbed(range.index, 'image', url);
+                            this.quill.setSelection(range.index + 1);
+                        }
+                    },
+                    'video': function() {
+                        var url = prompt('Cole a URL do vídeo (YouTube, Vimeo, etc):');
+                        if (url) {
+                            var embedUrl = url;
+                            var ytMatch = url.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/)([a-zA-Z0-9_-]+)/);
+                            if (ytMatch) {
+                                embedUrl = 'https://www.youtube.com/embed/' + ytMatch[1];
+                            }
+                            var vimeoMatch = url.match(/vimeo\.com\/(\d+)/);
+                            if (vimeoMatch) {
+                                embedUrl = 'https://player.vimeo.com/video/' + vimeoMatch[1];
+                            }
+                            var range = this.quill.getSelection(true);
+                            this.quill.insertEmbed(range.index, 'video', embedUrl);
+                            this.quill.setSelection(range.index + 1);
+                        }
+                    }
+                }
+            }
         }
     });
 
