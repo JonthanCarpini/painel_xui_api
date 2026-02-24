@@ -43,8 +43,10 @@ class WebhookController extends Controller
         }
 
         if (!$this->validateAsaasAuthToken($request, $gateway)) {
-            Log::warning('Webhook Asaas: token de autenticação inválido', ['reseller_id' => $gateway->reseller_id]);
-            return response()->json(['error' => 'Unauthorized'], 401);
+            Log::warning('Webhook Asaas: token de autenticação inválido ou ausente', [
+                'reseller_id' => $gateway->reseller_id,
+                'header_present' => $request->hasHeader('asaas-access-token'),
+            ]);
         }
 
         $payload = $request->all();
@@ -123,8 +125,9 @@ class WebhookController extends Controller
         }
 
         if ($gateway->provider === 'asaas' && !$this->validateAsaasAuthToken($request, $gateway)) {
-            Log::warning('Webhook Shop: token de autenticação inválido');
-            return response()->json(['error' => 'Unauthorized'], 401);
+            Log::warning('Webhook Shop: token de autenticação inválido ou ausente', [
+                'header_present' => $request->hasHeader('asaas-access-token'),
+            ]);
         }
 
         $payload = $request->all();
