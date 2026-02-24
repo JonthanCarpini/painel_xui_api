@@ -17,6 +17,47 @@
 </style>
 @endpush
 
+@push('scripts')
+<script src="https://cdn.quilljs.com/1.3.7/quill.min.js"></script>
+<script>
+function postForm() {
+    return {
+        mediaItems: {!! json_encode($post && $post->media ? $post->media->map(function($m) { return ['type' => $m->type, 'url' => $m->url, 'caption' => $m->caption]; })->toArray() : []) !!},
+        addMedia() {
+            this.mediaItems.push({ type: 'image', url: '', caption: '' });
+        },
+        removeMedia(index) {
+            this.mediaItems.splice(index, 1);
+        }
+    }
+}
+
+document.addEventListener('DOMContentLoaded', function () {
+    var quill = new Quill('#quillEditor', {
+        theme: 'snow',
+        placeholder: 'Escreva as instruções aqui...',
+        modules: {
+            toolbar: [
+                [{ 'header': [1, 2, 3, false] }],
+                ['bold', 'italic', 'underline', 'strike'],
+                [{ 'color': [] }, { 'background': [] }],
+                [{ 'list': 'ordered'}, { 'list': 'bullet' }],
+                [{ 'indent': '-1'}, { 'indent': '+1' }],
+                ['blockquote', 'code-block'],
+                ['link', 'image'],
+                [{ 'align': [] }],
+                ['clean']
+            ]
+        }
+    });
+
+    document.getElementById('postForm').addEventListener('submit', function () {
+        document.getElementById('contentInput').value = quill.root.innerHTML;
+    });
+});
+</script>
+@endpush
+
 @section('content')
 <div class="max-w-4xl mx-auto space-y-6" x-data="postForm()">
 
@@ -34,7 +75,9 @@
     {{-- Alertas --}}
     @if($errors->any())
         <div class="bg-red-50 dark:bg-red-500/10 border border-red-200 dark:border-red-500/30 text-red-700 dark:text-red-400 p-4 rounded-lg">
-            @foreach($errors->all() as $error) <p>{{ $error }}</p> @endforeach
+            @foreach($errors->all() as $error)
+                <p>{{ $error }}</p>
+            @endforeach
         </div>
     @endif
 
@@ -43,7 +86,9 @@
           action="{{ $post ? route('settings.help.posts.update', $post) : route('settings.help.posts.store') }}"
           id="postForm">
         @csrf
-        @if($post) @method('PUT') @endif
+        @if($post)
+            @method('PUT')
+        @endif
 
         <div class="space-y-6">
             {{-- Info básica --}}
@@ -132,11 +177,9 @@
                                 <i class="bi bi-trash"></i>
                             </button>
                         </div>
-
-                        {{-- Preview --}}
                         <div class="w-full mt-2" x-show="item.url">
                             <template x-if="item.type === 'image' && item.url">
-                                <img :src="item.url" class="max-h-32 rounded-lg border border-gray-200 dark:border-dark-100 object-contain" @error="$el.style.display='none'">
+                                <img :src="item.url" class="max-h-32 rounded-lg border border-gray-200 dark:border-dark-100 object-contain">
                             </template>
                             <template x-if="item.type === 'video' && item.url">
                                 <p class="text-xs text-gray-400"><i class="bi bi-play-circle me-1"></i> <span x-text="item.url"></span></p>
@@ -163,46 +206,4 @@
         </div>
     </form>
 </div>
-
-@push('scripts')
-<script src="https://cdn.quilljs.com/1.3.7/quill.min.js"></script>
-<script>
-function postForm() {
-    return {
-        mediaItems: @json($post ? $post->media->map(fn($m) => ['type' => $m->type, 'url' => $m->url, 'caption' => $m->caption])->toArray() : []),
-        addMedia() {
-            this.mediaItems.push({ type: 'image', url: '', caption: '' });
-        },
-        removeMedia(index) {
-            this.mediaItems.splice(index, 1);
-        }
-    }
-}
-
-document.addEventListener('DOMContentLoaded', function () {
-    const quill = new Quill('#quillEditor', {
-        theme: 'snow',
-        placeholder: 'Escreva as instruções aqui...',
-        modules: {
-            toolbar: [
-                [{ 'header': [1, 2, 3, false] }],
-                ['bold', 'italic', 'underline', 'strike'],
-                [{ 'color': [] }, { 'background': [] }],
-                [{ 'list': 'ordered'}, { 'list': 'bullet' }],
-                [{ 'indent': '-1'}, { 'indent': '+1' }],
-                ['blockquote', 'code-block'],
-                ['link', 'image'],
-                [{ 'align': [] }],
-                ['clean']
-            ]
-        }
-    });
-
-    document.getElementById('postForm').addEventListener('submit', function () {
-        document.getElementById('contentInput').value = quill.root.innerHTML;
-    });
-});
-</script>
-@endpush
-
 @endsection
