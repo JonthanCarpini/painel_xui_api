@@ -163,7 +163,6 @@
         </div>
     </form>
 </div>
-@endsection
 
 @push('scripts')
 <script src="https://cdn.quilljs.com/1.3.7/quill.min.js"></script>
@@ -205,3 +204,5 @@ document.addEventListener('DOMContentLoaded', function () {
 });
 </script>
 @endpush
+
+@endsection

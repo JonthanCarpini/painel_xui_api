@@ -203,4 +203,5 @@ function categoryPage() {
 }
 </script>
 @endpush
+
 @endsection
