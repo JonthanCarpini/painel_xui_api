@@ -138,6 +138,12 @@ Route::middleware(['auth', 'maintenance'])->group(function () {
         Route::get('/notifications', [\App\Http\Controllers\WhatsappController::class, 'notifications'])->name('notifications');
     });
 
+    // Módulo Central de Ajuda
+    Route::prefix('help')->name('help.')->group(function () {
+        Route::get('/', [\App\Http\Controllers\HelpController::class, 'index'])->name('index');
+        Route::get('/{post}', [\App\Http\Controllers\HelpController::class, 'show'])->name('show');
+    });
+
     // Módulo Loja
     Route::prefix('shop')->name('shop.')->group(function () {
         Route::get('/dns', [ShopController::class, 'dns'])->name('dns');
@@ -198,6 +204,21 @@ Route::middleware(['auth', 'maintenance'])->group(function () {
         Route::put('/shop-gateway/{id}', [\App\Http\Controllers\ShopGatewayController::class, 'update'])->name('shop-gateway.update');
         Route::post('/shop-gateway/{id}/toggle', [\App\Http\Controllers\ShopGatewayController::class, 'toggleActive'])->name('shop-gateway.toggle');
         Route::delete('/shop-gateway/{id}', [\App\Http\Controllers\ShopGatewayController::class, 'destroy'])->name('shop-gateway.destroy');
+
+        // Central de Ajuda (Admin)
+        Route::prefix('help')->name('help.')->group(function () {
+            Route::get('/categories', [\App\Http\Controllers\HelpAdminController::class, 'categories'])->name('categories');
+            Route::post('/categories', [\App\Http\Controllers\HelpAdminController::class, 'storeCategory'])->name('categories.store');
+            Route::put('/categories/{category}', [\App\Http\Controllers\HelpAdminController::class, 'updateCategory'])->name('categories.update');
+            Route::delete('/categories/{category}', [\App\Http\Controllers\HelpAdminController::class, 'destroyCategory'])->name('categories.destroy');
+
+            Route::get('/posts', [\App\Http\Controllers\HelpAdminController::class, 'posts'])->name('posts');
+            Route::get('/posts/create', [\App\Http\Controllers\HelpAdminController::class, 'createPost'])->name('posts.create');
+            Route::post('/posts', [\App\Http\Controllers\HelpAdminController::class, 'storePost'])->name('posts.store');
+            Route::get('/posts/{post}/edit', [\App\Http\Controllers\HelpAdminController::class, 'editPost'])->name('posts.edit');
+            Route::put('/posts/{post}', [\App\Http\Controllers\HelpAdminController::class, 'updatePost'])->name('posts.update');
+            Route::delete('/posts/{post}', [\App\Http\Controllers\HelpAdminController::class, 'destroyPost'])->name('posts.destroy');
+        });
 
         // Módulo Namecheap
         Route::get('/namecheap', [\App\Http\Controllers\Admin\NamecheapController::class, 'index'])->name('namecheap.index');

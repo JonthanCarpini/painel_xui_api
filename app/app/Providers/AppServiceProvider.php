@@ -91,11 +91,13 @@ class AppServiceProvider extends ServiceProvider
             
             $moduleShopEnabled = AppSetting::get('module_shop_enabled', '0') === '1';
             $modulePaymentsEnabled = AppSetting::get('module_payments_enabled', '0') === '1';
+            $moduleHelpEnabled = AppSetting::get('module_help_enabled', '0') === '1';
 
             $view->with('unreadNoticesCount', $unreadNoticesCount)
                  ->with('unreadTicketsCount', $unreadTicketsCount)
                  ->with('moduleShopEnabled', $moduleShopEnabled)
-                 ->with('modulePaymentsEnabled', $modulePaymentsEnabled);
+                 ->with('modulePaymentsEnabled', $modulePaymentsEnabled)
+                 ->with('moduleHelpEnabled', $moduleHelpEnabled);
         });
     }
 }

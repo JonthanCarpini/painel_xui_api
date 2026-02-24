@@ -244,6 +244,17 @@
                 </div>
                 @endif
 
+                <!-- Módulo Central de Ajuda -->
+                @if($moduleHelpEnabled ?? false)
+                <div>
+                    <p class="text-gray-500 dark:text-gray-500 text-xs font-semibold uppercase tracking-wider mb-2 px-3">Central de Ajuda</p>
+                    <a href="{{ route('help.index') }}" class="flex items-center gap-3 px-3 py-2 rounded-lg {{ request()->routeIs('help.*') && !request()->routeIs('help.admin.*') ? 'bg-gradient-to-r from-orange-500 to-orange-600 text-white shadow-md shadow-orange-500/20' : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-dark-200 hover:text-gray-900 dark:hover:text-white' }} transition-all duration-200">
+                        <i class="bi bi-question-circle text-lg"></i>
+                        <span class="font-medium">Tutoriais & Guias</span>
+                    </a>
+                </div>
+                @endif
+
                 <!-- Módulo Pagamentos -->
                 @if($modulePaymentsEnabled ?? false)
                 <div>
@@ -289,6 +300,10 @@
                     <a href="{{ route('settings.namecheap.index') }}" class="flex items-center gap-3 px-3 py-2 rounded-lg {{ request()->routeIs('settings.namecheap.*') ? 'bg-gradient-to-r from-orange-500 to-orange-600 text-white shadow-md shadow-orange-500/20' : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-dark-200 hover:text-gray-900 dark:hover:text-white' }} transition-all duration-200">
                         <i class="bi bi-globe2 text-lg"></i>
                         <span class="font-medium">Namecheap</span>
+                    </a>
+                    <a href="{{ route('settings.help.categories') }}" class="flex items-center gap-3 px-3 py-2 rounded-lg {{ request()->routeIs('settings.help.*') ? 'bg-gradient-to-r from-orange-500 to-orange-600 text-white shadow-md shadow-orange-500/20' : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-dark-200 hover:text-gray-900 dark:hover:text-white' }} transition-all duration-200">
+                        <i class="bi bi-question-circle text-lg"></i>
+                        <span class="font-medium">Central de Ajuda</span>
                     </a>
                     <a href="{{ route('settings.admin.vod-requests.index') }}" class="flex items-center gap-3 px-3 py-2 rounded-lg {{ request()->routeIs('settings.admin.vod-requests.*') ? 'bg-gradient-to-r from-orange-500 to-orange-600 text-white shadow-md shadow-orange-500/20' : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-dark-200 hover:text-gray-900 dark:hover:text-white' }} transition-all duration-200 justify-between">
                         <div class="flex items-center gap-3">

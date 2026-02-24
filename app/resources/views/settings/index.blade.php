@@ -146,6 +146,25 @@
                             </div>
                         </label>
                     </div>
+
+                    <div class="p-4 bg-gray-50 dark:bg-dark-200 rounded-lg border border-gray-200 dark:border-dark-100">
+                        <label class="flex items-center justify-between cursor-pointer">
+                            <div class="flex items-center gap-3">
+                                <div class="w-10 h-10 rounded-lg bg-blue-100 dark:bg-blue-500/20 flex items-center justify-center">
+                                    <i class="bi bi-question-circle text-blue-600 dark:text-blue-400 text-xl"></i>
+                                </div>
+                                <div>
+                                    <p class="font-bold text-gray-900 dark:text-white">Central de Ajuda</p>
+                                    <p class="text-xs text-gray-500 dark:text-gray-400">Tutoriais e guias para revendedores</p>
+                                </div>
+                            </div>
+                            <div class="relative">
+                                <input type="hidden" name="module_help_enabled" value="0">
+                                <input type="checkbox" name="module_help_enabled" value="1" {{ ($moduleHelpEnabled ?? false) ? 'checked' : '' }} class="sr-only peer">
+                                <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 dark:peer-focus:ring-blue-800 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-blue-500"></div>
+                            </div>
+                        </label>
+                    </div>
                 </div>
             </div>
 

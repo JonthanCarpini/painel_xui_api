@@ -114,6 +114,7 @@ class SettingsController extends Controller
             'trust_renew_package_id' => 'nullable|integer',
             'module_shop_enabled' => 'nullable',
             'module_payments_enabled' => 'nullable',
+            'module_help_enabled' => 'nullable',
             'namecheap_api_user' => 'nullable|string|max:255',
             'namecheap_api_key' => 'nullable|string|max:500',
             'namecheap_client_ip' => 'nullable|string|max:45',
@@ -163,6 +164,7 @@ class SettingsController extends Controller
             // 2.1 Salvar configurações de módulos
             AppSetting::set('module_shop_enabled', $request->input('module_shop_enabled', '0'));
             AppSetting::set('module_payments_enabled', $request->input('module_payments_enabled', '0'));
+            AppSetting::set('module_help_enabled', $request->input('module_help_enabled', '0'));
 
             // 2.2 Salvar configurações Namecheap e Shop
             if ($request->has('namecheap_api_user')) {
@@ -180,7 +182,7 @@ class SettingsController extends Controller
                 ->except([
                     'ghost_reseller_username', 'ghost_reseller_password', 'ghost_rotation_time',
                     'trust_renew_package_id', 'tmdb_api_key',
-                    'module_shop_enabled', 'module_payments_enabled',
+                    'module_shop_enabled', 'module_payments_enabled', 'module_help_enabled',
                     'namecheap_api_user', 'namecheap_api_key', 'namecheap_client_ip', 'namecheap_sandbox',
                     'shop_markup_percent',
                 ])
