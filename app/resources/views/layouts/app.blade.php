@@ -248,7 +248,7 @@
                 @if($moduleHelpEnabled ?? false)
                 <div>
                     <p class="text-gray-500 dark:text-gray-500 text-xs font-semibold uppercase tracking-wider mb-2 px-3">Central de Ajuda</p>
-                    <a href="{{ route('help.index') }}" class="flex items-center gap-3 px-3 py-2 rounded-lg {{ request()->routeIs('help.*') && !request()->routeIs('help.admin.*') ? 'bg-gradient-to-r from-orange-500 to-orange-600 text-white shadow-md shadow-orange-500/20' : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-dark-200 hover:text-gray-900 dark:hover:text-white' }} transition-all duration-200">
+                    <a href="{{ route('help.index') }}" class="flex items-center gap-3 px-3 py-2 rounded-lg {{ request()->routeIs('help.*') && !request()->routeIs('settings.help.*') ? 'bg-gradient-to-r from-orange-500 to-orange-600 text-white shadow-md shadow-orange-500/20' : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-dark-200 hover:text-gray-900 dark:hover:text-white' }} transition-all duration-200">
                         <i class="bi bi-question-circle text-lg"></i>
                         <span class="font-medium">Tutoriais & Guias</span>
                     </a>
