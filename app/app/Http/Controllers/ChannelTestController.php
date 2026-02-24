@@ -100,37 +100,30 @@ class ChannelTestController extends Controller
 
             $serverId = $streamData['server_id'] ?? null;
 
-            // 2. Status real via mysql_query na tabela streams_servers
+            // 2. Status via dados retornados pela API get_stream
             $status = 'Offline';
             $uptime = 'Indisponível';
-            $onDemand = 0;
+            $onDemand = (int)($streamData['on_demand'] ?? 0);
 
-            $ssResp = $this->api->runQuery(
-                "SELECT monitor_pid, pid, stream_status, on_demand, stream_started, "
-                . "UNIX_TIMESTAMP() - stream_started AS uptime_seconds "
-                . "FROM streams_servers WHERE stream_id = {$streamId} LIMIT 1"
-            );
-            $ssData = $ssResp['data'][0] ?? null;
+            $monitorPid   = (int)($streamData['monitor_pid'] ?? 0);
+            $pid          = (int)($streamData['pid'] ?? 0);
+            $streamStatus = (int)($streamData['stream_status'] ?? -1);
+            $streamStarted = (int)($streamData['stream_started'] ?? 0);
 
-            if ($ssData) {
-                $monitorPid   = (int)($ssData['monitor_pid'] ?? 0);
-                $pid          = (int)($ssData['pid'] ?? 0);
-                $streamStatus = (int)($ssData['stream_status'] ?? -1);
-                $onDemand     = (int)($ssData['on_demand'] ?? 0);
-
-                if ($monitorPid > 0 && $pid > 0 && $streamStatus === 0) {
-                    $status = 'Online';
-                    $uptimeSec = (int)($ssData['uptime_seconds'] ?? 0);
+            if ($monitorPid > 0 && $pid > 0 && $streamStatus === 0) {
+                $status = 'Online';
+                if ($streamStarted > 0) {
+                    $uptimeSec = time() - $streamStarted;
                     if ($uptimeSec > 0) {
                         $h = floor($uptimeSec / 3600);
                         $m = floor(($uptimeSec % 3600) / 60);
                         $uptime = ($h > 0 ? "{$h}h " : '') . "{$m}m";
                     }
-                } elseif ($monitorPid > 0 && $pid <= 0 && $streamStatus === 1) {
-                    $status = 'Com Erros';
-                } elseif ($onDemand) {
-                    $status = 'Sob Demanda';
                 }
+            } elseif ($monitorPid > 0 && $pid <= 0 && $streamStatus === 1) {
+                $status = 'Com Erros';
+            } elseif ($onDemand) {
+                $status = 'Sob Demanda';
             }
 
             // 3. Audiência via live_connections — contar conexões no stream_id

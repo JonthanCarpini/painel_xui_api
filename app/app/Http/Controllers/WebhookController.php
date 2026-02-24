@@ -47,6 +47,7 @@ class WebhookController extends Controller
                 'reseller_id' => $gateway->reseller_id,
                 'header_present' => $request->hasHeader('asaas-access-token'),
             ]);
+            return response()->json(['error' => 'Unauthorized'], 401);
         }
 
         $payload = $request->all();
@@ -128,6 +129,7 @@ class WebhookController extends Controller
             Log::warning('Webhook Shop: token de autenticação inválido ou ausente', [
                 'header_present' => $request->hasHeader('asaas-access-token'),
             ]);
+            return response()->json(['error' => 'Unauthorized'], 401);
         }
 
         $payload = $request->all();

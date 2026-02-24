@@ -97,19 +97,42 @@ class TmdbService
     public function checkExistsInXui(int $tmdbId, string $type, string $title = ''): ?array
     {
         if ($type === 'movie') {
-            $resp = $this->xuiApi->runQuery(
-                "SELECT id, stream_display_name AS name, tmdb_id, category_id, stream_icon, added, year, rating "
-                . "FROM streams WHERE tmdb_id = '{$tmdbId}' AND type = 2 LIMIT 1"
-            );
-            return $resp['data'][0] ?? null;
+            $resp = $this->xuiApi->getMovies();
+            $movies = $resp['data'] ?? [];
+            foreach ($movies as $movie) {
+                if ((int)($movie['tmdb_id'] ?? 0) === $tmdbId) {
+                    return [
+                        'id'          => $movie['id'],
+                        'name'        => $movie['stream_display_name'] ?? $movie['name'] ?? '',
+                        'tmdb_id'     => $movie['tmdb_id'],
+                        'category_id' => $movie['category_id'] ?? null,
+                        'stream_icon' => $movie['stream_icon'] ?? '',
+                        'added'       => $movie['added'] ?? '',
+                        'year'        => $movie['year'] ?? '',
+                        'rating'      => $movie['rating'] ?? '',
+                    ];
+                }
+            }
+            return null;
         }
 
-        // Séries
-        $resp = $this->xuiApi->runQuery(
-            "SELECT id, title AS name, tmdb_id, category_id, cover, last_modified, year, rating "
-            . "FROM series WHERE tmdb_id = '{$tmdbId}' LIMIT 1"
-        );
-        return $resp['data'][0] ?? null;
+        $resp = $this->xuiApi->getSeriesList();
+        $seriesList = $resp['data'] ?? [];
+        foreach ($seriesList as $series) {
+            if ((int)($series['tmdb_id'] ?? 0) === $tmdbId) {
+                return [
+                    'id'          => $series['id'],
+                    'name'        => $series['title'] ?? $series['name'] ?? '',
+                    'tmdb_id'     => $series['tmdb_id'],
+                    'category_id' => $series['category_id'] ?? null,
+                    'cover'       => $series['cover'] ?? '',
+                    'last_modified' => $series['last_modified'] ?? '',
+                    'year'        => $series['year'] ?? '',
+                    'rating'      => $series['rating'] ?? '',
+                ];
+            }
+        }
+        return null;
     }
 
     public function getSeriesSeasons(int $tmdbId): ?array
@@ -154,24 +177,34 @@ class TmdbService
 
     public function checkSeriesSeasonsInXui(int $tmdbId): array
     {
-        // Buscar série pelo tmdb_id via API Admin
-        $resp = $this->xuiApi->runQuery(
-            "SELECT id FROM series WHERE tmdb_id = '{$tmdbId}' LIMIT 1"
-        );
-        $series = $resp['data'][0] ?? null;
+        $resp = $this->xuiApi->getSeriesList();
+        $seriesList = $resp['data'] ?? [];
 
-        if (!$series) {
+        $seriesId = null;
+        foreach ($seriesList as $s) {
+            if ((int)($s['tmdb_id'] ?? 0) === $tmdbId) {
+                $seriesId = (int)$s['id'];
+                break;
+            }
+        }
+
+        if (!$seriesId) {
             return [];
         }
 
-        $seriesId = (int)$series['id'];
+        $epResp = $this->xuiApi->getEpisodes($seriesId);
+        $episodes = $epResp['data'] ?? [];
 
-        // Buscar temporadas disponíveis via episódios
-        $epResp = $this->xuiApi->runQuery(
-            "SELECT DISTINCT season_num FROM series_episodes WHERE series_id = {$seriesId} ORDER BY season_num ASC"
-        );
+        $seasons = [];
+        foreach ($episodes as $ep) {
+            $sn = (int)($ep['season_num'] ?? 0);
+            if ($sn > 0 && !in_array($sn, $seasons)) {
+                $seasons[] = $sn;
+            }
+        }
 
-        return array_map(fn($r) => (int)$r['season_num'], $epResp['data'] ?? []);
+        sort($seasons);
+        return $seasons;
     }
 
     public function getCategoryName(?string $categoryIdJson): string
@@ -190,14 +223,16 @@ class TmdbService
             return 'Sem categoria';
         }
 
-        $idList = implode(',', $ids);
-        $resp = $this->xuiApi->runQuery(
-            "SELECT id, category_name FROM streams_categories WHERE id IN ({$idList})"
-        );
+        $allCategories = $this->xuiApi->getCategories();
+        $names = [];
 
-        $names = array_map(fn($r) => $r['category_name'] ?? '', $resp['data'] ?? []);
+        foreach ($allCategories as $cat) {
+            if (in_array((int)($cat['id'] ?? 0), $ids)) {
+                $names[] = $cat['category_name'] ?? $cat['name'] ?? '';
+            }
+        }
+
         $names = array_filter($names);
-
         return !empty($names) ? implode(', ', $names) : 'Sem categoria';
     }
 }

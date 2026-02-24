@@ -20,14 +20,14 @@ Route::get('/clear-cache', function () {
     } catch (\Exception $e) {
         return "Erro ao limpar cache: " . $e->getMessage();
     }
-});
+})->middleware(['auth', 'admin']);
 
 Route::get('/', function () {
     return redirect()->route('login');
 });
 
 Route::get('/login', [AuthController::class, 'showLogin'])->name('login');
-Route::post('/login', [AuthController::class, 'login'])->name('login.post');
+Route::post('/login', [AuthController::class, 'login'])->middleware('throttle:5,1')->name('login.post');
 Route::post('/logout', [AuthController::class, 'logout'])->name('logout');
 
 require __DIR__.'/fix_template.php';

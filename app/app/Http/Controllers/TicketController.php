@@ -2,101 +2,53 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Ticket;
 use App\Models\TicketCategory;
 use App\Models\TicketExtra;
-use App\Services\XuiApiService;
+use App\Models\TicketReply;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
-use Illuminate\Pagination\LengthAwarePaginator;
 
 class TicketController extends Controller
 {
-    public function __construct(private XuiApiService $api) {}
-
     public function index(Request $request)
     {
         $user = Auth::user();
         $categoriesStats = [];
         $selectedCategory = null;
-        $tickets = [];
         $uncategorizedCount = 0;
 
-        // Buscar tickets via API
-        $response = $this->api->getTickets(['limit' => 1000]);
-        $allTickets = $response['data'] ?? [];
+        $query = Ticket::query()->orderByRaw("CASE WHEN status = 0 THEN 1 ELSE 0 END ASC, id DESC");
 
-        // Filtrar tickets localmente (já que a API não filtra por tudo)
-        $filteredTickets = [];
-        
-        if ($user->isAdmin()) {
-            // Admin vê tudo
-            $filteredTickets = $allTickets;
-        } else {
-            // Revendedor vê apenas seus tickets
-            $filteredTickets = array_filter($allTickets, function ($t) use ($user) {
-                return (int)($t['member_id'] ?? 0) === (int)$user->xui_id;
-            });
+        if (!$user->isAdmin()) {
+            $query->where('member_id', (int)$user->xui_id);
         }
 
-        // Ordenar por status (abertos primeiro) e ID desc
-        usort($filteredTickets, function ($a, $b) {
-            $statusA = (int)($a['status'] ?? 0);
-            $statusB = (int)($b['status'] ?? 0);
-            
-            // Status 0 (Fechado) deve ir pro final
-            if ($statusA === 0 && $statusB !== 0) return 1;
-            if ($statusA !== 0 && $statusB === 0) return -1;
-            if ($statusA !== $statusB) return $statusA <=> $statusB;
-            
-            return (int)($b['id'] ?? 0) <=> (int)($a['id'] ?? 0);
-        });
+        $tickets = $query->paginate(20)->withQueryString();
 
-        // Paginação manual
-        $page = $request->get('page', 1);
-        $perPage = 20;
-        $total = count($filteredTickets);
-        $offset = ($page - 1) * $perPage;
-        $items = array_slice($filteredTickets, $offset, $perPage);
-        
-        $tickets = new LengthAwarePaginator(
-            $items, 
-            $total, 
-            $perPage, 
-            $page, 
-            ['path' => $request->url(), 'query' => $request->query()]
-        );
-
-        // Stats de categorias (apenas Admin)
         if ($user->isAdmin()) {
             $categories = TicketCategory::all();
-            
-            // Buscar IDs de tickets ativos
-            $activeTicketIds = array_map(function($t) { return $t['id']; }, array_filter($allTickets, function($t) {
-                return (int)($t['status'] ?? 0) !== 0;
-            }));
+            $activeTicketIds = Ticket::where('status', '!=', 0)->pluck('id')->toArray();
 
-            if (!empty($activeTicketIds)) {
-                $extrasCount = TicketExtra::whereIn('ticket_id', $activeTicketIds)
+            $extrasCount = !empty($activeTicketIds)
+                ? TicketExtra::whereIn('ticket_id', $activeTicketIds)
                     ->selectRaw('category_id, count(*) as total')
                     ->groupBy('category_id')
-                    ->pluck('total', 'category_id');
-            } else {
-                $extrasCount = [];
-            }
+                    ->pluck('total', 'category_id')
+                : collect();
 
             foreach ($categories as $cat) {
                 $categoriesStats[$cat->id] = [
-                    'name' => $cat->name,
-                    'count' => $extrasCount[$cat->id] ?? 0,
-                    'active' => $request->query('category') == $cat->id
+                    'name'   => $cat->name,
+                    'count'  => $extrasCount[$cat->id] ?? 0,
+                    'active' => $request->query('category') == $cat->id,
                 ];
             }
-            
-            // Contar sem categoria
+
             $categorizedTicketIds = TicketExtra::pluck('ticket_id')->toArray();
-            $uncategorizedCount = count(array_filter($allTickets, function($t) use ($categorizedTicketIds) {
-                return (int)($t['status'] ?? 0) !== 0 && !in_array($t['id'], $categorizedTicketIds);
-            }));
+            $uncategorizedCount = Ticket::where('status', '!=', 0)
+                ->whereNotIn('id', $categorizedTicketIds)
+                ->count();
         }
 
         return view('tickets.index', compact('tickets', 'categoriesStats', 'uncategorizedCount', 'selectedCategory'));
@@ -111,64 +63,52 @@ class TicketController extends Controller
     public function store(Request $request)
     {
         $request->validate([
-            'title' => 'required|string|max:255',
+            'title'       => 'required|string|max:255',
             'category_id' => 'required|exists:ticket_categories,id',
-            'message' => 'required|string',
+            'message'     => 'required|string',
         ]);
 
         $user = Auth::user();
 
-        // Criar Ticket via API
-        $response = $this->api->createTicket($request->title, $request->message, (int)$user->xui_id);
-        
-        if (($response['status'] ?? '') === 'STATUS_SUCCESS' && isset($response['data']['id'])) {
-            $ticketId = $response['data']['id'];
-            
-            // Criar Vínculo de Categoria (Banco Local)
-            TicketExtra::create([
-                'ticket_id' => $ticketId,
-                'category_id' => $request->category_id,
-            ]);
+        $ticket = Ticket::create([
+            'member_id'  => (int)$user->xui_id,
+            'title'      => $request->title,
+            'status'     => Ticket::STATUS_OPEN,
+            'admin_read' => false,
+            'user_read'  => false,
+        ]);
 
-            return redirect()->route('tickets.index')->with('success', 'Ticket criado com sucesso!');
-        }
+        TicketReply::create([
+            'ticket_id'   => $ticket->id,
+            'admin_reply' => false,
+            'message'     => $request->message,
+            'date'        => time(),
+        ]);
 
-        return redirect()->back()->with('error', 'Erro ao criar ticket na API.');
+        TicketExtra::create([
+            'ticket_id'   => $ticket->id,
+            'category_id' => $request->category_id,
+        ]);
+
+        return redirect()->route('tickets.index')->with('success', 'Ticket criado com sucesso!');
     }
 
     public function show($id)
     {
         $user = Auth::user();
+        $ticket = Ticket::with('replies')->findOrFail((int)$id);
 
-        $response = $this->api->getTicket((int)$id);
-
-        if (($response['status'] ?? '') !== 'STATUS_SUCCESS' || !isset($response['data'])) {
-            return redirect()->route('tickets.index')->with('error', 'Ticket não encontrado.');
-        }
-
-        $ticketData = $response['data'];
-
-        // Converter replies (arrays) para collection de objetos
-        $replies = collect($ticketData['replies'] ?? [])->map(fn($r) => (object)$r);
-        unset($ticketData['replies']);
-
-        $ticket = (object)$ticketData;
-        $ticket->replies = $replies;
-
-        // Buscar categoria do banco local via TicketExtra
-        $extra = TicketExtra::where('ticket_id', (int)$id)->first();
-        $ticket->category = $extra ? TicketCategory::find($extra->category_id) : null;
-
-        // Validar permissão
         if (!$user->isAdmin() && (int)$ticket->member_id !== (int)$user->xui_id) {
             abort(403);
         }
 
-        // Marcar como lido no XUI
+        $extra = TicketExtra::where('ticket_id', $ticket->id)->first();
+        $ticket->category = $extra ? TicketCategory::find($extra->category_id) : null;
+
         if ($user->isAdmin()) {
-            $this->api->runQuery("UPDATE tickets SET admin_read = 1 WHERE id = {$id}");
+            $ticket->update(['admin_read' => true]);
         } else {
-            $this->api->runQuery("UPDATE tickets SET user_read = 1 WHERE id = {$id}");
+            $ticket->update(['user_read' => true]);
         }
 
         return view('tickets.show', compact('ticket'));
@@ -181,25 +121,40 @@ class TicketController extends Controller
         ]);
 
         $user = Auth::user();
-        $isAdminReply = $user->isAdmin() ? 1 : 0;
+        $ticket = Ticket::findOrFail((int)$id);
 
-        $response = $this->api->replyTicket((int)$id, $request->message, $isAdminReply);
-
-        if (($response['status'] ?? '') === 'STATUS_SUCCESS') {
-            return redirect()->route('tickets.show', $id)->with('success', 'Resposta enviada!');
+        if (!$user->isAdmin() && (int)$ticket->member_id !== (int)$user->xui_id) {
+            abort(403);
         }
 
-        return redirect()->back()->with('error', 'Erro ao enviar resposta.');
+        $isAdmin = $user->isAdmin();
+
+        TicketReply::create([
+            'ticket_id'   => $ticket->id,
+            'admin_reply' => $isAdmin,
+            'message'     => $request->message,
+            'date'        => time(),
+        ]);
+
+        $ticket->update([
+            'admin_read' => $isAdmin ? true : false,
+            'user_read'  => $isAdmin ? false : true,
+        ]);
+
+        return redirect()->route('tickets.show', $id)->with('success', 'Resposta enviada!');
     }
 
     public function close($id)
     {
-        $response = $this->api->closeTicket((int)$id);
+        $user = Auth::user();
+        $ticket = Ticket::findOrFail((int)$id);
 
-        if (($response['status'] ?? '') === 'STATUS_SUCCESS') {
-            return redirect()->route('tickets.show', $id)->with('success', 'Ticket fechado.');
+        if (!$user->isAdmin() && (int)$ticket->member_id !== (int)$user->xui_id) {
+            abort(403);
         }
 
-        return redirect()->back()->with('error', 'Erro ao fechar ticket.');
+        $ticket->update(['status' => Ticket::STATUS_CLOSED]);
+
+        return redirect()->route('tickets.show', $id)->with('success', 'Ticket fechado.');
     }
 }

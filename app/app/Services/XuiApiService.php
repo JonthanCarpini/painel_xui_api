@@ -392,80 +392,6 @@ class XuiApiService
     }
 
     // -------------------------------------------------------------------------
-    // Tickets (via mysql_query — XUI não tem endpoints dedicados de tickets)
-    // -------------------------------------------------------------------------
-
-    public function getTickets(array $params = []): array
-    {
-        $query = "SELECT t.*, u.username AS member_username FROM tickets t LEFT JOIN users u ON u.id = t.member_id ORDER BY t.id DESC";
-        if (!empty($params['limit'])) {
-            $query .= " LIMIT " . (int)$params['limit'];
-        }
-        $resp = $this->runQuery($query);
-        return [
-            'status' => $resp['status'] ?? 'STATUS_FAILURE',
-            'data'   => $resp['data'] ?? [],
-        ];
-    }
-
-    public function getTicket(int $ticketId): array
-    {
-        $resp = $this->runQuery("SELECT t.*, u.username AS member_username FROM tickets t LEFT JOIN users u ON u.id = t.member_id WHERE t.id = {$ticketId} LIMIT 1");
-        $ticket = $resp['data'][0] ?? null;
-        if (!$ticket) {
-            return ['status' => 'STATUS_FAILURE'];
-        }
-        $repliesResp = $this->runQuery("SELECT * FROM tickets_replies WHERE ticket_id = {$ticketId} ORDER BY date ASC");
-        $ticket['replies'] = $repliesResp['data'] ?? [];
-        return ['status' => 'STATUS_SUCCESS', 'data' => $ticket];
-    }
-
-    public function createTicket(string $subject, string $content, int $memberId): array
-    {
-        $safeTitle   = addslashes($subject);
-        $safeContent = addslashes($content);
-        $now = time();
-
-        // mysql_query não retorna insert_id para INSERTs, então buscamos via MAX(id)
-        $this->runQuery("INSERT INTO tickets (member_id, title, status, admin_read, user_read) VALUES ({$memberId}, '{$safeTitle}', 1, 0, 0)");
-
-        $maxResp  = $this->runQuery("SELECT MAX(id) AS max_id FROM tickets WHERE member_id = {$memberId}");
-        $ticketId = (int)($maxResp['data'][0]['max_id'] ?? 0);
-
-        if (!$ticketId) {
-            return ['status' => 'STATUS_FAILURE'];
-        }
-
-        $this->runQuery("INSERT INTO tickets_replies (ticket_id, admin_reply, message, date) VALUES ({$ticketId}, 0, '{$safeContent}', {$now})");
-
-        return ['status' => 'STATUS_SUCCESS', 'data' => ['id' => $ticketId]];
-    }
-
-    public function replyTicket(int $ticketId, string $content, int $adminReply = 0): array
-    {
-        $safeContent = addslashes($content);
-        $now = time();
-        $this->runQuery("INSERT INTO tickets_replies (ticket_id, admin_reply, message, date) VALUES ({$ticketId}, {$adminReply}, '{$safeContent}', {$now})");
-        if ($adminReply) {
-            $this->runQuery("UPDATE tickets SET admin_read = 1, user_read = 0 WHERE id = {$ticketId}");
-        } else {
-            $this->runQuery("UPDATE tickets SET admin_read = 0, user_read = 1 WHERE id = {$ticketId}");
-        }
-        return ['status' => 'STATUS_SUCCESS'];
-    }
-
-    public function closeTicket(int $ticketId): array
-    {
-        $resp = $this->runQuery("UPDATE tickets SET status = 0 WHERE id = {$ticketId}");
-        return ['status' => ($resp['status'] ?? '') === 'STATUS_SUCCESS' ? 'STATUS_SUCCESS' : 'STATUS_FAILURE'];
-    }
-
-    public function runQuery(string $query): array
-    {
-        return $this->get('mysql_query', ['query' => $query]);
-    }
-
-    // -------------------------------------------------------------------------
     // Servidores / Streams
     // -------------------------------------------------------------------------
 
@@ -593,6 +519,18 @@ class XuiApiService
     public function getSeriesList(): array
     {
         return $this->get('get_series_list', ['limit' => 100000]);
+    }
+
+    public function getEpisodes(?int $seriesId = null): array
+    {
+        $params = ['limit' => 100000];
+        if ($seriesId !== null) $params['series_id'] = $seriesId;
+        return $this->get('get_episodes', $params);
+    }
+
+    public function getSeries(int $id): array
+    {
+        return $this->get('get_series', ['id' => $id]);
     }
 
     public function startStream(int $id, ?int $serverId = null): array
