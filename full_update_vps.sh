@@ -97,6 +97,13 @@ for p in painel_5 painel_6 painel_9 painel_18 painel_20; do
     docker exec "$p" chmod -R 775 /var/www/storage
 done
 
+echo "=== 5. Aplicando CORS nos XUI Proxies ==="
+if [ -f /opt/fix_cors_proxies.sh ]; then
+    bash /opt/fix_cors_proxies.sh
+else
+    echo "fix_cors_proxies.sh não encontrado, pulando CORS..."
+fi
+
 echo ""
 echo "=== Status Final ==="
 docker ps --format 'table {{.Names}}\t{{.Status}}\t{{.Image}}' | grep painel_
