@@ -1,5 +1,9 @@
 #!/bin/bash
-# Fix v5: Recriar containers xui_proxy com config CORS + stream rewrite
+# Fix CORS + stream rewrite - recria containers xui_proxy
+# Formato XUI:
+#   Live:   http://IP/{user}/{pass}/{id}.m3u8       (SEM prefixo live/)
+#   Movie:  http://IP/movie/{user}/{pass}/{id}.ext  (COM prefixo)
+#   Series: http://IP/series/{user}/{pass}/{id}.ext (COM prefixo)
 XUI_IP="109.205.178.143"
 
 get_ghost() {
@@ -30,15 +34,35 @@ write_and_recreate() {
     local CONTAINER="xui_proxy_${NUM}"
     local CONF="/opt/xui_proxy_${NUM}.conf"
 
-    # Escrever config no host (truncar mesmo inode)
-    # Usar truncate + append para preservar inode
     : > "$CONF"
     cat >> "$CONF" << HEREDOC
 server {
     listen 80;
     server_name _;
 
-    location ~ ^/stream/(live|movie|series)/(.+)\$ {
+    # Live: /stream/live/{id}.ext -> /{user}/{pass}/{id}.ext (SEM prefixo live/)
+    location ~ ^/stream/live/(.+)\$ {
+        add_header Access-Control-Allow-Origin * always;
+        add_header Access-Control-Allow-Methods "GET, OPTIONS, HEAD" always;
+        add_header Access-Control-Allow-Headers "Range, Origin, Accept, Content-Type" always;
+        add_header Access-Control-Expose-Headers "Content-Length, Content-Range" always;
+
+        if (\$request_method = OPTIONS) {
+            return 204;
+        }
+
+        proxy_pass http://${XUI_IP}/${GU}/${GP}/\$1;
+        proxy_set_header Host ${XUI_IP};
+        proxy_set_header X-Real-IP \$remote_addr;
+        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto https;
+        proxy_buffering off;
+        proxy_read_timeout 300s;
+        proxy_connect_timeout 10s;
+    }
+
+    # Movie/Series: /stream/{type}/{id}.ext -> /{type}/{user}/{pass}/{id}.ext (COM prefixo)
+    location ~ ^/stream/(movie|series)/(.+)\$ {
         add_header Access-Control-Allow-Origin * always;
         add_header Access-Control-Allow-Methods "GET, OPTIONS, HEAD" always;
         add_header Access-Control-Allow-Headers "Range, Origin, Accept, Content-Type" always;
@@ -58,6 +82,7 @@ server {
         proxy_connect_timeout 10s;
     }
 
+    # Fallback
     location / {
         add_header Access-Control-Allow-Origin * always;
         add_header Access-Control-Allow-Methods "GET, OPTIONS, HEAD" always;
@@ -82,7 +107,6 @@ HEREDOC
 
     echo "  Config escrita: ghost=${GU}"
 
-    # Recriar container (remove + run)
     docker rm -f "$CONTAINER" 2>/dev/null
 
     docker run -d \

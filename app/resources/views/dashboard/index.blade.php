@@ -784,6 +784,7 @@
             // Atualizar botões Clientes
             ['7', '30'].forEach(d => {
                 const btn = document.getElementById(`btnClient${d}`);
+                if (!btn) return;
                 const isActive = d === days;
                 
                 if (isActive) {
@@ -827,6 +828,7 @@
             // Atualizar botões Revendas
             ['7', '30'].forEach(d => {
                 const btn = document.getElementById(`btnReseller${d}`);
+                if (!btn) return;
                 const isActive = d === days;
                 
                 if (isActive) {

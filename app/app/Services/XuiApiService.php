@@ -338,7 +338,7 @@ class XuiApiService
 
     public function getLiveConnections(): array
     {
-        return $this->get('live_connections', ['limit' => 100000]);
+        return $this->post('live_connections', ['limit' => 100000]);
     }
 
     public function killConnection(int $activityId): array
@@ -498,12 +498,12 @@ class XuiApiService
 
     public function getStream(int $id): array
     {
-        return $this->get('get_stream', ['id' => $id]);
+        return $this->post('get_stream', ['id' => $id]);
     }
 
     public function getStreams(): array
     {
-        return $this->get('get_streams', ['limit' => 100000]);
+        return $this->post('get_streams', ['limit' => 100000]);
     }
 
     public function getChannels(): array

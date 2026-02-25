@@ -178,8 +178,12 @@ class ChannelTestController extends Controller
 
     /**
      * Gera URL opaca sem credenciais do fantasma.
-     * Ex: https://xui.domain/stream/live/6.m3u8
      * O Nginx proxy injeta as credenciais internamente.
+     *
+     * Formato XUI:
+     *   Live:   http://IP/{user}/{pass}/{id}.m3u8       -> proxy: /stream/live/{id}.m3u8
+     *   Movie:  http://IP/movie/{user}/{pass}/{id}.mp4  -> proxy: /stream/movie/{id}.mp4
+     *   Series: http://IP/series/{user}/{pass}/{id}.mp4 -> proxy: /stream/series/{id}.mp4
      */
     private function buildOpaqueStreamUrl($channel, string $type, string $xuiProxyBase): string
     {
