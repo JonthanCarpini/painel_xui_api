@@ -59,7 +59,7 @@ class ChannelTestController extends Controller
             return [
                 'id' => $channel->id,
                 'name' => $channel->name,
-                'icon' => $this->ensureHttps($channel->logo_url),
+                'icon' => $this->proxyIcon($channel->logo_url),
                 'stream_url' => $this->buildOpaqueStreamUrl($channel, $type, $xuiProxyBase),
                 'stream_id' => $channel->stream_id,
             ];
@@ -202,6 +202,17 @@ class ChannelTestController extends Controller
         return "{$xuiProxyBase}/stream/{$type}/{$streamId}.{$ext}";
     }
 
+    private function proxyIcon(?string $url): ?string
+    {
+        if (empty($url)) return null;
+
+        if (str_starts_with($url, 'https://')) {
+            return $url;
+        }
+
+        return route('img.proxy') . '?url=' . urlencode($url);
+    }
+
     private function ensureHttps(?string $url): ?string
     {
         if (empty($url)) return $url;
@@ -256,17 +267,38 @@ class ChannelTestController extends Controller
         $user = Auth::user();
         
         try {
-            // 1. Criar Ticket no XUI via API
             $ticketTitle = "Problema no canal: " . $request->channel_name;
             
-            // Montar conteúdo do ticket com detalhes
             $content = $request->problem_description . "\n\n" .
                        "**Dados Técnicos do Relatório:**\n" .
                        "ID Stream (XUI): " . ($request->stream_id ?? 'N/A') . "\n" .
                        "URL Reprodução: " . ($request->stream_url ?? 'Não informada');
 
-            // Enviar para API
-            $this->api->createTicket($ticketTitle, $content, (int)$user->xui_id);
+            $ticket = Ticket::create([
+                'member_id'  => (int)$user->xui_id,
+                'title'      => $ticketTitle,
+                'status'     => Ticket::STATUS_OPEN,
+                'admin_read' => false,
+                'user_read'  => false,
+            ]);
+
+            TicketReply::create([
+                'ticket_id'   => $ticket->id,
+                'admin_reply' => false,
+                'message'     => $content,
+                'date'        => time(),
+            ]);
+
+            $reportCategory = TicketCategory::where('name', 'LIKE', '%report%')
+                ->orWhere('name', 'LIKE', '%canal%')
+                ->first();
+
+            if ($reportCategory) {
+                TicketExtra::create([
+                    'ticket_id'   => $ticket->id,
+                    'category_id' => $reportCategory->id,
+                ]);
+            }
 
             return response()->json(['success' => true, 'message' => 'Problema reportado com sucesso! Um ticket foi aberto.']);
 
