@@ -308,11 +308,11 @@ class ChannelTestController extends Controller
     private function getGhostCredentials(): array
     {
         $user = DB::table('app_settings')
-            ->where('setting_key', 'ghost_reseller_username')
-            ->value('setting_value');
+            ->where('key', 'ghost_reseller_username')
+            ->value('value');
         $pass = DB::table('app_settings')
-            ->where('setting_key', 'ghost_reseller_password')
-            ->value('setting_value');
+            ->where('key', 'ghost_reseller_password')
+            ->value('value');
 
         return [
             'user' => $user ?: 'fantasma',
