@@ -175,12 +175,12 @@ class ChannelTestController extends Controller
                 $xuiUrl = "http://{$xuiIp}/{$type}/{$creds['user']}/{$creds['pass']}/{$streamId}.{$ext}";
             }
 
-            // Seguir redirects e capturar effective URL (XUI redireciona para /auth/{token})
+            // Seguir redirects via GET e capturar effective URL (XUI redireciona para /auth/{token})
+            // Nota: XUI só faz redirect no GET, HEAD retorna 200 direto
             $ch = curl_init($xuiUrl);
             curl_setopt_array($ch, [
                 CURLOPT_RETURNTRANSFER => true,
                 CURLOPT_FOLLOWLOCATION => true,
-                CURLOPT_NOBODY => true,
                 CURLOPT_TIMEOUT => 10,
             ]);
             curl_exec($ch);
