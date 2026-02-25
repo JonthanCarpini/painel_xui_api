@@ -175,38 +175,33 @@ class ChannelTestController extends Controller
                 $xuiUrl = "http://{$xuiIp}/{$type}/{$creds['user']}/{$creds['pass']}/{$streamId}.{$ext}";
             }
 
-            // Fazer request HEAD/GET sem seguir redirects para capturar Location
+            // Seguir redirects e capturar effective URL (XUI redireciona para /auth/{token})
             $ch = curl_init($xuiUrl);
             curl_setopt_array($ch, [
                 CURLOPT_RETURNTRANSFER => true,
-                CURLOPT_FOLLOWLOCATION => false,
-                CURLOPT_HEADER => true,
+                CURLOPT_FOLLOWLOCATION => true,
                 CURLOPT_NOBODY => true,
                 CURLOPT_TIMEOUT => 10,
-                CURLOPT_HTTPHEADER => ["Host: {$xuiIp}"],
             ]);
-            $response = curl_exec($ch);
-            $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+            curl_exec($ch);
+            $effectiveUrl = curl_getinfo($ch, CURLINFO_EFFECTIVE_URL);
+            $redirectCount = curl_getinfo($ch, CURLINFO_REDIRECT_COUNT);
             curl_close($ch);
 
             $xuiProxyBase = $this->getXuiProxyBase();
 
-            if ($httpCode === 302 || $httpCode === 301) {
-                // Extrair Location header
-                if (preg_match('/Location:\s*(.+)/i', $response, $locMatch)) {
-                    $location = trim($locMatch[1]);
-                    // Extrair path (ex: /auth/WHWVn-...) da URL completa
-                    $path = parse_url($location, PHP_URL_PATH);
-                    if ($path) {
-                        return response()->json([
-                            'resolved_url' => $xuiProxyBase . $path,
-                            'type' => $type,
-                        ]);
-                    }
+            // Se houve redirect, extrair path da effective URL e montar URL no proxy
+            if ($redirectCount > 0 && $effectiveUrl) {
+                $path = parse_url($effectiveUrl, PHP_URL_PATH);
+                if ($path) {
+                    return response()->json([
+                        'resolved_url' => $xuiProxyBase . $path,
+                        'type' => $type,
+                    ]);
                 }
             }
 
-            // Se não houve redirect (ex: stream direto), retornar URL do proxy
+            // Se não houve redirect, retornar URL do proxy padrão
             return response()->json([
                 'resolved_url' => "{$xuiProxyBase}/stream/{$type}/{$streamId}.{$ext}",
                 'type' => $type,
