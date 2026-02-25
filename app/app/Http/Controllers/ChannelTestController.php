@@ -79,19 +79,17 @@ class ChannelTestController extends Controller
         try {
             $streamId = (int) $channel->stream_id;
 
-            // 1. Dados Básicos via API get_stream (individual)
-            $streamResp = $this->api->getStream($streamId);
-            $streamData = null;
+            // 1. Buscar em get_streams (lista com dados de runtime: pid, monitor_pid, stream_status, stream_started)
+            $streamsResp = $this->api->getStreams();
+            $streamData  = collect($streamsResp['data'] ?? [])
+                ->first(fn($s) => (int)($s['id'] ?? 0) === $streamId);
 
-            if (($streamResp['status'] ?? '') === 'STATUS_SUCCESS') {
-                $streamData = $streamResp['data'] ?? null;
-            }
-
-            // Fallback: buscar em get_streams e filtrar por id
+            // Fallback: get_stream individual (retorna config, sem runtime completo)
             if (!$streamData) {
-                $streamsResp = $this->api->getStreams();
-                $streamData  = collect($streamsResp['data'] ?? [])
-                    ->first(fn($s) => (int)($s['id'] ?? 0) === $streamId);
+                $streamResp = $this->api->getStream($streamId);
+                if (($streamResp['status'] ?? '') === 'STATUS_SUCCESS') {
+                    $streamData = $streamResp['data'] ?? null;
+                }
             }
 
             if (!$streamData) {
@@ -100,14 +98,14 @@ class ChannelTestController extends Controller
 
             $serverId = $streamData['server_id'] ?? null;
 
-            // 2. Status via dados retornados pela API get_stream
+            // 2. Status via dados de runtime
             $status = 'Offline';
             $uptime = 'Indisponível';
             $onDemand = (int)($streamData['on_demand'] ?? 0);
 
-            $monitorPid   = (int)($streamData['monitor_pid'] ?? 0);
-            $pid          = (int)($streamData['pid'] ?? 0);
-            $streamStatus = (int)($streamData['stream_status'] ?? -1);
+            $monitorPid    = (int)($streamData['monitor_pid'] ?? 0);
+            $pid           = (int)($streamData['pid'] ?? 0);
+            $streamStatus  = (int)($streamData['stream_status'] ?? -1);
             $streamStarted = (int)($streamData['stream_started'] ?? 0);
 
             if ($monitorPid > 0 && $pid > 0 && $streamStatus === 0) {
@@ -117,7 +115,8 @@ class ChannelTestController extends Controller
                     if ($uptimeSec > 0) {
                         $h = floor($uptimeSec / 3600);
                         $m = floor(($uptimeSec % 3600) / 60);
-                        $uptime = ($h > 0 ? "{$h}h " : '') . "{$m}m";
+                        $s = $uptimeSec % 60;
+                        $uptime = ($h > 0 ? "{$h}h " : '') . "{$m}m {$s}s";
                     }
                 }
             } elseif ($monitorPid > 0 && $pid <= 0 && $streamStatus === 1) {
