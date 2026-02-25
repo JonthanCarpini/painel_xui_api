@@ -43,6 +43,11 @@ server {
 
     # Live: /stream/live/{id}.ext -> /{user}/{pass}/{id}.ext (SEM prefixo live/)
     location ~ ^/stream/live/(.+)$ {
+        proxy_hide_header Access-Control-Allow-Origin;
+        proxy_hide_header Access-Control-Allow-Methods;
+        proxy_hide_header Access-Control-Allow-Headers;
+        proxy_hide_header Access-Control-Expose-Headers;
+
         add_header Access-Control-Allow-Origin * always;
         add_header Access-Control-Allow-Methods "GET, OPTIONS, HEAD" always;
         add_header Access-Control-Allow-Headers "Range, Origin, Accept, Content-Type" always;
@@ -66,6 +71,11 @@ server {
 
     # Movie/Series: /stream/{type}/{id}.ext -> /{type}/{user}/{pass}/{id}.ext
     location ~ ^/stream/(movie|series)/(.+)$ {
+        proxy_hide_header Access-Control-Allow-Origin;
+        proxy_hide_header Access-Control-Allow-Methods;
+        proxy_hide_header Access-Control-Allow-Headers;
+        proxy_hide_header Access-Control-Expose-Headers;
+
         add_header Access-Control-Allow-Origin * always;
         add_header Access-Control-Allow-Methods "GET, OPTIONS, HEAD" always;
         add_header Access-Control-Allow-Headers "Range, Origin, Accept, Content-Type" always;
@@ -89,6 +99,11 @@ server {
 
     # Auth tokens e HLS segments: XUI redireciona para /auth/{token}, segments em /hls/{token}
     location ~ ^/(auth|hls)/ {
+        proxy_hide_header Access-Control-Allow-Origin;
+        proxy_hide_header Access-Control-Allow-Methods;
+        proxy_hide_header Access-Control-Allow-Headers;
+        proxy_hide_header Access-Control-Expose-Headers;
+
         add_header Access-Control-Allow-Origin * always;
         add_header Access-Control-Allow-Methods "GET, OPTIONS, HEAD" always;
         add_header Access-Control-Allow-Headers "Range, Origin, Accept, Content-Type" always;
@@ -112,6 +127,11 @@ server {
 
     # Fallback
     location / {
+        proxy_hide_header Access-Control-Allow-Origin;
+        proxy_hide_header Access-Control-Allow-Methods;
+        proxy_hide_header Access-Control-Allow-Headers;
+        proxy_hide_header Access-Control-Expose-Headers;
+
         add_header Access-Control-Allow-Origin * always;
         add_header Access-Control-Allow-Methods "GET, OPTIONS, HEAD" always;
         add_header Access-Control-Allow-Headers "Range, Origin, Accept, Content-Type" always;
