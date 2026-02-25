@@ -392,42 +392,67 @@
             videoPlayer.src = streamUrl;
             videoPlayer.play().catch(e => console.log("Autoplay blocked", e));
         } else if (Hls.isSupported()) {
-            hls = new Hls({
-                xhrSetup: function(xhr, url) {
-                    const proxied = proxyUrl(url);
-                    if (proxied !== url) {
-                        xhr.open('GET', proxied, true);
-                    }
-                }
-            });
-            hls.loadSource(streamUrl);
-            hls.attachMedia(videoPlayer);
-            hls.on(Hls.Events.MANIFEST_PARSED, function() {
-                videoPlayer.play().catch(e => console.log("Autoplay blocked", e));
-            });
-            hls.on(Hls.Events.ERROR, function(event, data) {
-                if (data.fatal) {
-                    switch (data.type) {
-                        case Hls.ErrorTypes.NETWORK_ERROR:
-                            console.log("fatal network error encountered, try to recover");
-                            hls.startLoad();
-                            break;
-                        case Hls.ErrorTypes.MEDIA_ERROR:
-                            console.log("fatal media error encountered, try to recover");
-                            hls.recoverMediaError();
-                            break;
-                        default:
-                            hls.destroy();
-                            break;
-                    }
-                }
-            });
+            // Resolver URL via backend (evita redirect 302 no browser que causa CORS)
+            startHlsPlayer(channel, streamUrl);
         } else if (videoPlayer.canPlayType('application/vnd.apple.mpegurl')) {
             videoPlayer.src = streamUrl;
             videoPlayer.addEventListener('loadedmetadata', function() {
                 videoPlayer.play();
             });
         }
+    }
+
+    function startHlsPlayer(channel, fallbackUrl) {
+        const resolveUrl = `{{ route('channel-test.resolve-stream') }}?channel_id=${channel.id}&type=${currentType}`;
+
+        fetch(resolveUrl)
+            .then(res => res.json())
+            .then(data => {
+                const streamSrc = data.resolved_url || fallbackUrl;
+                initHls(streamSrc);
+            })
+            .catch(err => {
+                console.warn('resolve-stream failed, using fallback', err);
+                initHls(fallbackUrl);
+            });
+    }
+
+    function initHls(streamSrc) {
+        if (hls) {
+            hls.destroy();
+            hls = null;
+        }
+
+        hls = new Hls({
+            xhrSetup: function(xhr, url) {
+                const proxied = proxyUrl(url);
+                if (proxied !== url) {
+                    xhr.open('GET', proxied, true);
+                }
+            }
+        });
+        hls.loadSource(streamSrc);
+        hls.attachMedia(videoPlayer);
+        hls.on(Hls.Events.MANIFEST_PARSED, function() {
+            videoPlayer.play().catch(e => console.log("Autoplay blocked", e));
+        });
+        hls.on(Hls.Events.ERROR, function(event, data) {
+            if (data.fatal) {
+                switch (data.type) {
+                    case Hls.ErrorTypes.NETWORK_ERROR:
+                        console.log("fatal network error encountered, try to recover");
+                        hls.startLoad();
+                        break;
+                    case Hls.ErrorTypes.MEDIA_ERROR:
+                        console.log("fatal media error encountered, try to recover");
+                        hls.recoverMediaError();
+                        break;
+                    default:
+                        hls.destroy();
+                        break;
+                }
+            }
+        });
     }
 
     function resetStats() {

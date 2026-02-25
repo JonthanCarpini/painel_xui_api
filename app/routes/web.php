@@ -112,6 +112,7 @@ Route::middleware(['auth', 'maintenance'])->group(function () {
         Route::get('/', [\App\Http\Controllers\ChannelTestController::class, 'index'])->name('index');
         Route::get('/streams', [\App\Http\Controllers\ChannelTestController::class, 'getStreams'])->name('get-streams');
         Route::get('/details/{id}', [\App\Http\Controllers\ChannelTestController::class, 'getChannelDetails'])->name('details');
+        Route::get('/resolve-stream', [\App\Http\Controllers\ChannelTestController::class, 'resolveStreamUrl'])->name('resolve-stream');
         Route::post('/restart/{id}', [\App\Http\Controllers\ChannelTestController::class, 'restartChannel'])->name('restart');
         Route::post('/report', [\App\Http\Controllers\ChannelTestController::class, 'report'])->name('report');
     });

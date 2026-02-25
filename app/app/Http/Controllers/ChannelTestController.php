@@ -146,6 +146,78 @@ class ChannelTestController extends Controller
         }
     }
 
+    public function resolveStreamUrl(Request $request)
+    {
+        $channelId = $request->input('channel_id');
+        $type = $request->input('type', 'live');
+
+        $channel = TestChannel::find($channelId);
+        if (!$channel || !$channel->stream_id) {
+            return response()->json(['error' => 'Canal não encontrado'], 404);
+        }
+
+        try {
+            $xuiIp = $this->getXuiIp();
+            $creds = $this->getGhostCredentials();
+            $streamId = $channel->stream_id;
+
+            // Montar URL real do XUI com credenciais ghost
+            $ext = 'm3u8';
+            if (preg_match('/\.(\w+)(\?|$)/', $channel->stream_url ?? '', $m)) {
+                $ext = $m[1];
+            } elseif ($type === 'movie') {
+                $ext = 'mp4';
+            }
+
+            if ($type === 'live') {
+                $xuiUrl = "http://{$xuiIp}/{$creds['user']}/{$creds['pass']}/{$streamId}.{$ext}";
+            } else {
+                $xuiUrl = "http://{$xuiIp}/{$type}/{$creds['user']}/{$creds['pass']}/{$streamId}.{$ext}";
+            }
+
+            // Fazer request HEAD/GET sem seguir redirects para capturar Location
+            $ch = curl_init($xuiUrl);
+            curl_setopt_array($ch, [
+                CURLOPT_RETURNTRANSFER => true,
+                CURLOPT_FOLLOWLOCATION => false,
+                CURLOPT_HEADER => true,
+                CURLOPT_NOBODY => true,
+                CURLOPT_TIMEOUT => 10,
+                CURLOPT_HTTPHEADER => ["Host: {$xuiIp}"],
+            ]);
+            $response = curl_exec($ch);
+            $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+            curl_close($ch);
+
+            $xuiProxyBase = $this->getXuiProxyBase();
+
+            if ($httpCode === 302 || $httpCode === 301) {
+                // Extrair Location header
+                if (preg_match('/Location:\s*(.+)/i', $response, $locMatch)) {
+                    $location = trim($locMatch[1]);
+                    // Extrair path (ex: /auth/WHWVn-...) da URL completa
+                    $path = parse_url($location, PHP_URL_PATH);
+                    if ($path) {
+                        return response()->json([
+                            'resolved_url' => $xuiProxyBase . $path,
+                            'type' => $type,
+                        ]);
+                    }
+                }
+            }
+
+            // Se não houve redirect (ex: stream direto), retornar URL do proxy
+            return response()->json([
+                'resolved_url' => "{$xuiProxyBase}/stream/{$type}/{$streamId}.{$ext}",
+                'type' => $type,
+            ]);
+
+        } catch (\Exception $e) {
+            Log::error('resolveStreamUrl error', ['error' => $e->getMessage()]);
+            return response()->json(['error' => 'Erro ao resolver URL: ' . $e->getMessage()], 500);
+        }
+    }
+
     public function restartChannel($id)
     {
         if (!Auth::user()->isAdmin()) {
@@ -231,6 +303,21 @@ class ChannelTestController extends Controller
         }
 
         return $url;
+    }
+
+    private function getGhostCredentials(): array
+    {
+        $user = DB::table('app_settings')
+            ->where('setting_key', 'ghost_reseller_username')
+            ->value('setting_value');
+        $pass = DB::table('app_settings')
+            ->where('setting_key', 'ghost_reseller_password')
+            ->value('setting_value');
+
+        return [
+            'user' => $user ?: 'fantasma',
+            'pass' => $pass ?: 'fantasma123',
+        ];
     }
 
     private function getXuiIp(): string
