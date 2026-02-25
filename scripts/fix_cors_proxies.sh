@@ -34,52 +34,80 @@ write_and_recreate() {
     local CONTAINER="xui_proxy_${NUM}"
     local CONF="/opt/xui_proxy_${NUM}.conf"
 
+    # Usar single-quoted heredoc para evitar escape de $ do nginx
     : > "$CONF"
-    cat >> "$CONF" << HEREDOC
+    cat >> "$CONF" << 'ENDOFCONF'
 server {
     listen 80;
     server_name _;
 
     # Live: /stream/live/{id}.ext -> /{user}/{pass}/{id}.ext (SEM prefixo live/)
-    location ~ ^/stream/live/(.+)\$ {
+    location ~ ^/stream/live/(.+)$ {
         add_header Access-Control-Allow-Origin * always;
         add_header Access-Control-Allow-Methods "GET, OPTIONS, HEAD" always;
         add_header Access-Control-Allow-Headers "Range, Origin, Accept, Content-Type" always;
         add_header Access-Control-Expose-Headers "Content-Length, Content-Range" always;
 
-        if (\$request_method = OPTIONS) {
+        if ($request_method = OPTIONS) {
             return 204;
         }
 
-        proxy_pass http://${XUI_IP}/${GU}/${GP}/\$1;
-        proxy_set_header Host ${XUI_IP};
-        proxy_set_header X-Real-IP \$remote_addr;
-        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        proxy_pass http://___XUI_IP___/___GU___/___GP___/$1;
+        proxy_set_header Host ___XUI_IP___;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto https;
         proxy_buffering off;
         proxy_read_timeout 300s;
         proxy_connect_timeout 10s;
+
+        proxy_redirect ~^http://___XUI_IP___(:\d+)?/(.*)$ https://xui.___DOMAIN___/$2;
     }
 
-    # Movie/Series: /stream/{type}/{id}.ext -> /{type}/{user}/{pass}/{id}.ext (COM prefixo)
-    location ~ ^/stream/(movie|series)/(.+)\$ {
+    # Movie/Series: /stream/{type}/{id}.ext -> /{type}/{user}/{pass}/{id}.ext
+    location ~ ^/stream/(movie|series)/(.+)$ {
         add_header Access-Control-Allow-Origin * always;
         add_header Access-Control-Allow-Methods "GET, OPTIONS, HEAD" always;
         add_header Access-Control-Allow-Headers "Range, Origin, Accept, Content-Type" always;
         add_header Access-Control-Expose-Headers "Content-Length, Content-Range" always;
 
-        if (\$request_method = OPTIONS) {
+        if ($request_method = OPTIONS) {
             return 204;
         }
 
-        proxy_pass http://${XUI_IP}/\$1/${GU}/${GP}/\$2;
-        proxy_set_header Host ${XUI_IP};
-        proxy_set_header X-Real-IP \$remote_addr;
-        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        proxy_pass http://___XUI_IP___/$1/___GU___/___GP___/$2;
+        proxy_set_header Host ___XUI_IP___;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto https;
         proxy_buffering off;
         proxy_read_timeout 300s;
         proxy_connect_timeout 10s;
+
+        proxy_redirect ~^http://___XUI_IP___(:\d+)?/(.*)$ https://xui.___DOMAIN___/$2;
+    }
+
+    # Auth tokens e HLS segments: XUI redireciona para /auth/{token}, segments em /hls/{token}
+    location ~ ^/(auth|hls)/ {
+        add_header Access-Control-Allow-Origin * always;
+        add_header Access-Control-Allow-Methods "GET, OPTIONS, HEAD" always;
+        add_header Access-Control-Allow-Headers "Range, Origin, Accept, Content-Type" always;
+        add_header Access-Control-Expose-Headers "Content-Length, Content-Range" always;
+
+        if ($request_method = OPTIONS) {
+            return 204;
+        }
+
+        proxy_pass http://___XUI_IP___;
+        proxy_set_header Host ___XUI_IP___;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto https;
+        proxy_buffering off;
+        proxy_read_timeout 300s;
+        proxy_connect_timeout 10s;
+
+        proxy_redirect ~^http://___XUI_IP___(:\d+)?/(.*)$ https://xui.___DOMAIN___/$2;
     }
 
     # Fallback
@@ -89,21 +117,29 @@ server {
         add_header Access-Control-Allow-Headers "Range, Origin, Accept, Content-Type" always;
         add_header Access-Control-Expose-Headers "Content-Length, Content-Range" always;
 
-        if (\$request_method = OPTIONS) {
+        if ($request_method = OPTIONS) {
             return 204;
         }
 
-        proxy_pass http://${XUI_IP};
-        proxy_set_header Host ${XUI_IP};
-        proxy_set_header X-Real-IP \$remote_addr;
-        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        proxy_pass http://___XUI_IP___;
+        proxy_set_header Host ___XUI_IP___;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto https;
         proxy_buffering off;
         proxy_read_timeout 300s;
         proxy_connect_timeout 10s;
+
+        proxy_redirect ~^http://___XUI_IP___(:\d+)?/(.*)$ https://xui.___DOMAIN___/$2;
     }
 }
-HEREDOC
+ENDOFCONF
+
+    # Substituir placeholders
+    sed -i "s|___XUI_IP___|${XUI_IP}|g" "$CONF"
+    sed -i "s|___GU___|${GU}|g" "$CONF"
+    sed -i "s|___GP___|${GP}|g" "$CONF"
+    sed -i "s|___DOMAIN___|${DOMAIN}|g" "$CONF"
 
     echo "  Config escrita: ghost=${GU}"
 
